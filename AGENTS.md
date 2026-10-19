@@ -9,7 +9,7 @@
 - **脚本语言**: 以 GDScript 为主，必要时 C#
 - **开发环境**: DSH (DeepSeek Harness) Web — 工具均为小写命名
 - **交流语言**: 中文
-- **项目性质**: 参加「幻游万象展」GameJam（东方 Project 主题）的参赛作品
+- **项目性质**: 参加「幻游万象展」GameJam（东方 Project 主题）。本期活动主题：**「心」**；本项目方向：**剑术（居合道）与心流——东方 Project 各角色间的瞬息间剑术对决**。详见 `docs/gamejam/README.md`「本期主题」
 
 ## 2. 活动硬性约束（最高优先级，违反即违规）
 
@@ -71,7 +71,7 @@
 - **技能裁剪**：实际开发中如技能过多，可直接删除 `.dsh/skills/` 中不需要的条目（随仓库提交）
 - **技能更新**：`tools/update-godotprompter.ps1` 从上游仓库同步技能目录
 - **C# 脚本**：DSH 会话内无法编译 C#，新增/修改 C# 后需在 Godot 编辑器内构建
-- **外部程序执行受限**：DSH 沙箱下启动 `godot.exe` 报 `Access is denied`（`cmd.exe` 同样被拒），故 §6 的 `--headless` 导入、GUT 测试、启动游戏在本会话内均无法执行；验证需由人在本机执行，或另行授权放宽沙箱后再试
+- **外部程序执行受限**：DSH 沙箱默认下启动 `godot.exe`/`git.exe` 报 `Access is denied`；需带 `sandbox_permissions` 触发一次性审批后才可执行（已用该方式完成 `git init` 与首个提交）。未审批时 §6 的 `--headless` 导入、GUT 测试、启动游戏都无法运行，验证需由人在本机执行
 - **不要修改** `addons/` 内第三方插件源码（除非明确要求）；`docs/agent-prompts/` 为上游 GodotPrompter 的 DSH 适配版（MIT）
 
 ## 8. 编码规范
