@@ -42,6 +42,7 @@
 - `assets/icons/` — 220 个单色 SVG 图标（按功能分类）
 - `tools/generate_guide_context.gd` — GUIDE 上下文生成脚本（headless 运行，依赖 `res://input/actions/*.tres`，创建对应 Action 后使用）
 - 新功能按模块放入 `scenes/`、`scripts/`、`resources/`、`input/` 等目录（按需创建），保持模块化
+- `.dsh/skills/` — 项目级技能目录（第三方 GDAS 技能库的 2D 剪枝副本，33 个），DSH 自动发现；来源与许可见 `.dsh/skills/ATTRIBUTION.md`，使用约定见 §9
 
 ## 5. 策划 → 开发 → 评审工作流（一句灵感起步）
 
@@ -69,8 +70,8 @@
 
 ## 7. 注意事项
 
-- **技能裁剪**：实际开发中如技能过多，可直接删除 `.dsh/skills/` 中不需要的条目（随仓库提交）
-- **技能更新**：`tools/update-godotprompter.ps1` 从上游仓库同步技能目录
+- **技能来源**：`.dsh/skills/` 是第三方 GDAS 技能库的 2D 剪枝副本（LGPL-3.0，33 个），来源、提交号与许可见 `.dsh/skills/ATTRIBUTION.md` 与 `.dsh/skills/LICENSE`；不要手改技能文件
+- **技能更新**：更新源为仓库外 `.research/Game-Dev-Agentic-Skills`（已 gitignore），`git pull` 后按 `ATTRIBUTION.md` §4 重新复制并更新提交号（需外部命令审批）
 - **C# 脚本**：DSH 会话内无法编译 C#，新增/修改 C# 后需在 Godot 编辑器内构建
 - **外部程序执行受限**：DSH 沙箱默认下启动 `godot.exe`/`git.exe` 报 `Access is denied`；需带 `sandbox_permissions` 触发一次性审批后才可执行（已用该方式完成 `git init` 与首个提交）。未审批时 §6 的 `--headless` 导入、GUT 测试、启动游戏都无法运行，验证需由人在本机执行
 - **不要修改** `addons/` 内第三方插件源码（除非明确要求）；`docs/agent-prompts/` 为上游 GodotPrompter 的 DSH 适配版（MIT）
@@ -87,3 +88,15 @@
 - **`@onready`**：仅延迟初始化时使用，不在 `_ready()` 中赋值后又声明 `@onready`
 - **场景组织**：单一职责原则，一个 `.tscn` 做一件事；组合优于继承
 - **场景实例化隔离**：复杂 UI 或独立敌人实体必须存为独立的 .tscn 子场景，不得在主场景中直接堆砌孤立的节点层级。
+
+## 9. 项目技能（.dsh/skills）
+
+本项目从上游 [Game Dev Agentic Skills (GDAS)](https://github.com/thedivergentai/Game-Dev-Agentic-Skills)（LGPL-3.0，提交 `db004d74`，版本 0.1.1）引入技能，按「Godot 4.7 + 2D 剑术对决」剪枝保留 33 个，完整清单与更新流程见 `.dsh/skills/ATTRIBUTION.md`。
+
+**分组**：架构与工程（9）、2D 玩法与表现（12）、UI/音频/存档（4）、构建与质量（6）、类型参考（2：格斗 + AI 导航）。
+
+**使用约定**：
+1. 实现前先按任务匹配加载对应技能（如玩家角色 → `godot-characterbody-2d`；判定 → `godot-combat-system` / `godot-2d-physics`；状态 → `godot-state-machine-advanced`）。
+2. 技能为**参考**而非成品：其示例代码默认面向纯 Godot，需适配本项目插件约定（`GUIDE` 输入、`mc_game_framework`、`sound_manager`）、静态类型与命名规范（§8）。
+3. 技能只解决工程实现；**涉及文案/美术/音乐的需求仍受 §2 约束**（AI 不得生成，由人类提供或 `PLACEHOLDER`）。
+4. 需要 3D、多人、移动/主机、RPG 剧情等已剪枝能力时，从上游按需临时引入单个技能目录，并在 ATTRIBUTION 中登记。
