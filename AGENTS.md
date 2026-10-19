@@ -10,6 +10,7 @@
 - **开发环境**: DSH (DeepSeek Harness) Web — 工具均为小写命名
 - **交流语言**: 中文
 - **项目性质**: 参加「幻游万象展」GameJam（东方 Project 主题）。本期活动主题：**「心」**；本项目方向：**剑术（居合道）与心流——东方 Project 各角色间的瞬息间剑术对决**。详见 `docs/gamejam/README.md`「本期主题」
+- **代码仓库**: https://github.com/0999312/gamejam_iai （远端 `origin`，主干 `main`；工程根目录即仓库根目录）
 
 ## 2. 活动硬性约束（最高优先级，违反即违规）
 
