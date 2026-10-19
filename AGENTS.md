@@ -57,9 +57,17 @@
 
 ## 6. 测试与运行
 
+> **测试框架唯一为 GUT**（`addons/gut` v9.6.0）。所有测试脚本 `extends GutTest`，放在 `res://tests/`；不得引入 GdUnit4 或其他测试框架。写法与判定见 §8 末条与 `.dsh/skills/godot-testing-patterns/SKILL.md`。
+
 ```powershell
-# 运行 GUT 单元测试
-& "E:/godot_learning/Godot_v4.6.2-stable_mono_win64/godot.exe" --headless -s addons/gut/gut_cmdln.gd --path .
+# 运行全部 GUT 测试（退出码 0 = 全过，1 = 有失败）
+& "E:/godot_learning/Godot_v4.6.2-stable_mono_win64/godot.exe" --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit
+
+# 只跑文件名含 damage 的测试（调试用；完整参数见 .dsh/skills/godot-testing-patterns/references/gut-quick-reference.md）
+& "E:/godot_learning/Godot_v4.6.2-stable_mono_win64/godot.exe" --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -gselect=damage -gexit
+
+# 一键脚本（等价，见技能目录 scripts/run_tests.ps1）
+pwsh -File .dsh/skills/godot-testing-patterns/scripts/run_tests.ps1
 
 # 运行游戏
 & "E:/godot_learning/Godot_v4.6.2-stable_mono_win64/godot.exe" --path .
@@ -70,7 +78,8 @@
 
 ## 7. 注意事项
 
-- **技能来源**：`.dsh/skills/` 是第三方 GDAS 技能库的 2D 剪枝副本（LGPL-3.0，33 个），来源、提交号与许可见 `.dsh/skills/ATTRIBUTION.md` 与 `.dsh/skills/LICENSE`；不要手改技能文件
+- **技能来源**：`.dsh/skills/` 是第三方 GDAS 技能库的 2D 剪枝副本（LGPL-3.0，33 个），来源、提交号与许可见 `.dsh/skills/ATTRIBUTION.md` 与 `.dsh/skills/LICENSE`；除下方说明的一处本地改写外，不要手改技能文件
+- **唯一本地改写**：`godot-testing-patterns` 已由 GdUnit4 版改写为 **GUT 版**（SKILL.md、references、scripts 全部重写，时间 2026-10-19），改写记录见 `ATTRIBUTION.md` §6。上游再同步该技能时**不要覆盖**，需按 GUT 版重新适配
 - **技能更新**：更新源为仓库外 `.research/Game-Dev-Agentic-Skills`（已 gitignore），`git pull` 后按 `ATTRIBUTION.md` §4 重新复制并更新提交号（需外部命令审批）
 - **C# 脚本**：DSH 会话内无法编译 C#，新增/修改 C# 后需在 Godot 编辑器内构建
 - **外部程序执行受限**：DSH 沙箱默认下启动 `godot.exe`/`git.exe` 报 `Access is denied`；需带 `sandbox_permissions` 触发一次性审批后才可执行（已用该方式完成 `git init` 与首个提交）。未审批时 §6 的 `--headless` 导入、GUT 测试、启动游戏都无法运行，验证需由人在本机执行
@@ -88,6 +97,7 @@
 - **`@onready`**：仅延迟初始化时使用，不在 `_ready()` 中赋值后又声明 `@onready`
 - **场景组织**：单一职责原则，一个 `.tscn` 做一件事；组合优于继承
 - **场景实例化隔离**：复杂 UI 或独立敌人实体必须存为独立的 .tscn 子场景，不得在主场景中直接堆砌孤立的节点层级。
+- **测试（GUT）**：只用 GUT——`extends GutTest`，文件放 `res://tests/`（`unit/` 纯逻辑、`integration/` 场景、`fixtures/` 数据工厂），文件名以 `test_` 前缀、`.gd` 后缀；禁止 GdUnit4 或混用两套 API。异步一律 `await wait_frames(n)` / `await wait_physics_frames(n)` / `await wait_for_signal(sig, timeout)`，**不用 `OS.delay_*`/`sleep`**；帧窗判定（如居合判定帧）按 `Engine.get_physics_frames()` 计数断言。信号先 `watch_signals(obj)` 再 `assert_signal_emitted*`；协作者用 `double()` + `stub(...).to_return(...)` + `assert_called*`。节点用 `autofree` / `add_child_autofree`，套件末尾 `assert_no_new_orphans()`；随机只经 `RandomNumberGenerator` 并固定 `seed`。输入测试用 `GutInputFactory.key_down/key_up/action_down/action_up` 或 GUIDE 上下文切换，不硬编码键名。
 
 ## 9. 项目技能（.dsh/skills）
 
@@ -100,3 +110,4 @@
 2. 技能为**参考**而非成品：其示例代码默认面向纯 Godot，需适配本项目插件约定（`GUIDE` 输入、`mc_game_framework`、`sound_manager`）、静态类型与命名规范（§8）。
 3. 技能只解决工程实现；**涉及文案/美术/音乐的需求仍受 §2 约束**（AI 不得生成，由人类提供或 `PLACEHOLDER`）。
 4. 需要 3D、多人、移动/主机、RPG 剧情等已剪枝能力时，从上游按需临时引入单个技能目录，并在 ATTRIBUTION 中登记。
+5. `godot-testing-patterns` 已本地改写为 **GUT 版**（上游为 GdUnit4）：本项目所有测试按该技能的决策树、脚本与 `references/gut-quick-reference.md` 执行；即使临时引入其他技能，也不要引入 GdUnit4。

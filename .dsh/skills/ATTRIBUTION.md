@@ -1,7 +1,7 @@
 # 技能目录来源与许可（.dsh/skills）
 
 > 本目录是**第三方技能库的剪枝副本**，由 DSH 以项目级技能（`<projectRoot>/.dsh/skills`，发现优先级 100）自动加载。
-> 技能正文为上游英文原文，未做翻译或改写；本项目只增删技能条目，不改技能内部文件。
+> 除 `godot-testing-patterns` 已本地改写为 GUT 版（见 §6）外，技能正文为上游英文原文，未做翻译或改写；本项目只增删技能条目。
 
 ## 1. 来源
 
@@ -21,7 +21,7 @@
 - 保留：Godot 4.7 的 2D 玩法、架构、表现、管线与格斗类型参考。
 - 丢弃：`bevy-*` 全部（引擎不匹配）；3D 光照/材质/世界/物理；`adapt-*`（多端/3D 适配）；多人网络与服务器；移动/主机/VR 平台；`version-migration`；RPG 剧情/库存/经济/对话/任务；除格斗外的其他游戏类型；`monte-carlo-balancer`；`gdas-reader`/`rea` 工具链。
 - 丢弃（体积大、按需再引入）：`godot-master`（4.6 MB 汇总枢纽）、`godot-analyst` / `godot-auditor` / `godot-builder`（人格技能）、`godot-project-templates`。
-- 未改动任何保留技能的文件内容。
+- 除 `godot-testing-patterns` 外（改写见 §6），未改动任何保留技能的文件内容。
 
 ## 3. 已安装技能（33）
 
@@ -44,3 +44,16 @@
 ## 5. 免责
 
 技能内容为上游作者作品，版权归其所有；本项目仅作开发参考。技能中的示例代码在采用前需按项目 `AGENTS.md` 规范审查（静态类型、GUIDE 输入、mc_game_framework 等），不得直接粘贴未经审查的代码。
+
+## 6. 本地改写记录：`godot-testing-patterns` → GUT 版
+
+| 项 | 值 |
+|----|----|
+| 上游版本 | `godot-testing-patterns` 面向 **GdUnit4**（`extends GdUnitTestSuite`、`addons/gdUnit4/...`） |
+| 改写日期 | 2026-10-19 |
+| 原因 | 本工程已安装并启用 **GUT 9.6.0**（`addons/gut`），不引入 GdUnit4；测试方案统一为 GUT |
+| 改写范围 | `SKILL.md`、`references/expert-testing-patterns.md`、`references/manual-testing-checklist.md` 全部重写；新增 `references/gut-quick-reference.md`；`scripts/` 14 个脚本按 GUT 重写，另新增 `scripts/run_tests.ps1`；`references/migration-notes.md` 为版本迁移资料，保留上游原文 |
+| 未改内容 | 技能的决策树结构、NEVER 规则清单、测试分层思路（unit / scene / headless gate / golden / fuzz / perf / leak）均沿用上游设计 |
+| 再同步注意 | 从上游 `git pull` 重新复制本技能目录会**覆盖 GUT 版**；需要同步时逐文件比对，保留 GUT 改写，或在 `ATTRIBUTION` 记录新差异 |
+
+改写依据（GUT 9.6.0 实测 API）：`GutTest` 生命周期 `before_all/before_each/after_each/after_all`；断言 `assert_eq/assert_true/assert_lt/assert_between/assert_freed`；信号 `watch_signals/assert_signal_emitted/assert_signal_emitted_with_parameters/assert_signal_emit_count/assert_signal_not_emitted/get_signal_parameters`；替身 `double/partial_double/stub(...).to_return(...)/assert_called/assert_called_count/assert_not_called`；异步 `wait_frames/wait_physics_frames/wait_seconds/wait_for_signal`；节点 `autofree/autoqfree/add_child_autofree`、`assert_no_new_orphans`；CLI `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`（退出码 0/1）。

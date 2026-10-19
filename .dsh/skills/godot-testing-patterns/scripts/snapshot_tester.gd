@@ -1,43 +1,66 @@
-# snapshot_tester.gd
-# Expert utility for visual regression testing (Snapshot Testing).
-# Grounded in Godot 4.x RenderingServer and Image comparison.
+# 金色文件测试：把存档/关卡状态序列化成 JSON，与 res://tests/goldens/ 下的参考文件比对。
+# 审批流程：首次运行生成参考 → 有意变更后重新生成 → 人工 diff → 提交新文件。绝不手改字节。
+extends GutTest
 
-extends Node
+const GOLDEN_DIR: String = "res://tests/goldens"
 
-class_name SnapshotTester
 
-## Takes a screenshot and compares it to a "golden" reference image.
-func run_snapshot_test(scene_name: String) -> bool:
-	# Wait for frame draw to complete
-	await RenderingServer.frame_post_draw
-	
-	var viewport = get_viewport()
-	var img = viewport.get_texture().get_image()
-	
-	var ref_path = "res://tests/snapshots/%s.png" % scene_name
-	if not FileAccess.file_exists(ref_path):
-		img.save_png(ref_path) # Save first run as reference
-		print("Snapshot: Reference saved for %s" % scene_name)
-		return true
-		
-	var ref_img = Image.load_from_file(ref_path)
-	var diff = img.compute_image_metrics(ref_img, false)
-	
-	if diff["max"] > 0.01: # Threshold for drift
-		push_error("Snapshot Test FAILED for %s (Diff: %.4f)" % [scene_name, diff["max"]])
-		return false
-		
-	print("Snapshot Test PASSED for %s" % scene_name)
-	return true
-# =============================================================================
-# GDSkills research links (agents) — does not affect runtime
-# Official docs:
-# - https://docs.godotengine.org/en/stable/classes/class_renderingserver.html
-# - https://docs.godotengine.org/en/stable/classes/class_viewport.html
-# - https://docs.godotengine.org/en/stable/classes/class_image.html
-# - https://docs.godotengine.org/en/stable/tutorials/io/saving_games.html
-# Related skills:
-# - https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-ui-theming/SKILL.md — visual drift from theme/layout changes
-# - https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-save-load-systems/SKILL.md — golden file I/O patterns for references
-# Parent skill: https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-testing-patterns/SKILL.md
-# =============================================================================
+func before_all() -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(GOLDEN_DIR))
+
+
+func _golden_path(snapshot_name: String) -> String:
+	return "%s/%s.json" % [GOLDEN_DIR, snapshot_name]
+
+
+func _save_golden(path: String, value: Variant) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	assert_not_null(file, "无法写入金色文件: " + path)
+	file.store_string(JSON.stringify(value, "\t") + "\n")
+	file.close()
+
+
+func _load_golden(path: String) -> Variant:
+	return JSON.parse_string(FileAccess.get_file_as_string(path))
+
+
+func _sanitize(value: Variant) -> Variant:
+	# 浮点/瞬时值不要进金色文件，先取整或剔除，否则每次跑都 diff。
+	if value is float:
+		return snappedf(value, 0.001)
+	if value is Array:
+		var out: Array = []
+		for item in value:
+			out.append(_sanitize(item))
+		return out
+	if value is Dictionary:
+		var out_dict: Dictionary = {}
+		for key in value:
+			out_dict[key] = _sanitize(value[key])
+		return out_dict
+	return value
+
+
+# update=true 时强制重写参考文件（用于有意变更后重新生成）。
+func assert_golden(snapshot_name: String, actual: Variant, update: bool = false) -> void:
+	var path: String = _golden_path(snapshot_name)
+	var value: Variant = _sanitize(actual)
+
+	if update or not FileAccess.file_exists(path):
+		_save_golden(path, value)
+		pass_test(("updated " if update else "created ") + path)
+		return
+
+	assert_eq(value, _load_golden(path), "金色文件不一致: " + path + "（确认改动后重新生成）")
+
+
+func test_duel_result_snapshot() -> void:
+	var result := {
+		"winner": "player",
+		"rounds": [
+			{"index": 1, "hp_left": 2, "frames_taken": 143},
+		],
+		"flow_peak": 87,
+	}
+
+	assert_golden("duel_result", result)

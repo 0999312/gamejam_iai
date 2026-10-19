@@ -1,57 +1,36 @@
-# skills/testing-patterns/scripts/integration_test_base.gd
-extends "res://addons/gut/test.gd"
+# 场景测试基类模板：复制到 res://tests/fixtures/scene_test_base.gd 后使用。
+# 用法：测试文件写 extends "res://tests/fixtures/scene_test_base.gd"（该类本身继承 GutTest）。
+extends GutTest
 
-## Integration Test Base Expert Pattern
-## Base class for integration tests ensuring clean state and real-node interactions.
+const READY_SETTLE_FRAMES: int = 2
 
-class_name IntegrationTestBase
 
-# Scene references to be loaded for tests
-var _level_instance: Node
-var _player: Node
+# 把节点挂进测试树，等 _ready + 1 帧物理稳定后返回。
+func mount(node: Node) -> Node:
+	add_child_autofree(node)
+	await wait_frames(READY_SETTLE_FRAMES)
+	await wait_physics_frames(1)
+	return node
 
-func before_all() -> void:
-	# Run once before all tests in script
-	pass
 
-func after_all() -> void:
-	# Run once after all tests
-	pass
+# 加载并挂载一个 PackedScene；路径不存在时直接给出可读失败信息。
+func mount_scene(path: String) -> Node:
+	assert_true(ResourceLoader.exists(path), "场景不存在: " + path)
+	var packed: PackedScene = load(path) as PackedScene
+	assert_not_null(packed, "不是 PackedScene: " + path)
+	return await mount(packed.instantiate())
 
-func before_each() -> void:
-	# Setup clean environment
-	_level_instance = Node2D.new()
-	add_child_autofree(_level_instance) # GdUnit4 autofree helper on teardown
-	
-	# Mock or Real Player
-	_player = CharacterBody2D.new()
-	_player.name = "Player"
-	_level_instance.add_child(_player)
 
-func after_each() -> void:
-	# Cleanup happens via add_child_autofree, but custom logic goes here
-	pass
+# 等到角色速度收敛（例如落地、位移结束），超时则失败。
+func assert_body_settles(body: CharacterBody2D, max_frames: int = 30) -> void:
+	for i in max_frames:
+		await wait_physics_frames(1)
+		if body.velocity.length() < 0.01:
+			return
+	fail_test("body 在 %d 个物理帧内未静止（velocity=%s）" % [max_frames, body.velocity])
 
-func test_player_initial_state() -> void:
-	# Tests
-	assert_not_null(_player, "Player should exist")
-	assert_eq(_player.get_parent(), _level_instance, "Player should be in level")
 
-func simulate_frames(frames: int) -> void:
-	for i in range(frames):
-		await wait_frames(1)
+func test_base_class_is_mountable() -> void:
+	var node: Node = await mount(Node2D.new())
 
-## EXPERT USAGE:
-## extends IntegrationTestBase
-## func test_combat(): ...
-# =============================================================================
-# GDSkills research links (agents) — does not affect runtime
-# Official docs:
-# - https://docs.godotengine.org/en/stable/tutorials/scripting/nodes_and_scene_instances.html
-# - https://docs.godotengine.org/en/stable/tutorials/scripting/scene_tree.html
-# - https://docs.godotengine.org/en/stable/tutorials/best_practices/scene_organization.html
-# Related skills:
-# - https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-scene-management/SKILL.md — clean scene fixtures per test
-# - https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-project-foundations/SKILL.md — test/unit vs integration layout
-# Parent skill: https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-testing-patterns/SKILL.md
-# =============================================================================
+	assert_true(node.is_inside_tree())

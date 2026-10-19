@@ -1,33 +1,48 @@
-# mock_network_provider.gd
-# Expert utility for simulating network latency and packet loss during local tests.
-# Grounded in Godot 4.x ENetMultiplayerPeer simulation properties.
+# 离线 multiplayer 对端：测 RPC 时不要拉起真实 ENet，先换 OfflineMultiplayerPeer。
+# 本项目为单机双人对决，网络相关测试仅在接入联机时才需要。
+extends GutTest
 
-extends Node
+# 建议复制到 res://tests/fixtures/offline_multiplayer.gd 作为测试辅助。
+class OfflineMultiplayerHelper:
+	extends RefCounted
 
-class_name MockNetworkProvider
+	static func enable_offline(tree: SceneTree) -> void:
+		tree.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 
-## Configures the multiplayer peer with simulated latency/loss.
-static func configure_simulated_network(peer: ENetMultiplayerPeer, latency_ms: int = 50, jitter_ms: int = 10, loss_percent: float = 0.05) -> void:
-	if peer == null:
-		return
-		
-	# ENet-specific simulation (available via host/peer settings)
-	# Note: In Godot 4, some of these are set via the ENetConnection.
-	print("Network Simulator: Latency=%dms, Jitter=%dms, Loss=%.1f%%" % [latency_ms, jitter_ms, loss_percent * 100])
-	
-	# Placeholder for lower-level ENet configurations
-	# peer.get_host().set_bandwidth_limit(...) etc.
+	static func disable(tree: SceneTree) -> void:
+		tree.multiplayer.multiplayer_peer = null
 
-## Expert Tip: Use this provider in 'Integration Test' scenes to verify 
-## that prediction/reconciliation logic handles real-world lag.
-# =============================================================================
-# GDSkills research links (agents) — does not affect runtime
-# Official docs:
-# - https://docs.godotengine.org/en/stable/tutorials/networking/high_level_multiplayer.html
-# - https://docs.godotengine.org/en/stable/classes/class_enetmultiplayerpeer.html
-# - https://docs.godotengine.org/en/stable/classes/class_offlinemultiplayerpeer.html
-# Related skills:
-# - https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-multiplayer-networking/SKILL.md — peer/RPC APIs under lag simulation
-# - https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-adapt-single-to-multiplayer/SKILL.md — prediction paths that need mock latency
-# Parent skill: https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-testing-patterns/SKILL.md
-# =============================================================================
+
+var _original_peer: MultiplayerPeer = null
+
+
+func before_each() -> void:
+	_original_peer = get_tree().multiplayer.multiplayer_peer
+	OfflineMultiplayerHelper.enable_offline(get_tree())
+	await wait_frames(1)
+
+
+func after_each() -> void:
+	if is_instance_valid(_original_peer):
+		get_tree().multiplayer.multiplayer_peer = _original_peer
+	else:
+		OfflineMultiplayerHelper.disable(get_tree())
+
+
+func test_offline_peer_reports_server_identity() -> void:
+	assert_true(get_tree().multiplayer.multiplayer_peer is OfflineMultiplayerPeer)
+	assert_true(multiplayer.is_server(), "离线对端下应视为 server")
+
+
+func test_offline_peer_has_no_remote_peers() -> void:
+	var peers: PackedInt32Array = multiplayer.get_peers()
+	assert_eq(peers.size(), 0, "离线对端不应有远端连接")
+
+
+func test_rpc_to_missing_peer_fails_safely() -> void:
+	# 无真实对端时，rpc 到不存在的 peer 应安静失败而不是崩溃。
+	var target := Node.new()
+	add_child_autofree(target)
+	target.rpc_id(99, "notify", 1)
+	await wait_frames(1)
+	assert_true(is_instance_valid(target), "无对端时 rpc 不应导致节点被销毁")

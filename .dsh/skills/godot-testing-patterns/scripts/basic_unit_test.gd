@@ -1,26 +1,24 @@
-# basic_unit_test.gd
-# Minimal GdUnit4 test structure
-extends GdUnitTestSuite
+# 最小 GUT 单元测试：只测纯逻辑，不进场景树。
+# 用法：复制到 res://tests/unit/test_<模块>.gd，把 DamageMath 换成被测脚本（preload/class_name）。
+extends GutTest
 
-# EXPERT NOTE: In GdUnit4, use verify() and assert_that() 
-# for readable, robust unit testing of logic scripts.
+# 占位被测对象；真实项目里删掉它、改为 preload("res://scripts/...")。
+class DamageMath:
+	static func compute(raw: int, multiplier: float) -> int:
+		return maxi(0, roundi(float(raw) * multiplier))
 
-func test_arithmetic_logic():
-	assert_that(1 + 1).is_equal(2)
-	assert_that("Godot").is_not_empty()
+	static func is_defeated(health: int) -> bool:
+		return health <= 0
 
-func test_player_damage():
-	var player = Player.new()
-	player.take_damage(20)
-	assert_that(player.health).is_equal(80)
-	player.free()
-# =============================================================================
-# GDSkills research links (agents) — does not affect runtime
-# Official docs:
-# - https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html
-# - https://docs.godotengine.org/en/stable/tutorials/best_practices/logic_preferences.html
-# Related skills:
-# - https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-gdscript-mastery/SKILL.md — typed asserts and pure-logic unit tests
-# - https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-project-foundations/SKILL.md — where test scripts live in project layout
-# Parent skill: https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-testing-patterns/SKILL.md
-# =============================================================================
+
+func test_damage_scales_with_multiplier() -> void:
+	assert_eq(DamageMath.compute(10, 1.5), 15, "10 x 1.5 应为 15")
+
+
+func test_damage_is_clamped_at_zero() -> void:
+	assert_eq(DamageMath.compute(5, -2.0), 0, "负倍率应夹到 0")
+
+
+func test_zero_health_is_defeated() -> void:
+	assert_true(DamageMath.is_defeated(0), "0 血即败")
+	assert_false(DamageMath.is_defeated(1), "1 血未败")

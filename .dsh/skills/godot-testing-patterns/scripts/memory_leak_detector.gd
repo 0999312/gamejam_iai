@@ -1,23 +1,41 @@
-# memory_leak_detector.gd
-# Capturing object count regressions
-extends Node
+# 孤儿节点检测：GUT 自带 assert_no_new_orphans()，在 after_all 里统一兜底。
+# 常见泄漏点：new 了节点但没进树、没 free / queue_free、信号连接持有引用。
+extends GutTest
 
-# EXPERT NOTE: A sudden spike in Performance.OBJECT_COUNT 
-# usually indicates nodes or resources that aren't being 
-# freed correctly (orphans).
+var _orphan_baseline: int = 0
 
-func _process(_delta):
-	if Input.is_action_just_pressed("ui_focus_next"):
-		var orphans = Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)
-		if orphans > 0:
-			print_rich("[color=red]ORPHAN NODES DETECTED: [/color]", orphans)
-# =============================================================================
-# GDSkills research links (agents) — does not affect runtime
-# Official docs:
-# - https://docs.godotengine.org/en/stable/classes/class_performance.html
-# - https://docs.godotengine.org/en/stable/tutorials/scripting/debug/objectdb_profiler.html
-# Related skills:
-# - https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-debugging-profiling/SKILL.md — ObjectDB/orphan investigation
-# - https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-performance-optimization/SKILL.md — leak cost in long sessions
-# Parent skill: https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-testing-patterns/SKILL.md
-# =============================================================================
+
+func before_all() -> void:
+	_orphan_baseline = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+
+
+func after_all() -> void:
+	assert_no_new_orphans("套件结束后仍有未释放的节点")
+
+
+func test_free_keeps_orphan_count_flat() -> void:
+	var node := Node.new()
+	node.free()
+	await wait_frames(1)
+
+	var current: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	assert_true(current <= _orphan_baseline + 1, "free() 之后孤儿数不应上涨（当前 %d）" % current)
+
+
+func test_add_child_autofree_cleans_up() -> void:
+	var node := Node2D.new()
+	add_child_autofree(node)
+	await wait_frames(1)
+
+	assert_true(is_instance_valid(node), "测试运行期间节点应有效")
+
+
+func test_queue_free_releases_after_frames() -> void:
+	var node := Node2D.new()
+	add_child_autofree(node)
+	await wait_frames(1)
+
+	node.queue_free()
+	await wait_frames(2)
+
+	assert_freed(node, "queue_free 后应在数帧内释放")

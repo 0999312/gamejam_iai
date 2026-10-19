@@ -1,51 +1,37 @@
-# headless_test_runner.gd
-# CI headless orchestrator for GdUnit4 suites (GdUnitTestSuite).
+# Headless CI 门控参考（本文件不是测试用例，GUT 不会收集它）。
+#
+# 命令（工作目录 = 工程根）：
+#   godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit
+#
+# 契约：
+#   0 = 全部测试通过
+#   1 = 存在失败（含 GUT 内部错误）
+#   必须带 -gexit，否则进程跑完不退出，CI 会一直挂到超时。
+#
+# 注意：
+#   - 不要解析 stdout 文本判断成败，日志格式不保证稳定；只看退出码。
+#   - 需要报告时加 -gjunit_xml_file=res://test-results.xml。
+#   - 失败排查加 -glog=2；CI 里不要用 pause_before_teardown（或加 -gignore_pause）。
+#   - 优先调用 scripts/run_tests.ps1，避免参数抄错。
+extends RefCounted
 
-extends Node
+const TEST_DIR: String = "res://tests"
 
-## GdUnit4 CLI (typical CI):
-## godot --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://test
-## Exit code propagates via OS.exit_code below.
 
-func _ready() -> void:
-	if DisplayServer.get_name() == "headless":
-		_run_ci_tests()
+static func build_command(godot_exe: String, project_path: String, select_filter: String = "") -> PackedStringArray:
+	var args := PackedStringArray([
+		"--headless",
+		"--path", project_path,
+		"-s", "addons/gut/gut_cmdln.gd",
+		"-gdir=" + TEST_DIR,
+		"-ginclude_subdirs",
+		"-gexit",
+	])
+	if select_filter != "":
+		args.append("-gselect=" + select_filter)
+	return args
 
-func _run_ci_tests() -> void:
-	print("Starting Headless Test Suite...")
-	var success := _execute_all_tests()
-	OS.exit_code = 0 if success else 1
-	if not success:
-		printerr("Tests failed — OS.exit_code=%d" % OS.exit_code)
-	get_tree().quit(0 if success else 1)
 
-func _execute_all_tests() -> bool:
-	# Invoke GdUnit4 runner when addon present; stub returns pass for template projects
-	if ClassDB.class_exists("GdUnitTestSuite"):
-		# Real projects: delegate to GdUnitCmdTool or run discovered suites here
-		pass
-	return true
-
-func test_signal_decoupling() -> void:
-	var emitter := Node.new()
-	emitter.add_user_signal("data_processed", [{"name": "value", "type": TYPE_INT}])
-	var signal_received := false
-	var received_value := -1
-	emitter.data_processed.connect(func(v):
-		signal_received = true
-		received_value = v
-	)
-	emitter.emit_signal("data_processed", 42)
-	assert(signal_received, "Signal 'data_processed' was not emitted.")
-	assert(received_value == 42, "Signal payload was incorrect.")
-# =============================================================================
-# GDSkills research links (agents) — does not affect runtime
-# Official docs:
-# - https://docs.godotengine.org/en/stable/tutorials/editor/command_line_tutorial.html
-# - https://docs.godotengine.org/en/stable/classes/class_displayserver.html
-# - https://docs.godotengine.org/en/stable/classes/class_os.html
-# Related skills:
-# - https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-export-builds/SKILL.md — CI pipelines invoking headless Godot
-# - https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-signal-architecture/SKILL.md — signal assertions in the runner example
-# Parent skill: https://github.com/thedivergentai/gd-agentic-skills/blob/main/skills/godot-testing-patterns/SKILL.md
-# =============================================================================
+# CI 里失败时应返回非 0；调用方据此决定是否中断流水线。
+static func is_success_exit_code(code: int) -> bool:
+	return code == 0

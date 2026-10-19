@@ -1,32 +1,40 @@
 # Manual testing checklist
 
-Automate critical paths first; use this for release smoke when CI cannot cover feel.
+先自动化关键路径；这里只保留 CI 覆盖不到的部分——手感、可读性、舞台观感。
 
-## Gameplay
+## 玩法（剑术对决）
 
-- [ ] Movement all directions
-- [ ] Jump / combat numbers match design
-- [ ] Enemy AI responds
+- [ ] 移动 / 朝向 / 位移取消符合设计
+- [ ] 出刀起手、激活、收招三段时长与设计一致
+- [ ] 居合窗口（判定帧区间）能被稳定触发，且不能连点刷出
+- [ ] 受击硬直、无敌帧、击退方向正确
+- [ ] 双方同时命中（相杀）按设计结算，不出现双赢/双输不一致
+- [ ] AI 会逼近、会择机出刀、会后退拉开距离；不会卡墙
+- [ ] 胜负判定与回合流程（进下一局 / 重开）无死锁
 
 ## UI
 
-- [ ] Buttons / focus navigation
-- [ ] Readable at min supported resolution
+- [ ] 按钮可聚焦、可键盘/手柄操作
+- [ ] 最小支持分辨率下文字不截断
+- [ ] 血条 / 心流槽 / 计时器数字与后台状态一致
 
-## Audio
+## 音频
 
-- [ ] Music + SFX trigger; bus levels balanced
+- [ ] 出刀、命中、格挡、胜负音效在判定当帧触发
+- [ ] 音乐与音效总线电平平衡；静音设置生效
 
-## Performance
+## 性能与稳定性
 
-- [ ] Stable target FPS
-- [ ] No stutter spikes; memory stable
+- [ ] 目标分辨率下稳定目标帧率，无周期性卡顿
+- [ ] 连续对局 10 分钟后内存稳定
+- [ ] 窗口缩放 / 全屏切换 / 切出再切回不崩
 
-## Test folder layout (suggested)
+## 测试目录（本工程）
 
 ```
-res://test/
-├── unit/
-├── integration/
-└── fixtures/
+res://tests/
+├── unit/          # 纯逻辑，test_*.gd
+├── integration/   # 场景集成，test_*.gd
+├── fixtures/      # 替身与数据工厂（非 test_ 前缀）
+└── goldens/       # JSON 金色文件
 ```
