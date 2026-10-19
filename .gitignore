@@ -1,25 +1,26 @@
-# Godot 4.2+ specific ignores
-~*.dll
-
-# Godot 4+ specific ignores
+# Godot 4+ generated
 .godot/
-.nomedia
+/android/
+/export/
 
-# Godot-specific ignores
-.import/
-export.cfg
-export_credentials.cfg
-*.tmp
+# Prototype (web验证原型, 不属于Godot项目)
+prototype/
 
-# Imported translations (automatically generated from CSV files)
-*.translation
+# DSH 研究/更新源克隆（GodotPrompter 上游，不入库；技能副本在 .dsh/skills/）
+.research/
 
-# Mono-specific ignores
-.mono/
-data_*/
-mono_crash.*.json
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 
-# Export outputs
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.zip
+*.pck
 *.exe
-# Uncomment if your project does not version PCK files as runtime dependencies.
-# *.pck
