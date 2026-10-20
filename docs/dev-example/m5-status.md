@@ -59,6 +59,7 @@
 
 - 产物：`build/windows/iai.exe`（123,619,784 B，2026-10-20 14:05）。
 - 验证：`iai.exe --headless --quit-after 60` 退出码 0；日志 `Language [zh_CN]/[en] loaded successfully with 122 entries`。
+- 远端构建（2026-10-20 14:38，UTC+8）：GitHub Actions `build-windows` 第 14 次运行成功，Release `2026-10-20-02` 已创建；附件 `iai.exe` 118 MB，sha256 `db6fff55990cb30744f3a25d5f37bfc8dc1edf53455968f3b16a93f1a067397f`。首次空 Release `2026-10-20-01` 无附件，保留未删。
 - 说明：导出日志仍有两条重复字体 UID 警告（`assets/MiSans-Semibold.*` 与 `assets/fonts/MiSans-Semibold.*` 重复），不影响运行；`.cs` 已从导出排除，避免 mono 模板要求 `.sln` 的报错。`build/` 不入库。
 
 ### GitHub Release 版本（2026-10-20）
@@ -74,5 +75,5 @@
 - 通用中文 UI 标签由 AI 起草、按人类指示去占位；若主办方严格按「UI 文字也必须人类撰写」审核，需人类再过一遍。
 - 未做分辨率设置（按人类指示）；未做键位预设/多套方案。热插拔重建由单元/集成测试覆盖（直接调用回调），真实手柄插拔仍需人类试玩确认。
 - 全手柄 UI 由 `Input.parse_input_event` 的单元/集成测试覆盖（方向键焦点、初始焦点、A/B 映射）；真实手柄的方向键/摇杆手感与长按重复仍需人类实机确认。手柄原始事件兜底按 `event.device` 分发，已覆盖“GUIDE 枚举为空”的情况，但真实设备枚举失败仍需人类复测。
-- GitHub Actions/Release 尚未在远端实际跑通；首次 push 后需观察 `build-windows` 运行结果。
+- GitHub Actions/Release 已在远端跑通（2026-10-20，Release `2026-10-20-02` 带 EXE）；后续每次 push `main` 仍会自动构建并创建新 Release，提交前需注意。
 - 商店条目新增只需在 `resources/unlocks/` 放一个 `.tres`；名称/描述仍在 I18N 的 `shop.item.<id>.name/desc`。

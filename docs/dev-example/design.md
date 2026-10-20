@@ -649,7 +649,7 @@ GUIDE 输入 ──► DuelController ──► DuelSim.press()
 | 11-05 ~ 11-06 | 验证与导出 | 非开发机验证、导出、README/封面/披露 | 无阻塞性操作问题，材料齐全 |
 | 11-07 上午 | 提交 | 打包、自测解压运行、提交 | **09:40 前提交并留存凭证** |
 
-> 实际进度（2026-10-20）：M1/M2/M3/M4 完成；M5 完成通用 UI 去占位、中英双语（各 122 键）、按键/手柄改键与冲突检测、手柄热插拔、商店完全数据驱动（`resources/unlocks/*.tres` + MSF 注册表）、键鼠+手柄并存、P2 第二手柄检测、全手柄 UI 导航；GUT 116/116（22 脚本、363 asserts）。Windows EXE 已导出（`build/windows/iai.exe`，123,618,216 B，嵌入 PCK）并在本机 headless 冒烟 exit 0；GitHub Actions 工作流已加入，尚未在远端验证。剩余：人类写正式文案/美术、试听音效、真实手柄试玩、非开发机验证。
+> 实际进度（2026-10-20）：M1/M2/M3/M4 完成；M5 完成通用 UI 去占位、中英双语（各 122 键）、按键/手柄改键与冲突检测、手柄热插拔、商店完全数据驱动（`resources/unlocks/*.tres` + MSF 注册表）、键鼠+手柄并存、P2 第二手柄检测、全手柄 UI 导航；GUT 119/119（22 脚本、368 asserts）。Windows EXE 已导出（`build/windows/iai.exe`，123,619,784 B，嵌入 PCK）并在本机 headless 冒烟 exit 0；GitHub Actions 已在远端跑通，Release `2026-10-20-02` 带 EXE 附件（118 MB）。剩余：人类写正式文案/美术、试听音效、真实手柄试玩、非开发机验证。
 
 ### 16.2 范围
 
@@ -713,3 +713,4 @@ GUIDE 输入 ──► DuelController ──► DuelSim.press()
 | v0.12 | 2026-10-20 | 手柄改键 UI：每个动作独立手柄键，写入 `settings.joy_buttons`，同作用域冲突拒绝；手柄热插拔重建 GUIDE 上下文并重新分配 P1/P2；中英各 121 键；GUT 110/110 |
 | v0.13 | 2026-10-20 | 全手柄 UI：`UiFocus` 金色焦点环与初始焦点；`GameBootstrap` 给 `ui_accept`/`ui_cancel` 追加手柄 A/B；菜单/商店/设置/暂停/奖励支持方向键导航；改键等待时 Back 取消；中英各 122 键；GUT 116/116。导出 Windows EXE（`build/windows/iai.exe`，123,618,216 B，嵌入 PCK），本机 headless 冒烟 exit 0；新增 GitHub Actions 构建工作流（未在远端验证） |
 | v0.14 | 2026-10-20 | 修复真实手柄完全失效：GUIDE 手柄表延迟刷新、P1/P2 映射不依赖启动枚举、`_input` 按 `event.device` 原始兜底（玩家隔离/暂停去抖）；UI 动作补 `device=-1` 的 A/B/方向键；GUT 119/119。GitHub Action 对接 Release：构建号 `YYYY-MM-DD-NN`（UTC，01 起），语义化版本 `0.0.0`，tag/Release 自动创建 |
+| v0.15 | 2026-10-20 | CI 导出修复并远端跑通：使用 mono 版 Godot、导出前 `--import`、定位真实 `.exe`（不走 `godot` 包装脚本）；Release `2026-10-20-02` 带 118 MB EXE 附件；GUT 119/119（368 asserts） |

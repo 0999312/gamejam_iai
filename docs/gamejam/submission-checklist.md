@@ -45,12 +45,13 @@
 
 ## 3. 构建与导出
 
-- [x] 导出预设存在且导出成功（Windows exe 或 web，按主办方要求）。2026-10-20：`Windows Desktop`，`build/windows/iai.exe`，123,618,216 B，嵌入 PCK。
+- [x] 导出预设存在且导出成功（Windows exe 或 web，按主办方要求）。2026-10-20：`Windows Desktop`，`build/windows/iai.exe`，123,619,784 B，嵌入 PCK。
 - [x] 导出包内资源齐全（字体、音效、主题、shader 无丢失；`.pck` 一并打包）。已确认中英 122 条在导出 EXE 中加载；字体/音效路径未报缺失（导出日志仍有两处重复字体 UID 警告，不影响运行）。
 - [ ] 在**干净目录**解压/运行一次，确认不依赖开发机环境。
 - [x] 记录构建版本号与导出时间。Godot 4.7.2.stable.mono / 2026-10-20 13:50；语义化版本 `0.0.0`，构建号 `YYYY-MM-DD-NN`。
-- [x] GitHub Action 自动导出并创建 Release（`.github/workflows/build.yml`）：构建号 `YYYY-MM-DD-NN`（UTC，01 起），tag/Release 标题/附件同名；EXE 只作 Release 附件与 Artifact，不入库。远端首次运行结果待观察。
+- [x] GitHub Action 自动导出并创建 Release（`.github/workflows/build.yml`）：构建号 `YYYY-MM-DD-NN`（UTC，01 起），tag/Release 标题/附件同名；EXE 只作 Release 附件与 Artifact，不入库。远端已于 2026-10-20 跑通，Release `2026-10-20-02` 带 118 MB EXE；首次空 Release `2026-10-20-01` 保留未删。
 - [ ] 保留一份带 tag 的源码快照（如 `v0.9-submit`），避免提交后误改。
+- [x] 开发说明 README 已写（`README.md`，仅工程/构建/测试说明，不是提交用作品 README）；提交用 README 仍须人类按 §4 撰写。
 
 ## 4. 提交材料
 

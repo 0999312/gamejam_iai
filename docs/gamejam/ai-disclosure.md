@@ -61,6 +61,7 @@
 | 2026-10-20 | `export_presets.cfg`、`.github/workflows/build.yml`、`build/windows/iai.exe`（不入库）、`docs/dev-example/m5-status.md`（导出段） | DeepSeek Harness（deepseek-flash） | 生成 Windows 导出预设与 GitHub Actions 工作流；本机导出 EXE 并做 headless 冒烟 | 100% | 待人类在非开发机与远端 CI 验证 | 代码/构建配置 100% AI；导出产物在 `build/` 且已 gitignore；GUT 116/116 |
 | 2026-10-20 | `scripts/duel/duel_controller.gd`、`scripts/core/game_bootstrap.gd`、`tests/integration/test_duel_gamepad.gd`、`tests/integration/test_ui_gamepad.gd`（手柄兜底） | DeepSeek Harness（deepseek-flash） | 修复真实手柄失效：GUIDE 手柄表延迟刷新、P1/P2 映射不依赖启动枚举、按 `event.device` 原始兜底、UI 动作 `device=-1`、暂停去抖 | 100% | 待人类用真实手柄复测 | 代码 100% AI；GUT 119/119 |
 | 2026-10-20 | `.github/workflows/build.yml`、`project.godot`、`export_presets.cfg`（Release 版本） | DeepSeek Harness（deepseek-flash） | 构建号 `YYYY-MM-DD-NN`（UTC，01 起）、语义化版本 `0.0.0`；Action 导出 EXE 并创建 GitHub Release | 100% | 待远端首次运行验证 | 构建配置 100% AI；Release notes 仅含版本/构建号/commit 元数据 |
+| 2026-10-20 | `README.md`、`docs/dev-example/design.md`（v0.15）、`docs/dev-example/m5-status.md`（CI/README 段）、`docs/gamejam/submission-checklist.md`（构建/README 项） | DeepSeek Harness（deepseek-flash） | 编写**工程开发说明** README（环境/命令/架构/扩展/构建/限制）；同步最终状态 | 100% | 待人类复核；提交用作品 README 未写，仍由人类撰写 | 仅工程/构建说明，非玩家文案；AI 未生成美术/音频/剧情；GUT 119/119 |
 
 ## 5. 艺术资产声明（提交时填写并保留）
 
