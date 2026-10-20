@@ -59,6 +59,12 @@ jobs:
           path: build/windows/
           if-no-files-found: warn
 
+      - name: Verify exported EXE
+        shell: pwsh
+        run: |
+          $exe = Get-Item build/windows/iai.exe -ErrorAction Stop
+          Write-Output "EXE: $($exe.FullName) ($($exe.Length) bytes)"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -68,7 +74,8 @@ jobs:
             Semantic version: ${{ env.SEMVER }}
             Build: ${{ env.BUILD_VERSION }}
             Commit: ${{ github.sha }}
-          files: build/windows/iai.exe
+          files: build/windows/*.exe
+          fail_on_unmatched_files: true
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
