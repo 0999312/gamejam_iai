@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="UnlockItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/unlock_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"hard_mode"
+category = &"mode"
+cost = 0
+requires_clear = true
+toggle_setting = &"hard_mode"
+order = 40

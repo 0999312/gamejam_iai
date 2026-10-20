@@ -21,6 +21,7 @@ prototype/
 Thumbs.db
 
 # Build artifacts
+/build/
 *.zip
 *.pck
 *.exe

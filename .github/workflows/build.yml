@@ -1,0 +1,36 @@
+name: build-windows
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot 4.7.2
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.2
+          use-dotnet: false
+          include-templates: true
+
+      - name: Export Windows release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build/windows | Out-Null
+          godot --headless --path . --export-release "Windows Desktop" build/windows/iai.exe
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: iai-windows
+          path: build/windows/iai.exe
+          if-no-files-found: error

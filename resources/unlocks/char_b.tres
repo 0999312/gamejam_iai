@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="UnlockItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/unlock_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"char_b"
+category = &"character"
+cost = 40
+requires_clear = false
+toggle_setting = &""
+order = 10

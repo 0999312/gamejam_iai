@@ -82,6 +82,7 @@ func _build_ui() -> void:
 	_char_option.add_theme_font_override("font", FONT)
 	_char_option.add_theme_font_size_override("font_size", 18)
 	_char_option.item_selected.connect(_on_character_selected)
+	UiFocus.prepare(_char_option)
 	char_row.add_child(_char_option)
 	_populate_characters()
 
@@ -128,6 +129,7 @@ func _make_button(parent: Control, text: String) -> Button:
 	button.custom_minimum_size = Vector2(420, 56)
 	button.add_theme_font_override("font", FONT)
 	button.add_theme_font_size_override("font_size", 22)
+	UiFocus.prepare(button)
 	parent.add_child(button)
 	return button
 

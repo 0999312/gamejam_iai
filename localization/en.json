@@ -1,0 +1,160 @@
+{
+  "ui": {
+    "hp": "HP",
+    "flow": "Flow",
+    "state": "State",
+    "run": "Stage",
+    "gold": "Gold",
+    "zanshin": "Zanshin",
+    "controls": "J Slash / K Guard / R Restart / Esc Pause / 1–3 Pick",
+    "controls_template": "P1 %a Slash / %g Guard   %r Restart   %p Pause   1–3 Pick",
+    "controls_versus_template": "P1 %a Slash / %g Guard   P2 %d Slash / %f Guard   %r Restart   %p Pause",
+    "reward_title": "Choose one insight",
+    "reward_hint": "Click, or press 1 / 2 / 3",
+    "result_win": "Victory",
+    "result_lose": "Defeat",
+    "result_clear": "Cleared",
+    "upgrade_unknown": "Unnamed insight",
+    "round_start": "Start",
+    "versus": "Local Versus",
+    "controls_versus": "P1 J Slash / K Guard   P2 Numpad 1 Slash / 2 Guard   R Restart   Esc Pause",
+    "result_p1": "Player 1 wins",
+    "result_p2": "Player 2 wins",
+    "menu_hint": "Esc to menu"
+  },
+  "menu": {
+    "title": "[PLACEHOLDER] Sword · Flow",
+    "subtitle": "[PLACEHOLDER] One instant decides",
+    "gold": "Gold",
+    "start": "Single Run",
+    "versus": "Local Versus",
+    "shop": "Shop / Unlocks",
+    "settings": "Settings",
+    "character": "Character",
+    "character_hint": "More characters in the shop",
+    "char_a": "A · Balanced",
+    "char_b": "B · Swift",
+    "char_c": "C · Heavy",
+    "quit": "Quit",
+    "hint": "Click or press Enter"
+  },
+  "shop": {
+    "title": "Shop / Unlocks",
+    "gold": "Gold",
+    "back": "Back",
+    "buy": "Unlock",
+    "owned": "Unlocked",
+    "insufficient": "Not enough gold",
+    "requires_clear": "Clear the run to unlock",
+    "hard_on": "Hard mode: ON",
+    "hard_off": "Hard mode: OFF",
+    "section": {
+      "character": "Characters",
+      "perk": "Run Perks",
+      "mode": "Modes"
+    },
+    "item": {
+      "char_b": {"name": "[PLACEHOLDER] Character B", "desc": "[PLACEHOLDER] Swift: short windup, fast recovery"},
+      "char_c": {"name": "[PLACEHOLDER] Character C", "desc": "[PLACEHOLDER] Heavy: more HP, wider hit window"},
+      "start_slot": {"name": "[PLACEHOLDER] Starting Insight Slot", "desc": "[PLACEHOLDER] Begin each run with one random insight"},
+      "hard_mode": {"name": "[PLACEHOLDER] Hard Mode", "desc": "[PLACEHOLDER] Faster, fiercer, tougher opponents"}
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "master": "Master",
+    "sfx": "SFX",
+    "ambient": "Ambient",
+    "mute": "Mute",
+    "fullscreen": "Fullscreen",
+    "back": "Back",
+    "language": "Language",
+    "keys": "Keys & Gamepad",
+    "key_attack_p1": "Slash (P1)",
+    "key_guard_p1": "Guard (P1)",
+    "key_attack_p2": "Slash (P2)",
+    "key_guard_p2": "Guard (P2)",
+    "key_pause": "Pause",
+    "key_restart": "Restart",
+    "press_key": "Press a key...",
+    "press_joy": "Press a gamepad button...",
+    "cancel_hint": "(Back to cancel)",
+    "key_conflict": "Key already in use",
+    "joy_conflict": "Gamepad button already in use",
+    "no_gamepad": "No gamepad detected; connect one and retry",
+    "action_col": "Action",
+    "key_col": "Keyboard",
+    "joy_col": "Gamepad",
+    "reset_keys": "Reset to defaults",
+    "gamepads": "Gamepads",
+    "gamepad_p2_pad": "P2: Gamepad 2",
+    "gamepad_p2_keyboard": "P2: Keyboard",
+    "gamepad_hint": "Keyboard/mouse and gamepad work at the same time; an action can bind both; P2 can use gamepad 2 when connected"
+  },
+  "pause": {
+    "title": "Paused",
+    "resume": "Resume",
+    "restart": "Restart",
+    "menu": "Main Menu"
+  },
+  "state": {
+    "idle": "Idle",
+    "commit": "Commit",
+    "slash": "Slash",
+    "recovery": "Recovery",
+    "guard": "Guard",
+    "guard_rec": "Guard End",
+    "hitstun": "Hitstun",
+    "clash": "Clash",
+    "down": "Down"
+  },
+  "tutorial": {
+    "start": "[PLACEHOLDER] Watch the tell, do not rush",
+    "guard": "[PLACEHOLDER] K Guard: block before the blade lands",
+    "attack": "[PLACEHOLDER] J Slash: attacking leaves you open",
+    "flow": "[PLACEHOLDER] Higher flow widens the guard window",
+    "wait": "[PLACEHOLDER] Wait for the moment"
+  },
+  "upgrade": {
+    "u01": {
+      "name": "[PLACEHOLDER] Guard Window",
+      "desc": "[PLACEHOLDER] Guard lasts 2 more frames"
+    },
+    "u02": {
+      "name": "[PLACEHOLDER] Quick Commit",
+      "desc": "[PLACEHOLDER] Slash windup -2 frames"
+    },
+    "u03": {
+      "name": "[PLACEHOLDER] Perfect",
+      "desc": "[PLACEHOLDER] Perfect guard returns 18 flow"
+    },
+    "u04": {
+      "name": "[PLACEHOLDER] Calm Mind",
+      "desc": "[PLACEHOLDER] Start with +10 flow"
+    },
+    "u05": {
+      "name": "[PLACEHOLDER] Read",
+      "desc": "[PLACEHOLDER] Tell hint appears 4 frames earlier"
+    },
+    "u06": {
+      "name": "[PLACEHOLDER] See-Through",
+      "desc": "[PLACEHOLDER] At 50+ flow, negate one hit"
+    },
+    "u07": {
+      "name": "[PLACEHOLDER] Pursuit",
+      "desc": "[PLACEHOLDER] Next hit after a hit deals +1 damage"
+    },
+    "u08": {
+      "name": "[PLACEHOLDER] Guts",
+      "desc": "[PLACEHOLDER] No flow loss for 2s after a hit"
+    },
+    "u09": {
+      "name": "[PLACEHOLDER] First Strike",
+      "desc": "[PLACEHOLDER] Slash windup -3 frames in the first 3s"
+    },
+    "u10": {
+      "name": "[PLACEHOLDER] Recovery",
+      "desc": "[PLACEHOLDER] Heal 2 HP per win"
+    }
+  }
+}

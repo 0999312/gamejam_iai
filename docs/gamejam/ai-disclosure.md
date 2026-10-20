@@ -54,6 +54,11 @@
 | 2026-10-20 | `scripts/duel/fighter_data.gd`、`fighter_state.gd`、`duel_sim.gd`、`ai_profile.gd`、`duel_ai.gd`、`duel_controller.gd`、`duel_view.gd`、`duel_hud.gd`、`localization/zh_CN.json`、`tests/unit/test_duel_sim.gd`、`test_duel_ai.gd`、`test_upgrades.gd`、`tests/integration/test_duel_hud.gd`、`docs/dev-example/design.md`、`balance-pass-01.md`（平衡调整 01 + 开始提示/AI 间合） | DeepSeek Harness（deepseek-flash） | 按人类试玩反馈实现心流自然恢复、出刀扣心流、降低对手攻击欲/虚招率、礼让 180f、关底 HP 4、COMMIT 气环；追加礼让结束「开始」提示与 AI 命中后间合 | 100% | 待人工试玩复核 | 数值为初版调参；文本仍为 `[占位]`；GUT 69/69 |
 | 2026-10-20 | `scripts/audio/duel_audio.gd`、`scripts/duel/duel_controller.gd`、`scripts/duel/duel_hud.gd`、`scripts/ui/menu.gd`、`project.godot`、`assets/audio/sfx/*`、`assets/audio/amb/*`（音频接入第一版） | DeepSeek Harness（deepseek-flash） | 接入 `SoundManager`；把斩/拔刀/被架/完美格挡/刃鸣/受击/衣料/开始提示/UI 点击/环境风声映射到判定信号；修复环境音退出泄漏 | 100% | 待人工试听/试玩 | **音效与环境音 0% AI 生成**，均为 Kenney / OGA（SketchMan3）CC0；来源见 `assets/audio/CREDITS.md`；GUT 69/69 |
 | 2026-10-20 | `scripts/duel/fighter_data.gd`、`scripts/run/run_state.gd`、`scripts/core/meta_save.gd`、`game_bootstrap.gd`、`scripts/core/unlocks.gd`、`scripts/ui/menu.gd`、`shop.gd`、`settings.gd`、`pause_menu.gd`、`scripts/duel/duel_controller.gd`、`localization/zh_CN.json`、`scenes/ui/*`、`tests/unit/test_characters.gd`、`test_unlocks.gd`、`test_meta_save.gd`、`test_duel_pause.gd`、`tests/integration/test_menu.gd`（M4） | DeepSeek Harness（deepseek-flash） | 实现角色 B/C、局外解锁商店、困难模式、起始心得槽、设置页、暂停层、P2 镜像角色；音频总线与 headless 无音频处理 | 100% | 待人工试玩复核 | 代码 100% AI；玩家可见文本仍全部 `[占位]`；GUT 81/81 |
+| 2026-10-20 | `scripts/core/key_bindings.gd`、`unlock_item.gd`、`unlocks.gd`、`meta_save.gd`、`game_bootstrap.gd`、`scripts/ui/settings.gd`、`shop.gd`、`menu.gd`、`scripts/duel/duel_controller.gd`、`duel_hud.gd`、`localization/zh_CN.json`、`localization/en.json`、`tests/unit/test_key_bindings.gd`、`test_i18n.gd`、`test_shop_catalog.gd`、`tests/integration/test_settings.gd`（M5） | DeepSeek Harness（deepseek-flash） | 通用 UI 去占位、中英双语与语言切换、按键改键/冲突检测/恢复默认、HUD 动态操作提示、商店目录化（`UnlockItem`/`Unlocks.catalog()`） | 100% | 通用 UI 标签由人类指示去占位（m02521），待人类最终复核；内容文案仍为占位 | 代码 100% AI；**通用中文 UI 标签为功能性术语，由 AI 起草、人类明确指示采用**；剧情/教程/心得/商店条目/英文内容仍为占位；GUT 95/95 |
+| 2026-10-20 | `scripts/core/input_devices.gd`、`resources/unlocks/*.tres`、`game_bootstrap.gd`、`unlocks.gd`、`shop.gd`、`duel_controller.gd`、`settings.gd`、`tests/unit/test_input_devices.gd`、`test_game_data.gd`、`tests/integration/test_duel_gamepad.gd`（数据驱动商店 + 手柄） | DeepSeek Harness（deepseek-flash） | 商店改为 MSF 注册表数据驱动；键鼠/手柄同一动作并存映射；P2 第二手柄检测；虚拟手柄注入测试 | 100% | 待人类测试真实手柄与商店追加流程 | 代码 100% AI；当时代码固定 A/B/Start/Back；手柄改键见下一行；GUT 102/102 |
+| 2026-10-20 | `scripts/core/key_bindings.gd`、`meta_save.gd`、`input_devices.gd`、`scripts/ui/settings.gd`、`scripts/duel/duel_controller.gd`、`localization/zh_CN.json`、`localization/en.json`、`tests/unit/test_key_bindings.gd`、`test_input_devices.gd`、`tests/integration/test_settings.gd`、`test_duel_gamepad.gd`（手柄改键 + 热插拔） | DeepSeek Harness（deepseek-flash） | 手柄键逐项改绑、冲突检测、`settings.joy_buttons` 持久化、手柄热插拔重建 GUIDE 上下文并重新分配 P1/P2 | 100% | 待人类插拔真实手柄复核 | 代码 100% AI；通用 UI 文本为功能性标签；GUT 110/110 |
+| 2026-10-20 | `scripts/ui/ui_focus.gd`、`scripts/core/game_bootstrap.gd`、`scripts/ui/menu.gd`、`shop.gd`、`settings.gd`、`pause_menu.gd`、`scripts/duel/duel_hud.gd`、`localization/zh_CN.json`、`localization/en.json`、`tests/integration/test_ui_gamepad.gd`（全手柄 UI） | DeepSeek Harness（deepseek-flash） | 内置 `ui_accept`/`ui_cancel` 追加手柄 A/B；菜单/商店/设置/暂停/奖励初始焦点与金色焦点环；方向键导航；改键等待时 Back 取消 | 100% | 待人类用真实手柄复核 | 代码 100% AI；通用 UI 文本为功能性标签；GUT 116/116 |
+| 2026-10-20 | `export_presets.cfg`、`.github/workflows/build.yml`、`build/windows/iai.exe`（不入库）、`docs/dev-example/m5-status.md`（导出段） | DeepSeek Harness（deepseek-flash） | 生成 Windows 导出预设与 GitHub Actions 工作流；本机导出 EXE 并做 headless 冒烟 | 100% | 待人类在非开发机与远端 CI 验证 | 代码/构建配置 100% AI；导出产物在 `build/` 且已 gitignore；GUT 116/116 |
 
 ## 5. 艺术资产声明（提交时填写并保留）
 
@@ -65,6 +70,8 @@
 - [ ] 本作代码允许使用 AI 辅助，明细见 §4。
 - [ ] 本作**未使用**东方 Project 原作游戏素材（截图/游玩视频仅用于宣传）。
 - [ ] （仅当采用东方 IP 时）已在游戏内「关于」页与提交 README 中注明「本作是东方 Project 二次创作」。
+
+> 注（2026-10-20）：通用功能性 UI 标签（如「设置」「生命」「金币」）按人类指示由 AI 起草并去除 `[占位]`；剧情、教程、心得、商店条目与英文内容仍为占位。提交前需人类复核这些标签是否可接受，必要时由人类改写。
 
 ## 6. 第三方素材来源表
 

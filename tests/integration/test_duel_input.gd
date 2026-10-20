@@ -64,3 +64,30 @@ func test_teaching_ai_waits_during_opening_grace() -> void:
 		DuelTypes.State.IDLE,
 		"教学对手在开场礼让帧内不应行动"
 	)
+
+
+func test_remapped_attack_key_drives_duel() -> void:
+	var old_meta := GameBootstrap.meta
+	GameBootstrap.meta = MetaSave.new()
+	KeyBindings.set_key(GameBootstrap.meta, &"attack_p1", KEY_L)
+
+	var scene := DUEL_SCENE.instantiate()
+	add_child_autofree(scene)
+	await wait_process_frames(2)
+	await wait_physics_frames(2)
+	var sim := scene.get("sim") as DuelSim
+	sim.opening_lock_frames = 0
+
+	var down := InputEventKey.new()
+	down.keycode = KEY_L
+	down.physical_keycode = KEY_L
+	down.pressed = true
+	GUIDE.inject_input(down)
+	await wait_process_frames(2)
+	await wait_physics_frames(2)
+
+	assert_true(
+		sim.p1.state == DuelTypes.State.COMMIT or sim.p1.state == DuelTypes.State.SLASH,
+		"改键后按 L 应进入 COMMIT 或 SLASH，实际=%s" % DuelTypes.state_name(sim.p1.state)
+	)
+	GameBootstrap.meta = old_meta

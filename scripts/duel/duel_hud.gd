@@ -1,7 +1,7 @@
 class_name DuelHud
 extends CanvasLayer
 
-## 灰盒 HUD：PH_ 占位文本 + 数值条 + 三选一按钮；正式文案由人类替换。
+## 灰盒 HUD：I18N 文本 + 数值条 + 三选一按钮；正式文案由人类替换。
 
 signal offer_chosen(index: int)
 
@@ -105,6 +105,7 @@ func _ready() -> void:
 		button.custom_minimum_size = Vector2(520, 64)
 		button.add_theme_font_override("font", FONT)
 		button.pressed.connect(_on_reward_button.bind(i))
+		UiFocus.prepare(button)
 		_reward_box.add_child(button)
 		_reward_buttons.append(button)
 
@@ -124,6 +125,22 @@ func set_versus(value: bool) -> void:
 	refresh()
 
 
+func _controls_text() -> String:
+	var meta := GameBootstrap.meta if GameBootstrap != null else null
+	if meta == null:
+		return _tr("ui.controls_versus" if versus else "ui.controls")
+	var template := _tr("ui.controls_versus_template" if versus else "ui.controls_template")
+	if template.begins_with("[占位]"):
+		return _tr("ui.controls_versus" if versus else "ui.controls")
+	return template \
+		.replace("%a", KeyBindings.label(meta, &"attack_p1")) \
+		.replace("%g", KeyBindings.label(meta, &"guard_p1")) \
+		.replace("%d", KeyBindings.label(meta, &"attack_p2")) \
+		.replace("%f", KeyBindings.label(meta, &"guard_p2")) \
+		.replace("%r", KeyBindings.label(meta, &"restart")) \
+		.replace("%p", KeyBindings.label(meta, &"pause"))
+
+
 func refresh() -> void:
 	if sim == null:
 		return
@@ -141,7 +158,7 @@ func refresh() -> void:
 		_state_label(sim.p2.state),
 	]
 
-	_controls.text = _tr("ui.controls_versus" if versus else "ui.controls")
+	_controls.text = _controls_text()
 
 	if run != null and not versus:
 		_run_info.text = "%s %d/%d  %s %d  %s %d" % [
@@ -199,11 +216,18 @@ func show_rewards(offers: Array) -> void:
 			button.visible = false
 	_reward_box.visible = true
 	_reward_dim.visible = true
+	for i in _reward_buttons.size():
+		var focus_button := _reward_buttons[i]
+		if focus_button.visible and not focus_button.disabled:
+			focus_button.grab_focus()
+			break
 
 
 func hide_rewards() -> void:
 	_reward_box.visible = false
 	_reward_dim.visible = false
+	if get_viewport() != null:
+		get_viewport().gui_release_focus()
 
 
 func _on_reward_button(index: int) -> void:

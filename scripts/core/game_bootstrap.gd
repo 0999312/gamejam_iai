@@ -4,9 +4,14 @@ extends Node
 ## 只做数据/框架接线，不承载玩法逻辑。
 
 const REGISTRY_NAME := "upgrade"
+const UNLOCK_REGISTRY_NAME := "unlock"
+const UNLOCK_DIR := "res://resources/unlocks"
 const NAMESPACE := "iai"
-const LANG := "zh_CN"
-const I18N_PATH := "res://localization/zh_CN.json"
+const DEFAULT_LANGUAGE := "zh_CN"
+const I18N_FILES: Dictionary = {
+	"zh_CN": "res://localization/zh_CN.json",
+	"en": "res://localization/en.json",
+}
 
 ## 10 个心得。effect 由 RunState 解释，amount 为效果数值。
 const UPGRADE_DEFS := [
@@ -36,13 +41,48 @@ var hard_mode: bool = false
 
 
 func _ready() -> void:
-	_ensure_registry()
+	_ensure_ui_gamepad_actions()
+	_ensure_registry(REGISTRY_NAME)
+	_ensure_registry(UNLOCK_REGISTRY_NAME)
 	_register_upgrades()
-	_load_i18n()
+	_register_unlocks()
 	meta = MetaSave.load_from()
+	KeyBindings.normalize(meta.settings)
+	_load_i18n(current_language())
 	hard_mode = bool(meta.settings.get("hard_mode", false))
 	_ensure_audio_buses()
 	apply_settings()
+
+
+## Godot 内置 ui_accept / ui_cancel 默认只含键盘；补上手柄 A / B，
+## 让菜单、商店、设置、暂停和奖励选择都能纯手柄操作。
+func _ensure_ui_gamepad_actions() -> void:
+	_add_joy_event("ui_accept", JOY_BUTTON_A)
+	_add_joy_event("ui_cancel", JOY_BUTTON_B)
+
+
+func _add_joy_event(action: StringName, button_index: JoyButton) -> void:
+	var event := InputEventJoypadButton.new()
+	event.button_index = button_index
+	if InputMap.action_has_event(action, event):
+		return
+	InputMap.action_add_event(action, event)
+
+
+func current_language() -> String:
+	if meta == null:
+		return DEFAULT_LANGUAGE
+	var lang := String(meta.settings.get("language", DEFAULT_LANGUAGE))
+	return lang if I18N_FILES.has(lang) else DEFAULT_LANGUAGE
+
+
+func set_language(lang: String) -> bool:
+	if meta == null or not I18N_FILES.has(lang):
+		return false
+	meta.settings["language"] = lang
+	I18NManager.set_language(lang)
+	save_meta()
+	return true
 
 
 func save_meta() -> void:
@@ -94,13 +134,13 @@ func _ensure_audio_buses() -> void:
 	SoundManager.set_default_music_bus("Music")
 
 
-func _ensure_registry() -> void:
-	if RegistryManager.has_registry(REGISTRY_NAME):
-		var existing := RegistryManager.get_registry(REGISTRY_NAME)
+func _ensure_registry(registry_name: String) -> void:
+	if RegistryManager.has_registry(registry_name):
+		var existing := RegistryManager.get_registry(registry_name)
 		if existing != null:
 			existing.clear()
 		return
-	RegistryManager.register_registry(REGISTRY_NAME, RegistryBase.new())
+	RegistryManager.register_registry(registry_name, RegistryBase.new())
 
 
 func _register_upgrades() -> void:
@@ -119,8 +159,32 @@ func _register_upgrades() -> void:
 		registry.register(ResourceLocation.new(NAMESPACE, String(id)), data)
 
 
-func _load_i18n() -> void:
-	if not I18NManager.load_translation(LANG, I18N_PATH):
-		push_error("GameBootstrap: failed to load %s" % I18N_PATH)
+## 商店条目完全由数据驱动：扫描 res://resources/unlocks/*.tres，
+## 每个 UnlockItem 以 id 注册到 "unlock" 注册表。新增条目不需要改代码。
+func _register_unlocks() -> void:
+	var registry := RegistryManager.get_registry(UNLOCK_REGISTRY_NAME)
+	if registry == null:
+		push_error("GameBootstrap: unlock registry is missing")
 		return
-	I18NManager.set_language(LANG)
+	var dir := DirAccess.open(UNLOCK_DIR)
+	if dir == null:
+		push_error("GameBootstrap: missing %s" % UNLOCK_DIR)
+		return
+	for file_name in dir.get_files():
+		# 导出后资源可能变成 .res 或带 .remap，统一还原成可 load 的逻辑路径。
+		var logical_name := file_name.trim_suffix(".remap")
+		if not (logical_name.ends_with(".tres") or logical_name.ends_with(".res")):
+			continue
+		var item := load("%s/%s" % [UNLOCK_DIR, logical_name]) as UnlockItem
+		if item == null or item.id == &"":
+			push_warning("GameBootstrap: invalid unlock resource %s" % file_name)
+			continue
+		registry.register(ResourceLocation.new(NAMESPACE, String(item.id)), item)
+
+
+func _load_i18n(lang: String) -> void:
+	for code in I18N_FILES.keys():
+		var path := String(I18N_FILES[code])
+		if not I18NManager.load_translation(String(code), path):
+			push_error("GameBootstrap: failed to load %s" % path)
+	I18NManager.set_language(lang)

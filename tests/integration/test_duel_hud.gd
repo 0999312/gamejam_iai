@@ -41,7 +41,7 @@ func test_result_text_for_loss() -> void:
 	hud.set_run(run)
 	hud.bind(sim)
 	assert_true(hud._result.visible)
-	assert_eq(hud._result.text, "[占位] 败北")
+	assert_eq(hud._result.text, "败北")
 
 
 func test_start_cue_visible_after_opening_lock() -> void:
@@ -53,4 +53,4 @@ func test_start_cue_visible_after_opening_lock() -> void:
 	hud.bind(sim)
 	hud.refresh()
 	assert_true(hud._start_cue.visible)
-	assert_eq(hud._start_cue.text, "[占位] 开始")
+	assert_eq(hud._start_cue.text, "开始")

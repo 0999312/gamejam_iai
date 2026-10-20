@@ -29,10 +29,11 @@ func test_menu_shows_gold_and_five_entries() -> void:
 	var has_shop := false
 	var has_settings := false
 	for button in buttons:
-		assert_string_contains((button as Button).text, "[占位]")
-		if (button as Button).text.contains("商店"):
+		var text := (button as Button).text
+		assert_false(text.is_empty())
+		if text.contains("商店"):
 			has_shop = true
-		if (button as Button).text.contains("设置"):
+		if text.contains("设置"):
 			has_settings = true
 	assert_true(has_shop)
 	assert_true(has_settings)

@@ -1,15 +1,15 @@
 extends Node2D
 
 ## 灰盒对决控制器：GUIDE 输入 + RunState 阶梯 / 本地双人 + 表现层。
-## P1：J 斩 / K 架；P2：小键盘 1/2（或 I/O）；R 重开；Esc 返回菜单；1–3 选心得。
+## P1：J 斩 / K 架（鼠标左/右键、手柄 1 的 A/B 同时可用）；
+## P2：小键盘 1/2（或 I/O），检测到第二手柄时也可用手柄 2 的 A/B。
+## R 重开；Esc 暂停；1–3 选心得。
 
 const VIEW_SCENE := preload("res://scenes/duel/duel_view.tscn")
 const HUD_SCENE := preload("res://scenes/duel/hud.tscn")
 const PAUSE_SCENE := preload("res://scenes/ui/pause_menu.tscn")
 const MENU_SCENE := "res://scenes/menu/menu.tscn"
 
-const RESTART_KEY := KEY_R
-const PAUSE_KEY := KEY_ESCAPE
 const OFFER_KEYS: Array[Key] = [KEY_1, KEY_2, KEY_3]
 
 var sim: DuelSim
@@ -47,6 +47,7 @@ func _ready() -> void:
 		mode = &"run"
 
 	_setup_input()
+	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_view = VIEW_SCENE.instantiate() as DuelView
 	add_child(_view)
 	_hud = HUD_SCENE.instantiate() as DuelHud
@@ -74,6 +75,8 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	if Input.joy_connection_changed.is_connected(_on_joy_connection_changed):
+		Input.joy_connection_changed.disconnect(_on_joy_connection_changed)
 	if _audio != null:
 		_audio.stop_ambient()
 	if _context != null:
@@ -218,20 +221,42 @@ func _on_offer_chosen(index: int) -> void:
 func _setup_input() -> void:
 	_context = GUIDEMappingContext.new()
 	_context.display_name = "duel_m3"
+	_offer_actions.clear()
 
-	var p1_attack: Array[Key] = [KEY_J]
-	var p1_guard: Array[Key] = [KEY_K]
-	var p2_attack: Array[Key] = [KEY_KP_1, KEY_I]
-	var p2_guard: Array[Key] = [KEY_KP_2, KEY_O]
-	var restart_keys: Array[Key] = [RESTART_KEY]
-	var pause_keys: Array[Key] = [PAUSE_KEY]
+	var meta := GameBootstrap.meta if GameBootstrap != null else null
+	var p1_attack: Array[Key] = KeyBindings.get_keys(meta, &"attack_p1")
+	var p1_guard: Array[Key] = KeyBindings.get_keys(meta, &"guard_p1")
+	var p2_attack: Array[Key] = KeyBindings.get_keys(meta, &"attack_p2")
+	var p2_guard: Array[Key] = KeyBindings.get_keys(meta, &"guard_p2")
+	var restart_keys: Array[Key] = KeyBindings.get_keys(meta, &"restart")
+	var pause_keys: Array[Key] = KeyBindings.get_keys(meta, &"pause")
 
-	_attack_action = _add_key_action(&"duel_attack_p1", p1_attack)
-	_guard_action = _add_key_action(&"duel_guard_p1", p1_guard)
-	_p2_attack_action = _add_key_action(&"duel_attack_p2", p2_attack)
-	_p2_guard_action = _add_key_action(&"duel_guard_p2", p2_guard)
-	_restart_action = _add_key_action(&"duel_restart", restart_keys)
-	_pause_action = _add_key_action(&"duel_pause", pause_keys)
+	var p1_joy := InputDevices.p1_joy()
+	var p2_joy := InputDevices.p2_joy()
+	var p1_joys: Array[int] = []
+	var p2_joys: Array[int] = []
+	if p1_joy >= 0:
+		p1_joys.append(p1_joy)
+	if p2_joy >= 0:
+		p2_joys.append(p2_joy)
+	var p1_mouse_attack: Array[MouseButton] = [MOUSE_BUTTON_LEFT]
+	var p1_mouse_guard: Array[MouseButton] = [MOUSE_BUTTON_RIGHT]
+	var no_mouse: Array[MouseButton] = []
+	var p1_attack_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"attack_p1")]
+	var p1_guard_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"guard_p1")]
+	var p2_attack_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"attack_p2")]
+	var p2_guard_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"guard_p2")]
+	var pause_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"pause")]
+	var restart_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"restart")]
+	var all_joys: Array[int] = p1_joys.duplicate()
+	all_joys.append_array(p2_joys)
+
+	_attack_action = _add_action(&"duel_attack_p1", p1_attack, p1_mouse_attack, p1_joys, p1_attack_buttons)
+	_guard_action = _add_action(&"duel_guard_p1", p1_guard, p1_mouse_guard, p1_joys, p1_guard_buttons)
+	_p2_attack_action = _add_action(&"duel_attack_p2", p2_attack, no_mouse, p2_joys, p2_attack_buttons)
+	_p2_guard_action = _add_action(&"duel_guard_p2", p2_guard, no_mouse, p2_joys, p2_guard_buttons)
+	_restart_action = _add_action(&"duel_restart", restart_keys, no_mouse, all_joys, restart_buttons)
+	_pause_action = _add_action(&"duel_pause", pause_keys, no_mouse, all_joys, pause_buttons)
 
 	_attack_action.just_triggered.connect(_on_attack_pressed)
 	_guard_action.just_triggered.connect(_on_guard_pressed)
@@ -242,14 +267,31 @@ func _setup_input() -> void:
 
 	for i in OFFER_KEYS.size():
 		var offer_keys: Array[Key] = [OFFER_KEYS[i]]
-		var action := _add_key_action(StringName("duel_offer_%d" % (i + 1)), offer_keys)
+		var action := _add_action(StringName("duel_offer_%d" % (i + 1)), offer_keys, no_mouse, [], [])
 		action.just_triggered.connect(_on_offer_key.bind(i))
 		_offer_actions.append(action)
 
 	GUIDE.enable_mapping_context(_context, true)
 
 
-func _add_key_action(action_name: StringName, keys: Array[Key]) -> GUIDEAction:
+func _on_joy_connection_changed(_device: int, _connected: bool) -> void:
+	_rebuild_input()
+
+
+## 热插拔：重建 GUIDE 上下文，按新的手柄数量重新分配 P1/P2 设备；
+## 不改 sim 状态，因此对局可以继续。
+func _rebuild_input() -> void:
+	if _context != null:
+		GUIDE.disable_mapping_context(_context)
+		_context = null
+	_clear_queued_input()
+	_setup_input()
+	if _hud != null:
+		_hud.refresh()
+
+
+## 一个动作可以挂多条映射：键盘、鼠标、手柄同时生效，互不排斥。
+func _add_action(action_name: StringName, keys: Array[Key], mouse_buttons: Array[MouseButton], joy_indices: Array[int], joy_buttons: Array[JoyButton]) -> GUIDEAction:
 	var action := GUIDEAction.new()
 	action.name = action_name
 	action.action_value_type = GUIDEAction.GUIDEActionValueType.BOOL
@@ -263,6 +305,22 @@ func _add_key_action(action_name: StringName, keys: Array[Key]) -> GUIDEAction:
 		key_input.key = key
 		input_mapping.input = key_input
 		mapping.input_mappings.append(input_mapping)
+
+	for mouse_button in mouse_buttons:
+		var input_mapping := GUIDEInputMapping.new()
+		var mouse_input := GUIDEInputMouseButton.new()
+		mouse_input.button = mouse_button
+		input_mapping.input = mouse_input
+		mapping.input_mappings.append(input_mapping)
+
+	for joy_index in joy_indices:
+		for joy_button in joy_buttons:
+			var input_mapping := GUIDEInputMapping.new()
+			var joy_input := GUIDEInputJoyButton.new()
+			joy_input.joy_index = joy_index
+			joy_input.button = joy_button
+			input_mapping.input = joy_input
+			mapping.input_mappings.append(input_mapping)
 
 	_context.mappings.append(mapping)
 	return action
@@ -300,6 +358,7 @@ func _on_pause_pressed() -> void:
 
 func _on_resume_requested() -> void:
 	_paused = false
+	_clear_queued_input()
 	if _pause != null:
 		_pause.hide_pause()
 

@@ -17,6 +17,9 @@ var settings: Dictionary = {
 	"mute": false,
 	"fullscreen": false,
 	"hard_mode": false,
+	"language": "zh_CN",
+	"keys": {},
+	"joy_buttons": {},
 	"screen_shake": 1.0,
 	"hint_level": 1,
 }
@@ -110,6 +113,7 @@ func _from_dict(data: Dictionary) -> void:
 		for key in settings.keys():
 			if (raw_settings as Dictionary).has(key):
 				settings[key] = (raw_settings as Dictionary)[key]
+	KeyBindings.normalize(settings)
 
 	var raw_stats: Variant = data.get("stats", {})
 	if typeof(raw_stats) == TYPE_DICTIONARY:

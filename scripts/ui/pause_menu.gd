@@ -59,8 +59,17 @@ func _make_button(parent: Control, text: String) -> Button:
 	button.custom_minimum_size = Vector2(360, 58)
 	button.add_theme_font_override("font", FONT)
 	button.add_theme_font_size_override("font_size", 22)
+	UiFocus.prepare(button)
 	parent.add_child(button)
 	return button
+
+
+func _input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		_on_resume_pressed()
 
 
 func show_pause() -> void:
