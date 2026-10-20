@@ -53,10 +53,14 @@ jobs:
           New-Item -ItemType Directory -Force "$root/build/windows" | Out-Null
           "Godot: $(godot --version)" | Add-Content $env:GITHUB_STEP_SUMMARY
           $log = "$root/build/export.log"
-          & godot --headless --path "$root" --export-release "Windows Desktop" "$root/build/windows/iai.exe" *>&1 | Tee-Object -FilePath $log
+          & godot --headless --path "$root" --export-release "Windows Desktop" "$root/build/windows/iai.exe" *> $log
           $code = $LASTEXITCODE
           "exit=$code" | Add-Content $env:GITHUB_STEP_SUMMARY
-          Get-Content $log | Add-Content $env:GITHUB_STEP_SUMMARY
+          if (Test-Path $log) {
+            Get-Content $log | Add-Content $env:GITHUB_STEP_SUMMARY
+          } else {
+            "export.log missing" | Add-Content $env:GITHUB_STEP_SUMMARY
+          }
           if ($code -ne 0) { throw "Godot export failed: $code" }
           if (-not (Test-Path "$root/build/windows/iai.exe")) {
             Get-ChildItem -Recurse "$root/build" | Out-String | Add-Content $env:GITHUB_STEP_SUMMARY
