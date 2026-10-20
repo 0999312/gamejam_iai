@@ -60,9 +60,15 @@ jobs:
           if-no-files-found: warn
 
       - name: Publish GitHub Release
-        shell: pwsh
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.BUILD_VERSION }}
+          name: ${{ env.BUILD_VERSION }}
+          body: |
+            Semantic version: ${{ env.SEMVER }}
+            Build: ${{ env.BUILD_VERSION }}
+            Commit: ${{ github.sha }}
+          files: build/windows/iai.exe
+          generate_release_notes: false
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $body = "Semantic version: $env:SEMVER`nBuild: $env:BUILD_VERSION`nCommit: $env:GITHUB_SHA"
-          gh release create $env:BUILD_VERSION build/windows/iai.exe --title $env:BUILD_VERSION --notes $body
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
