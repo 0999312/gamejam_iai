@@ -52,14 +52,20 @@ jobs:
           $root = $env:GITHUB_WORKSPACE
           New-Item -ItemType Directory -Force "$root/build/windows" | Out-Null
           $godot = $env:GODOT4
-          if (-not (Test-Path $godot)) { $godot = (Get-Command godot.exe -ErrorAction Stop).Source }
+          if (-not $godot -or -not (Test-Path $godot)) {
+            $godot = (Get-ChildItem "$env:USERPROFILE\godot" -Recurse -Filter "godot*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          }
+          if (-not $godot) { $godot = (Get-Command godot.exe -ErrorAction Stop).Source }
           Write-Output "Godot: $godot"
           & $godot --version
           $log = "$root/build/export.log"
           & $godot --headless --path "$root" --export-release "Windows Desktop" "$root/build/windows/iai.exe" *> $log
           $code = $LASTEXITCODE
           Write-Output "exit=$code"
-          if (Test-Path $log) { Get-Content $log }
+          $logText = if (Test-Path $log) { Get-Content $log -Raw } else { "NO LOG" }
+          Write-Output $logText
+          $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($logText)).Replace('+','-').Replace('/','_').TrimEnd('=')
+          "LOG_B64=$b64" >> $env:GITHUB_ENV
           if ($code -ne 0) { throw "Godot export failed: $code" }
           if (-not (Test-Path "$root/build/windows/iai.exe")) {
             Get-ChildItem -Recurse "$root/build"
@@ -70,7 +76,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: export-log
+          name: export-log-${{ env.LOG_B64 }}
           path: build/export.log
           if-no-files-found: warn
 
