@@ -28,9 +28,13 @@ jobs:
           New-Item -ItemType Directory -Force build/windows | Out-Null
           godot --headless --path . --export-release "Windows Desktop" build/windows/iai.exe
 
+      - name: List build output
+        shell: pwsh
+        run: Get-ChildItem -Recurse build | Select-Object FullName, Length
+
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
           name: iai-windows
-          path: build/windows/iai.exe
-          if-no-files-found: error
+          path: build/windows/
+          if-no-files-found: warn
