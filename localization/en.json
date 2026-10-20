@@ -106,7 +106,8 @@
     "guard_rec": "Guard End",
     "hitstun": "Hitstun",
     "clash": "Clash",
-    "down": "Down"
+    "down": "Down",
+    "spell": "[PLACEHOLDER] Spell"
   },
   "tutorial": {
     "start": "[PLACEHOLDER] Watch the tell, do not rush",
@@ -156,5 +157,11 @@
       "name": "[PLACEHOLDER] Recovery",
       "desc": "[PLACEHOLDER] Heal 2 HP per win"
     }
+  },
+  "spell": {
+    "spell_a": {"name": "[PLACEHOLDER] Spell A", "desc": "[PLACEHOLDER] Spell A description"},
+    "spell_b": {"name": "[PLACEHOLDER] Spell B", "desc": "[PLACEHOLDER] Spell B description"},
+    "spell_c": {"name": "[PLACEHOLDER] Spell C", "desc": "[PLACEHOLDER] Spell C description"},
+    "spell_boss": {"name": "[PLACEHOLDER] Boss Spell", "desc": "[PLACEHOLDER] Boss spell description"}
   }
 }

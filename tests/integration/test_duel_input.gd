@@ -69,7 +69,8 @@ func test_teaching_ai_waits_during_opening_grace() -> void:
 func test_remapped_attack_key_drives_duel() -> void:
 	var old_meta := GameBootstrap.meta
 	GameBootstrap.meta = MetaSave.new()
-	KeyBindings.set_key(GameBootstrap.meta, &"attack_p1", KEY_L)
+	# 用一个没有默认绑定的键，避免和默认符卡键（L）撞车。
+	KeyBindings.set_key(GameBootstrap.meta, &"attack_p1", KEY_Y)
 
 	var scene := DUEL_SCENE.instantiate()
 	add_child_autofree(scene)
@@ -79,8 +80,8 @@ func test_remapped_attack_key_drives_duel() -> void:
 	sim.opening_lock_frames = 0
 
 	var down := InputEventKey.new()
-	down.keycode = KEY_L
-	down.physical_keycode = KEY_L
+	down.keycode = KEY_Y
+	down.physical_keycode = KEY_Y
 	down.pressed = true
 	GUIDE.inject_input(down)
 	await wait_process_frames(2)
@@ -88,6 +89,6 @@ func test_remapped_attack_key_drives_duel() -> void:
 
 	assert_true(
 		sim.p1.state == DuelTypes.State.COMMIT or sim.p1.state == DuelTypes.State.SLASH,
-		"改键后按 L 应进入 COMMIT 或 SLASH，实际=%s" % DuelTypes.state_name(sim.p1.state)
+		"改键后按 Y 应进入 COMMIT 或 SLASH，实际=%s" % DuelTypes.state_name(sim.p1.state)
 	)
 	GameBootstrap.meta = old_meta

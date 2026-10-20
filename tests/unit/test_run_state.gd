@@ -28,6 +28,20 @@ func test_win_awards_gold_and_zanshin_and_heals() -> void:
 	assert_eq(run.offers.size(), 3)
 
 
+func test_heal_bonus_upgrade_heals_two() -> void:
+	run.upgrades.append(&"u10")
+	run.player_hp = 1
+	run.on_duel_finished(DuelTypes.Side.P1)
+	assert_eq(run.player_hp, 3, "复元：每胜回复 2（1 + 2 被 max_hp 截到 3）")
+
+
+func test_heal_bonus_is_capped_by_max_hp() -> void:
+	run.upgrades.append(&"u10")
+	run.player_hp = 3
+	run.on_duel_finished(DuelTypes.Side.P1)
+	assert_eq(run.player_hp, 3, "满血时复元不会溢出")
+
+
 func test_flawless_win_awards_bonus() -> void:
 	run.player_hp = 3
 	run.on_duel_finished(DuelTypes.Side.P1)
@@ -86,9 +100,21 @@ func test_upgrade_runtime_mods() -> void:
 
 func test_zanshin_adds_starting_flow() -> void:
 	run.zanshin = 2
-	assert_eq(run.start_flow(), 56)
+	assert_eq(run.player_data().start_flow, 56)
 	run.zanshin = 99
-	assert_eq(run.start_flow(), 100)
+	assert_eq(run.player_data().start_flow, 64, "残心上限 3 层")
+
+
+func test_zanshin_guarantees_flow_floor() -> void:
+	var base := run.player_data()
+	assert_eq(base.flow_floor, 15)
+	assert_eq(base.flow_loss_reduction, 0, "没有残心时受击心流照常损失")
+
+	run.zanshin = 3
+	var reinforced := run.player_data()
+	assert_eq(reinforced.flow_floor, 33, "3 层残心的下限直接越过最低档上限")
+	assert_eq(reinforced.flow_loss_reduction, 9, "受击只掉 6 心流")
+	assert_eq(reinforced.guard_duration_base, 15, "同时多 3f 架窗")
 
 
 func test_restart_keeps_gold() -> void:

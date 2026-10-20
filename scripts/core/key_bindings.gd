@@ -8,8 +8,10 @@ extends RefCounted
 const DEFAULT_KEYS: Dictionary = {
 	&"attack_p1": [KEY_J],
 	&"guard_p1": [KEY_K],
+	&"spell_p1": [KEY_L],
 	&"attack_p2": [KEY_KP_1, KEY_I],
 	&"guard_p2": [KEY_KP_2, KEY_O],
+	&"spell_p2": [KEY_KP_3, KEY_P],
 	&"pause": [KEY_ESCAPE],
 	&"restart": [KEY_R],
 }
@@ -17,8 +19,10 @@ const DEFAULT_KEYS: Dictionary = {
 const DEFAULT_JOY_BUTTONS: Dictionary = {
 	&"attack_p1": JOY_BUTTON_A,
 	&"guard_p1": JOY_BUTTON_B,
+	&"spell_p1": JOY_BUTTON_Y,
 	&"attack_p2": JOY_BUTTON_A,
 	&"guard_p2": JOY_BUTTON_B,
+	&"spell_p2": JOY_BUTTON_Y,
 	&"pause": JOY_BUTTON_START,
 	&"restart": JOY_BUTTON_BACK,
 }
@@ -26,8 +30,10 @@ const DEFAULT_JOY_BUTTONS: Dictionary = {
 const ACTION_ORDER: Array[StringName] = [
 	&"attack_p1",
 	&"guard_p1",
+	&"spell_p1",
 	&"attack_p2",
 	&"guard_p2",
+	&"spell_p2",
 	&"pause",
 	&"restart",
 ]
@@ -162,7 +168,7 @@ static func _same_joy_scope(a: StringName, b: StringName) -> bool:
 
 
 static func _is_p1(id: StringName) -> bool:
-	return id == &"attack_p1" or id == &"guard_p1"
+	return id == &"attack_p1" or id == &"guard_p1" or id == &"spell_p1"
 
 
 static func _is_global(id: StringName) -> bool:

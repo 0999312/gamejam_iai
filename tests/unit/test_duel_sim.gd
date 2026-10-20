@@ -89,9 +89,13 @@ func test_perfect_block_grants_bonus_flow() -> void:
 
 func test_guard_startup_is_hittable() -> void:
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
-	_tick_n(12)
+	_tick_n(1)
+	var total: int = sim.p1.commit_total
+	# 推到出刀前一帧，再按「架」：起架当帧仍在 guard_startup 内，应当被打中。
+	# （guard_startup 已降到 1f，所以「同帧按下」是唯一还能撞上前摇的时机。）
+	_tick_n(total - 1)
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
-	_tick_n(2)
+	_tick_n(1)
 
 	assert_eq(sim.p2.hp, 2)
 	assert_eq(sim.p2.state, DuelTypes.State.HITSTUN)
@@ -100,7 +104,10 @@ func test_guard_startup_is_hittable() -> void:
 func test_whiffed_guard_loses_flow() -> void:
 	watch_signals(sim)
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
-	_tick_n(15)
+	# 架窗 = guard_startup + guard_duration_base + 心流档位偏移，等它自然走完。
+	var guard_frames: int = sim.p2.data.guard_startup + sim.p2.data.guard_duration_base \
+			+ DuelTypes.GUARD_TIER_OFFSET[DuelTypes.tier_for_flow(sim.p2.flow)]
+	_tick_n(guard_frames + 1)
 
 	assert_eq(sim.p2.flow, 32)
 	assert_eq(sim.p2.state, DuelTypes.State.GUARD_REC)
@@ -162,9 +169,12 @@ func test_slash_interrupts_commit() -> void:
 
 func test_slash_hits_guard_recovery() -> void:
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
-	sim.tick()
+	# 先让守方接近架窗末尾，再让攻方的斩判定落在「架收招」里。
+	var guard_frames: int = sim.p2.data.guard_startup + sim.p2.data.guard_duration_base \
+			+ DuelTypes.GUARD_TIER_OFFSET[DuelTypes.tier_for_flow(sim.p2.flow)]
+	_tick_n(guard_frames - 6)
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
-	_tick_n(14)
+	_tick_n(sim.p1.data.base_commit + 2)
 
 	assert_eq(sim.p2.hp, 2)
 	assert_eq(sim.p2.state, DuelTypes.State.HITSTUN)

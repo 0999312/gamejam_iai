@@ -13,8 +13,8 @@ func test_defaults_are_available() -> void:
 
 func test_set_key_persists_to_settings() -> void:
 	var meta := MetaSave.new()
-	assert_true(KeyBindings.set_key(meta, &"attack_p1", KEY_L))
-	assert_true(KeyBindings.get_keys(meta, &"attack_p1").has(KEY_L))
+	assert_true(KeyBindings.set_key(meta, &"attack_p1", KEY_Y))
+	assert_true(KeyBindings.get_keys(meta, &"attack_p1").has(KEY_Y))
 	assert_true(meta.settings["keys"].has("attack_p1"))
 
 
@@ -26,10 +26,10 @@ func test_conflicting_key_is_rejected() -> void:
 
 func test_reset_restores_defaults() -> void:
 	var meta := MetaSave.new()
-	KeyBindings.set_key(meta, &"attack_p1", KEY_L)
+	KeyBindings.set_key(meta, &"attack_p1", KEY_Y)
 	KeyBindings.reset(meta)
 	assert_true(KeyBindings.get_keys(meta, &"attack_p1").has(KEY_J))
-	assert_false(KeyBindings.get_keys(meta, &"attack_p1").has(KEY_L))
+	assert_false(KeyBindings.get_keys(meta, &"attack_p1").has(KEY_Y))
 
 
 func test_gamepad_defaults() -> void:

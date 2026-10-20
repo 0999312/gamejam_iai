@@ -50,6 +50,10 @@ func bind(sim: DuelSim) -> void:
 	_sim.attack_blocked.connect(_on_attack_blocked)
 	_sim.clash_happened.connect(_on_clash_happened)
 	_sim.guard_whiffed.connect(_on_guard_whiffed)
+	_sim.spell_cast.connect(_on_spell_cast)
+	_sim.spell_failed.connect(_on_spell_failed)
+	_sim.spell_interrupted.connect(_on_spell_interrupted)
+	_sim.slash_imminent.connect(_on_slash_imminent)
 	# headless（GUT/CI）没有真实音频设备，OGG loop 播放会在退出时残留 playback；
 	# 只在有窗口的运行时启动环境音。
 	if DisplayServer.get_name() != "headless":
@@ -67,6 +71,14 @@ func _disconnect_sim() -> void:
 		_sim.clash_happened.disconnect(_on_clash_happened)
 	if _sim.guard_whiffed.is_connected(_on_guard_whiffed):
 		_sim.guard_whiffed.disconnect(_on_guard_whiffed)
+	if _sim.spell_cast.is_connected(_on_spell_cast):
+		_sim.spell_cast.disconnect(_on_spell_cast)
+	if _sim.spell_failed.is_connected(_on_spell_failed):
+		_sim.spell_failed.disconnect(_on_spell_failed)
+	if _sim.spell_interrupted.is_connected(_on_spell_interrupted):
+		_sim.spell_interrupted.disconnect(_on_spell_interrupted)
+	if _sim.slash_imminent.is_connected(_on_slash_imminent):
+		_sim.slash_imminent.disconnect(_on_slash_imminent)
 
 
 func start_ambient() -> void:
@@ -121,6 +133,29 @@ func _on_clash_happened(_a: int, _b: int) -> void:
 
 func _on_guard_whiffed(_side: int) -> void:
 	_play(CLOTHS, 0.88, 0.96)
+
+
+## 符卡发动：用开场音降调 + 高频金属余韵，和普通出刀明显区分开。
+func _on_spell_cast(side: int, _effect: int) -> void:
+	var pitch := 0.80 if side == DuelTypes.Side.P2 else 0.90
+	SoundManager.play_sound_with_pitch(START, pitch)
+	_play(CLASHES, 1.28, 1.46)
+
+
+## 心流不足或次数用尽：一声闷响，不打断战斗节奏。
+func _on_spell_failed(_side: int) -> void:
+	_play(CLOTHS, 0.70, 0.80)
+
+
+## 蓄力被一刀驱散：短促的破音。
+func _on_spell_interrupted(_side: int) -> void:
+	_play(HITS, 0.68, 0.78)
+
+
+## 落刀预警：把金属撞击升到 1.5 倍音高，做成一声短促的「叮」。
+## 与拔刀声（COMMIT 开始）拉开音区，玩家不需要分辨方向。
+func _on_slash_imminent(_side: int) -> void:
+	_play(BLOCKS, 1.52, 1.66)
 
 
 func _play(options: Array, pitch_min: float, pitch_max: float) -> void:

@@ -14,11 +14,20 @@ var versus: bool = false
 var _p1_hp: Label
 var _p1_flow_bar: ProgressBar
 var _p1_flow_text: Label
+var _p1_spell: Label
 var _p2_hp: Label
 var _p2_flow_bar: ProgressBar
 var _p2_flow_text: Label
+var _p2_spell: Label
 var _center: Label
 var _start_cue: Label
+var _spell_banner: Label
+var _banner_until_frame: int = -1
+var _banner_text: String = ""
+var _banner_side: int = -1
+## 符卡发不出去时把对应那一行标红几帧，避免「按了没反应」。
+var _p1_spell_fail_until: int = -1
+var _p2_spell_fail_until: int = -1
 var _run_info: Label
 var _tutorial: Label
 var _result: Label
@@ -50,10 +59,12 @@ func _ready() -> void:
 	_p1_hp = _make_label(root, Vector2(40, 24), 24, HORIZONTAL_ALIGNMENT_LEFT)
 	_p1_flow_bar = _make_bar(root, Vector2(40, 62))
 	_p1_flow_text = _make_label(root, Vector2(40, 82), 16, HORIZONTAL_ALIGNMENT_LEFT)
+	_p1_spell = _make_label(root, Vector2(40, 104), 16, HORIZONTAL_ALIGNMENT_LEFT)
 
 	_p2_hp = _make_label(root, Vector2(980, 24), 24, HORIZONTAL_ALIGNMENT_RIGHT)
 	_p2_flow_bar = _make_bar(root, Vector2(980, 62))
 	_p2_flow_text = _make_label(root, Vector2(980, 82), 16, HORIZONTAL_ALIGNMENT_RIGHT)
+	_p2_spell = _make_label(root, Vector2(980, 104), 16, HORIZONTAL_ALIGNMENT_RIGHT)
 
 	_center = _make_label(root, Vector2(0, 118), 18, HORIZONTAL_ALIGNMENT_CENTER)
 	_center.size = Vector2(1280, 28)
@@ -65,6 +76,10 @@ func _ready() -> void:
 	_start_cue.size = Vector2(1280, 80)
 	_start_cue.add_theme_color_override("font_color", Color("#ffd36e"))
 	_start_cue.visible = false
+
+	_spell_banner = _make_label(root, Vector2(0, 246), 42, HORIZONTAL_ALIGNMENT_CENTER)
+	_spell_banner.size = Vector2(1280, 56)
+	_spell_banner.visible = false
 
 	_controls = _make_label(root, Vector2(0, 652), 18, HORIZONTAL_ALIGNMENT_CENTER)
 	_controls.size = Vector2(1280, 28)
@@ -111,7 +126,21 @@ func _ready() -> void:
 
 
 func bind(p_sim: DuelSim) -> void:
+	if sim != null:
+		if sim.spell_cast.is_connected(_on_spell_cast):
+			sim.spell_cast.disconnect(_on_spell_cast)
+		if sim.spell_interrupted.is_connected(_on_spell_interrupted):
+			sim.spell_interrupted.disconnect(_on_spell_interrupted)
+		if sim.spell_failed.is_connected(_on_spell_failed):
+			sim.spell_failed.disconnect(_on_spell_failed)
 	sim = p_sim
+	_p1_spell_fail_until = -1
+	_p2_spell_fail_until = -1
+	_banner_until_frame = -1
+	if sim != null:
+		sim.spell_cast.connect(_on_spell_cast)
+		sim.spell_interrupted.connect(_on_spell_interrupted)
+		sim.spell_failed.connect(_on_spell_failed)
 	refresh()
 
 
@@ -123,6 +152,71 @@ func set_run(p_run: RunState) -> void:
 func set_versus(value: bool) -> void:
 	versus = value
 	refresh()
+
+
+## 当前心流档位下这一刀的实际前摇帧数（HUD 直接给出数字，不再靠体感猜）。
+func _commit_frames(fighter: FighterState) -> int:
+	var tier := DuelTypes.tier_for_flow(fighter.flow)
+	return maxi(DuelSim.COMMIT_MIN_FRAMES,
+			fighter.data.base_commit + DuelTypes.COMMIT_TIER_OFFSET[tier])
+
+
+## 当前心流档位下的实际「架」持续帧数（含心得/残心加成）。
+func _guard_frames(fighter: FighterState) -> int:
+	return fighter.data.guard_duration_base + DuelTypes.GUARD_TIER_OFFSET[DuelTypes.tier_for_flow(fighter.flow)]
+
+
+## 心流条随档位换色，升档时整个数值区更亮，补足「心流变强了」的即时反馈。
+func _tier_color(flow: int) -> Color:
+	if flow >= 67:
+		return Color("#9ff0d0")
+	if flow >= 34:
+		return Color("#d8b45a")
+	return Color("#8b97a6")
+
+
+func _spell_ready(fighter: FighterState) -> bool:
+	return fighter.spell_card != null \
+			and fighter.spell_uses_left > 0 \
+			and fighter.flow >= fighter.spell_card.flow_cost
+
+
+## 是否是「已付心流、正在等兑现」的蓄力中（含架势的安全区）。
+func _spell_charging(fighter: FighterState) -> bool:
+	var now: int = sim.frame if sim != null else 0
+	return fighter.spell_pending_slash \
+			or fighter.spell_power_amount > 0 \
+			or fighter.spell_perfect_until_frame > now
+
+
+func _spell_remaining(fighter: FighterState) -> int:
+	var now: int = sim.frame if sim != null else 0
+	if fighter.spell_perfect_until_frame > now:
+		return fighter.spell_perfect_until_frame - now
+	if fighter.state == DuelTypes.State.SPELL:
+		return maxi(0, fighter.state_duration - fighter.state_frame)
+	return 0
+
+
+func _spell_modulate(fighter: FighterState) -> Color:
+	if _spell_charging(fighter):
+		return Color("#b79bff")
+	if _spell_ready(fighter):
+		return Color(1, 1, 1, 1.0)
+	return Color(1, 1, 1, 0.45)
+
+
+## 符卡行：就绪 / 蓄力中（▶剩余帧）/ 已用 / 心流不足。
+func _spell_text(fighter: FighterState) -> String:
+	var card := fighter.spell_card
+	if card == null:
+		return ""
+	var name_text := _tr(card.name_key)
+	if fighter.spell_uses_left <= 0:
+		return "%s ×0" % name_text
+	if _spell_charging(fighter):
+		return "%s ×%d ▶%d" % [name_text, fighter.spell_uses_left, _spell_remaining(fighter)]
+	return "%s ×%d (%d)" % [name_text, fighter.spell_uses_left, card.flow_cost]
 
 
 func _controls_text() -> String:
@@ -146,11 +240,25 @@ func refresh() -> void:
 		return
 	_p1_hp.text = "%s %d/%d" % [_tr("ui.hp"), sim.p1.hp, sim.p1.data.max_hp]
 	_p1_flow_bar.value = sim.p1.flow
-	_p1_flow_text.text = "%s %d" % [_tr("ui.flow"), sim.p1.flow]
+	_p1_flow_bar.modulate = _tier_color(sim.p1.flow)
+	_p1_flow_text.text = "%s %d · %df/%df" % [
+		_tr("ui.flow"), sim.p1.flow, _commit_frames(sim.p1), _guard_frames(sim.p1),
+	]
+	_p1_spell.text = _spell_text(sim.p1)
+	_p1_spell.modulate = _spell_modulate(sim.p1)
+	if sim.frame < _p1_spell_fail_until:
+		_p1_spell.modulate = Color("#ff6a6a")
 
 	_p2_hp.text = "%s %d/%d" % [_tr("ui.hp"), sim.p2.hp, sim.p2.data.max_hp]
 	_p2_flow_bar.value = sim.p2.flow
-	_p2_flow_text.text = "%s %d" % [_tr("ui.flow"), sim.p2.flow]
+	_p2_flow_bar.modulate = _tier_color(sim.p2.flow)
+	_p2_flow_text.text = "%s %d · %df/%df" % [
+		_tr("ui.flow"), sim.p2.flow, _commit_frames(sim.p2), _guard_frames(sim.p2),
+	]
+	_p2_spell.text = _spell_text(sim.p2)
+	_p2_spell.modulate = _spell_modulate(sim.p2)
+	if sim.frame < _p2_spell_fail_until:
+		_p2_spell.modulate = Color("#ff6a6a")
 
 	_center.text = "%s %s / %s" % [
 		_tr("ui.state"),
@@ -194,6 +302,48 @@ func refresh() -> void:
 			_result.text = ""
 
 	_tutorial.text = "" if versus else _tutorial_text()
+
+	# 符卡报幕：只显示符卡名（文案由人类提供），不附加任何 AI 撰写的动词。
+	var banner_on := sim.frame < _banner_until_frame and not sim.finished
+	_spell_banner.visible = banner_on
+	if banner_on:
+		_spell_banner.text = _banner_text
+		_spell_banner.add_theme_color_override("font_color", _spell_banner_color(_banner_side))
+		# 剩余时间越短越淡，避免硬切。
+		var left := float(_banner_until_frame - sim.frame) / 96.0
+		_spell_banner.modulate = Color(1, 1, 1, clampf(left * 2.0, 0.0, 1.0))
+
+
+func _on_spell_cast(side: int, _effect: int) -> void:
+	_show_banner(side)
+
+
+func _on_spell_failed(side: int) -> void:
+	if sim == null:
+		return
+	if side == DuelTypes.Side.P1:
+		_p1_spell_fail_until = sim.frame + 16
+	else:
+		_p2_spell_fail_until = sim.frame + 16
+
+
+func _on_spell_interrupted(side: int) -> void:
+	_show_banner(side)
+
+
+func _show_banner(side: int) -> void:
+	if sim == null:
+		return
+	var fighter := sim.get_fighter(side)
+	if fighter.spell_card == null:
+		return
+	_banner_side = side
+	_banner_text = "◆ %s ◆" % _tr(fighter.spell_card.name_key)
+	_banner_until_frame = sim.frame + 96
+
+
+func _spell_banner_color(side: int) -> Color:
+	return Color("#b79bff") if side == DuelTypes.Side.P1 else Color("#ff9bd0")
 
 
 func show_rewards(offers: Array) -> void:

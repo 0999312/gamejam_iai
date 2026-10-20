@@ -13,8 +13,14 @@ signal guard_whiffed(side: int)
 signal feint_seen(observer_side: int)
 signal duel_finished(winner_side: int)
 signal damage_negated(side: int)
+signal spell_cast(side: int, effect: int)
+signal spell_failed(side: int)
+## 符卡蓄力被一刀驱散：抢刀打断是关底符卡的唯一正解。
+signal spell_interrupted(side: int)
+## 「构」进入落刀前 SLASH_WARN_FRAMES 帧的确认信号，只给表现层用。
+signal slash_imminent(side: int)
 
-const HIT_DAMAGE := 1
+## 单刀伤害改由 FighterData.hit_damage 决定（重剑 2 / 其余 1）。
 const HIT_FLOW_LOSS := 15
 const BLOCK_FLOW_GAIN := 7
 const PERFECT_BLOCK_FLOW_GAIN := 12
@@ -31,6 +37,14 @@ const COMMIT_WAIT_CAP := 15
 const NO_INPUT_GRACE := 180
 const NO_INPUT_PENALTY_INTERVAL := 20
 const WHIFF_LOCK_FRAMES := 120
+## 「构」的下限帧数：心流 + 疾势叠加后不允许短到无法被读到。
+const COMMIT_MIN_FRAMES := 8
+## 「崩山」类符卡命中时追加的硬直。
+const SPELL_CRUSH_STAGGER := 12
+## 「架势」符卡有效期内，架窗至少这么长（保证必完美判定有余量）。
+const SPELL_STANCE_GUARD_FRAMES := 30
+## 符卡蓄力被打断时追加的惩罚硬直：一次符卡白给，必须疼。
+const SPELL_INTERRUPT_PENALTY := 12
 
 var p1: FighterState
 var p2: FighterState
@@ -51,6 +65,7 @@ var _pursuit_armed_until: int = 0
 var _guts_until: int = 0
 
 var _pending: Array = [DuelTypes.Action.NONE, DuelTypes.Action.NONE]
+var _pending_spell: Array = [false, false]
 
 
 func _init(p1_data: FighterData = null, p2_data: FighterData = null, seed_value: int = 0) -> void:
@@ -78,6 +93,7 @@ func reset(seed_value: int = 0) -> void:
 	p1.reset_for_duel()
 	p2.reset_for_duel()
 	_pending = [DuelTypes.Action.NONE, DuelTypes.Action.NONE]
+	_pending_spell = [false, false]
 	_see_through_used = false
 	_pursuit_used = false
 	_pursuit_armed_until = 0
@@ -112,7 +128,20 @@ func set_input(side: int, attack_pressed: bool, guard_pressed: bool) -> void:
 
 ## 测试/脚本用的单动作入口。
 func press(side: int, action: int) -> void:
+	if action == DuelTypes.Action.SPELL:
+		set_spell(side)
+		return
 	set_input(side, action == DuelTypes.Action.ATTACK, action == DuelTypes.Action.GUARD)
+
+
+## 按下符卡键；真正的判定在下一帧 tick 内消费（与斩/架同帧排序一致）。
+## 若此刻不在 IDLE（收刀/架后/受击），进入输入缓冲，过期才报失败。
+func set_spell(side: int) -> void:
+	if finished or frame < opening_lock_frames:
+		return
+	var fighter := get_fighter(side)
+	_pending_spell[side] = true
+	fighter.spell_buffer_expire_frame = frame + fighter.data.input_buffer
 
 
 func tick() -> void:
@@ -125,6 +154,8 @@ func tick() -> void:
 
 	_apply_pending_input(p1)
 	_apply_pending_input(p2)
+	_apply_pending_spell(p1)
+	_apply_pending_spell(p2)
 
 	_advance(p1)
 	_advance(p2)
@@ -181,6 +212,11 @@ func _snapshot(fighter: FighterState) -> Dictionary:
 		"tier": DuelTypes.tier_for_flow(fighter.flow),
 		"buffer": fighter.buffer_action,
 		"buffer_expire_frame": fighter.buffer_expire_frame,
+		"spell_uses": fighter.spell_uses_left,
+		"spell_ready": fighter.spell_card != null and fighter.spell_uses_left > 0 \
+				and fighter.flow >= fighter.spell_card.flow_cost,
+		"spell_charging": _has_spell_charge(fighter),
+		"spell_perfect": fighter.spell_perfect_until_frame > frame,
 	}
 
 
@@ -208,6 +244,50 @@ func _apply_pending_input(fighter: FighterState) -> void:
 		return
 	if action != DuelTypes.Action.NONE:
 		_apply_action(fighter, action)
+
+
+func _apply_pending_spell(fighter: FighterState) -> void:
+	if not _pending_spell[fighter.side]:
+		return
+	if frame < opening_lock_frames:
+		return
+	if fighter.state != DuelTypes.State.IDLE:
+		# 收刀/受击硬直里按下不算「没按」：缓冲几帧，过期才报失败。
+		if frame > fighter.spell_buffer_expire_frame:
+			_pending_spell[fighter.side] = false
+			spell_failed.emit(fighter.side)
+		return
+	_pending_spell[fighter.side] = false
+	if not _cast_spell(fighter):
+		spell_failed.emit(fighter.side)
+
+
+## 真正的符卡发动；返回 false 表示条件不足（心流/次数/没有符卡）。
+## 唯一入口是 set_spell / _apply_pending_spell，不存在第二条路径。
+func _cast_spell(fighter: FighterState) -> bool:
+	var card: SpellCardData = fighter.spell_card
+	if card == null or fighter.spell_uses_left <= 0 or fighter.flow < card.flow_cost:
+		return false
+
+	fighter.spell_uses_left -= 1
+	_sub_flow(fighter, card.flow_cost)
+	match card.effect:
+		SpellCardData.Effect.GUARD_STANCE:
+			fighter.spell_perfect_until_frame = frame + card.amount
+			_enter(fighter, DuelTypes.State.SPELL, card.cast_frames)
+		SpellCardData.Effect.BLADE_RUSH:
+			fighter.spell_power_amount = card.amount
+			fighter.spell_unblockable = card.unblockable
+			fighter.spell_pending_slash = true
+			_enter(fighter, DuelTypes.State.SPELL, card.cast_frames)
+		SpellCardData.Effect.CRUSH:
+			fighter.spell_power_amount = card.amount
+			fighter.spell_stagger_bonus = SPELL_CRUSH_STAGGER
+			fighter.spell_unblockable = card.unblockable
+			fighter.spell_pending_slash = true
+			_enter(fighter, DuelTypes.State.SPELL, card.cast_frames)
+	spell_cast.emit(fighter.side, card.effect)
+	return true
 
 
 func _apply_action(fighter: FighterState, action: int) -> void:
@@ -245,6 +325,8 @@ func _advance(fighter: FighterState) -> void:
 		DuelTypes.State.COMMIT:
 			if fighter.state_frame >= fighter.commit_total:
 				_enter_slash(fighter)
+			elif fighter.state_frame == fighter.commit_total - DuelTypes.SLASH_WARN_FRAMES:
+				slash_imminent.emit(fighter.side)
 		DuelTypes.State.SLASH:
 			if fighter.state_frame >= fighter.data.slash_frames:
 				_enter_recovery(fighter, fighter.data.whiff_recovery)
@@ -254,6 +336,14 @@ func _advance(fighter: FighterState) -> void:
 		DuelTypes.State.RECOVERY, DuelTypes.State.GUARD_REC, DuelTypes.State.HITSTUN, DuelTypes.State.CLASH:
 			if fighter.state_frame >= fighter.state_duration:
 				_enter_idle(fighter)
+		DuelTypes.State.SPELL:
+			if fighter.state_frame >= fighter.state_duration:
+				# 斩类符卡：蓄力结束自动落刀，不需要再按一次。
+				if fighter.spell_pending_slash:
+					fighter.spell_pending_slash = false
+					_enter_slash(fighter)
+				else:
+					_enter_idle(fighter)
 		_:
 			pass
 
@@ -276,10 +366,16 @@ func _enter_idle(fighter: FighterState) -> void:
 
 func _enter_commit(fighter: FighterState) -> void:
 	var tier := DuelTypes.tier_for_flow(fighter.flow)
+	var tier_offset: int = DuelTypes.COMMIT_TIER_OFFSET[tier]
+	if not fighter.data.flow_speeds_commit:
+		# 对手只吃低心流的惩罚，不吃高档加速：否则「流」档会把 18f 压到 12f，
+		# 玩家看见也来不及，变成纯粹的面板伤害。
+		tier_offset = maxi(0, tier_offset)
 	var opening_offset: int = 0
 	if fighter.side == DuelTypes.Side.P1 and frame < 180:
 		opening_offset = int(mods.get("opening_commit", 0))
-	fighter.commit_total = maxi(1, fighter.data.base_commit + DuelTypes.COMMIT_TIER_OFFSET[tier] + opening_offset)
+	fighter.commit_total = maxi(COMMIT_MIN_FRAMES,
+			fighter.data.base_commit + tier_offset + opening_offset)
 	# 出刀本身消耗心流；档位按付出前计算，避免同一刀因扣费反而变快。
 	_sub_flow(fighter, fighter.data.slash_cost)
 	_enter(fighter, DuelTypes.State.COMMIT, fighter.commit_total)
@@ -296,7 +392,12 @@ func _enter_recovery(fighter: FighterState, duration: int) -> void:
 
 func _enter_guard(fighter: FighterState) -> void:
 	var tier := DuelTypes.tier_for_flow(fighter.flow)
-	fighter.guard_duration = DuelTypes.GUARD_TIER_FRAMES[tier]
+	# 档位偏移 + 心得/残心叠加（guard_duration_base 已含 U01 与残心加成）。
+	fighter.guard_duration = fighter.data.guard_duration_base \
+			+ DuelTypes.GUARD_TIER_OFFSET[tier]
+	# 架势符卡有效期内架窗不低于 SPELL_STANCE_GUARD_FRAMES，给必完美判定留余量。
+	if fighter.spell_perfect_until_frame > frame:
+		fighter.guard_duration = maxi(fighter.guard_duration, SPELL_STANCE_GUARD_FRAMES)
 	fighter.guard_blocked = false
 	_enter(fighter, DuelTypes.State.GUARD, fighter.data.guard_startup + fighter.guard_duration)
 
@@ -327,10 +428,14 @@ func _resolve_slash(attacker: FighterState) -> void:
 		return
 
 	match defender.state:
-		DuelTypes.State.IDLE, DuelTypes.State.COMMIT, DuelTypes.State.RECOVERY, DuelTypes.State.GUARD_REC:
+		DuelTypes.State.IDLE, DuelTypes.State.COMMIT, DuelTypes.State.RECOVERY, DuelTypes.State.GUARD_REC, DuelTypes.State.SPELL:
 			_do_hit(attacker, defender)
 		DuelTypes.State.GUARD:
-			if defender.state_frame >= defender.data.guard_startup:
+			if attacker.spell_unblockable:
+				# 符卡「破防」：这一刀无视架，直接结算命中。
+				attacker.spell_unblockable = false
+				_do_hit(attacker, defender)
+			elif defender.state_frame >= defender.data.guard_startup:
 				_do_block(attacker, defender)
 			else:
 				_do_hit(attacker, defender)
@@ -341,7 +446,15 @@ func _resolve_slash(attacker: FighterState) -> void:
 
 
 func _do_hit(attacker: FighterState, defender: FighterState) -> void:
-	var damage := HIT_DAMAGE
+	# 角色基础伤害（重剑 2 / 其余 1）+ 破势硬直。
+	var damage := attacker.data.hit_damage
+	var stagger := attacker.data.stagger
+	if attacker.spell_power_amount > 0:
+		damage = maxi(damage, attacker.spell_power_amount)
+		stagger += attacker.spell_stagger_bonus
+		attacker.spell_power_amount = 0
+		attacker.spell_stagger_bonus = 0
+	attacker.spell_unblockable = false
 
 	# U07 追击：第一次命中标记 3 秒窗口；窗口内的下一刀 +1 伤害（每场 1 次）。
 	if attacker.side == DuelTypes.Side.P1 and bool(mods.get("pursuit", false)) and not _pursuit_used:
@@ -372,20 +485,49 @@ func _do_hit(attacker: FighterState, defender: FighterState) -> void:
 	defender.perfect_streak = 0
 	defender.guard_blocked = false
 	defender.whiff_lock = WHIFF_LOCK_FRAMES
-	_sub_flow(defender, HIT_FLOW_LOSS)
+	# 一刀把符卡蓄力驱散：蓄力期间被抓到就是白付心流 + 追加惩罚硬直。
+	var spell_broken := _has_spell_charge(defender)
+	if spell_broken:
+		_clear_spell_charge(defender)
+		spell_interrupted.emit(defender.side)
+	# 残心：抬高心流下限之外，还让这一刀掉的心流变少，高档位才守得住。
+	_sub_flow(defender, maxi(0, HIT_FLOW_LOSS - defender.data.flow_loss_reduction))
 	if defender.side == DuelTypes.Side.P1 and bool(mods.get("guts", false)):
 		_guts_until = frame + 300
 
-	_enter(defender, DuelTypes.State.HITSTUN, defender.data.hitstun)
+	_enter(defender, DuelTypes.State.HITSTUN, defender.data.hitstun + stagger \
+			+ (SPELL_INTERRUPT_PENALTY if spell_broken else 0))
 	defender.invuln = defender.data.invuln
 	_enter_recovery(attacker, attacker.data.whiff_recovery)
 
 	hit_landed.emit(attacker.side, defender.side, damage)
 
 
+## 是否有「已付心流、还没兑现」的符卡蓄力。
+func _has_spell_charge(fighter: FighterState) -> bool:
+	return fighter.spell_power_amount > 0 \
+			or fighter.spell_stagger_bonus > 0 \
+			or fighter.spell_pending_slash \
+			or fighter.spell_perfect_until_frame > frame \
+			or fighter.spell_unblockable
+
+
+func _clear_spell_charge(fighter: FighterState) -> void:
+	fighter.spell_power_amount = 0
+	fighter.spell_stagger_bonus = 0
+	fighter.spell_perfect_until_frame = 0
+	fighter.spell_pending_slash = false
+	fighter.spell_unblockable = false
+
+
 func _do_block(attacker: FighterState, defender: FighterState) -> void:
 	var frames_since_active := defender.state_frame - defender.data.guard_startup
-	var perfect := frames_since_active <= PERFECT_BLOCK_WINDOW
+	# 心流档位也放宽「完美格挡」判定窗（+0/+1/+2f），让高心流的回报可感知。
+	var perfect_window: int = PERFECT_BLOCK_WINDOW \
+			+ DuelTypes.PERFECT_TIER_OFFSET[DuelTypes.tier_for_flow(defender.flow)]
+	# 架势符卡有效期内：任意时刻的架都判定为完美格挡。
+	var stance_active: bool = defender.spell_perfect_until_frame > frame
+	var perfect: bool = stance_active or frames_since_active <= perfect_window
 
 	var gain := BLOCK_FLOW_GAIN
 	if perfect:

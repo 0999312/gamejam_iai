@@ -65,6 +65,40 @@ func test_ai_is_inert_after_duel_finished() -> void:
 	assert_eq(sim.frame, 0)
 
 
+## 回归：修复前 AI 用 `elapsed >= reaction_frames` 判「读招」，
+## 「快剑 + 疾势」把前摇压到 14f，而 reaction 是 15/16，AI 永远等不到，
+## 一刀不挡 → 无脑连砍。现在按「最晚决定帧」读招，短前摇也必须能架。
+func test_ai_can_guard_fourteen_frame_commit() -> void:
+	var fast := FighterData.player_b()
+	fast.base_commit = 14
+	sim = DuelSim.new(fast, FighterData.opponent_teaching(), 7)
+	var profile := AiProfile.teaching()
+	profile.aggression = 0.0
+	profile.guard_chance = 1.0
+	profile.reaction_frames = 15
+	ai = DuelAi.new(DuelTypes.Side.P2, profile, 7)
+
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	for i in 20:
+		ai.tick(sim)
+		sim.tick()
+
+	assert_eq(sim.p2.hp, 3, "14f 前摇也必须能被读到并架住")
+	assert_eq(sim.p1.state, DuelTypes.State.RECOVERY, "出刀被架后进入惩罚硬直")
+
+
+## 连挨刀会抬高 AI 的防御意愿，但不会超过 0.75 的上限。
+func test_guard_chance_rises_after_consecutive_hits() -> void:
+	var profile := AiProfile.teaching()
+	profile.guard_chance = 0.3
+	ai = DuelAi.new(DuelTypes.Side.P2, profile, 7)
+	assert_almost_eq(ai._guard_chance_now(), 0.3, 0.001)
+	ai._consecutive_hits_taken = 1
+	assert_almost_eq(ai._guard_chance_now(), 0.45, 0.001)
+	ai._consecutive_hits_taken = 99
+	assert_almost_eq(ai._guard_chance_now(), 0.75, 0.001, "上限 0.75")
+
+
 func test_ai_pauses_after_landing_a_hit() -> void:
 	sim.opening_lock_frames = 10
 	ai.tick(sim)
@@ -80,3 +114,25 @@ func test_ai_pauses_after_landing_a_hit() -> void:
 	ai._start_attack(sim)
 	sim.tick()
 	assert_eq(sim.p2.state, DuelTypes.State.COMMIT, "间合结束后恢复出刀")
+
+
+## AI 架住/完美格挡会涨心流，若吃高档 −6f 就会把 18f 压成 12f（200ms），
+## 玩家看见也来不及。对手必须只吃低心流的 +6 惩罚。
+func test_ai_commit_ignores_flow_speedup() -> void:
+	var foe := FighterData.opponent_for_stage(4)
+	assert_false(foe.flow_speeds_commit, "对手数据必须关掉心流加速")
+	sim = DuelSim.new(FighterData.player_a(), foe, 7)
+	sim.p2.flow = 100
+	sim.press(DuelTypes.Side.P2, DuelTypes.Action.ATTACK)
+	sim.tick()
+	assert_eq(sim.p2.commit_total, foe.base_commit,
+			"AI 在高档心流下前摇仍是 base_commit，不会掉到 12f")
+
+	# 玩家侧保留加速：这是心流的主要爽点。
+	var me := DuelSim.new(FighterData.player_a(), FighterData.opponent_for_stage(0), 7)
+	me.p1.flow = 100
+	me.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	me.tick()
+	assert_eq(me.p1.commit_total,
+			FighterData.player_a().base_commit + DuelTypes.COMMIT_TIER_OFFSET[DuelTypes.Tier.FLOW],
+			"玩家高档心流仍缩短 6f")

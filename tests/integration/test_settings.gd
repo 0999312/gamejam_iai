@@ -16,11 +16,11 @@ func test_rebind_writes_key() -> void:
 	settings._begin_rebind(&"attack_p1")
 	var event := InputEventKey.new()
 	event.pressed = true
-	event.keycode = KEY_L
+	event.keycode = KEY_Y
 	settings.get_viewport().push_input(event)
 	await wait_process_frames(1)
 
-	assert_true(KeyBindings.get_keys(GameBootstrap.meta, &"attack_p1").has(KEY_L))
+	assert_true(KeyBindings.get_keys(GameBootstrap.meta, &"attack_p1").has(KEY_Y))
 	GameBootstrap.meta = old_meta
 
 

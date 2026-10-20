@@ -8,7 +8,12 @@ enum Phase { DUEL, REWARD, FAILED, CLEAR }
 
 const STAGE_COUNT := 5
 const ZANSHIN_CAP := 3
+## 每层残心提供的开局心流。
 const ZANSHIN_FLOW_BONUS := 8
+## 每层残心抬高的心流下限（3 层 → 15 + 18 = 33，直接脱离最低档）。
+const ZANSHIN_FLOOR_BONUS := 6
+## 每层残心减免的受击心流损失（3 层 → 15 - 9 = 6）。
+const ZANSHIN_LOSS_GUARD := 3
 
 const UPGRADE_IDS: Array[StringName] = [
 	&"u01", &"u02", &"u03", &"u04", &"u05",
@@ -103,9 +108,16 @@ func enemy_profile() -> AiProfile:
 	return profile
 
 
-## 把已选心得换算成玩家帧数据（效果由注册表里的 UpgradeData 声明）。
+## 把已选心得与残心换算成玩家帧数据（效果由注册表里的 UpgradeData 声明）。
+## 残心在这里一次性折算完毕，不存在第二个入口。
 func player_data() -> FighterData:
 	var data := FighterData.for_character(character_id)
+	var zan := mini(zanshin, ZANSHIN_CAP)
+	# 残心 = 心流保证：抬高起点与下限、降低受击损失，并给一点架窗。
+	data.start_flow = mini(data.max_flow, data.start_flow + zan * ZANSHIN_FLOW_BONUS)
+	data.flow_floor += zan * ZANSHIN_FLOOR_BONUS
+	data.flow_loss_reduction = zan * ZANSHIN_LOSS_GUARD
+	data.guard_duration_base += zan
 	for id in upgrades:
 		var upgrade := upgrade_data(id)
 		if upgrade == null:
@@ -148,11 +160,6 @@ func mods() -> Dictionary:
 			&"hint_lead":
 				result["hint_lead"] = upgrade.amount
 	return result
-
-
-func start_flow() -> int:
-	var data := player_data()
-	return mini(data.max_flow, data.start_flow + zanshin * ZANSHIN_FLOW_BONUS)
 
 
 func has_upgrade(id: StringName) -> bool:

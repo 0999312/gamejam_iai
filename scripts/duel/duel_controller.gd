@@ -27,16 +27,20 @@ var _start_cue_played := false
 var _context: GUIDEMappingContext
 var _attack_action: GUIDEAction
 var _guard_action: GUIDEAction
+var _spell_action: GUIDEAction
 var _p2_attack_action: GUIDEAction
 var _p2_guard_action: GUIDEAction
+var _p2_spell_action: GUIDEAction
 var _restart_action: GUIDEAction
 var _pause_action: GUIDEAction
 var _offer_actions: Array[GUIDEAction] = []
 
 var _attack_queued := false
 var _guard_queued := false
+var _spell_queued := false
 var _p2_attack_queued := false
 var _p2_guard_queued := false
+var _p2_spell_queued := false
 var _restart_queued := false
 var _settled := false
 var _raw_p1_device := -1
@@ -118,11 +122,15 @@ func _input(event: InputEvent) -> void:
 			_attack_queued = true
 		elif button == KeyBindings.get_joy_button(meta, &"guard_p1"):
 			_guard_queued = true
+		elif button == KeyBindings.get_joy_button(meta, &"spell_p1"):
+			_spell_queued = true
 	else:
 		if button == KeyBindings.get_joy_button(meta, &"attack_p2"):
 			_p2_attack_queued = true
 		elif button == KeyBindings.get_joy_button(meta, &"guard_p2"):
 			_p2_guard_queued = true
+		elif button == KeyBindings.get_joy_button(meta, &"spell_p2"):
+			_p2_spell_queued = true
 	if button == KeyBindings.get_joy_button(meta, &"pause"):
 		_on_pause_pressed()
 	elif button == KeyBindings.get_joy_button(meta, &"restart"):
@@ -151,18 +159,16 @@ func _physics_process(_delta: float) -> void:
 	if mode == &"versus":
 		sim.set_input(DuelTypes.Side.P1, _attack_queued, _guard_queued)
 		sim.set_input(DuelTypes.Side.P2, _p2_attack_queued, _p2_guard_queued)
-		_attack_queued = false
-		_guard_queued = false
-		_p2_attack_queued = false
-		_p2_guard_queued = false
-		sim.tick()
+		if _p2_spell_queued:
+			sim.set_spell(DuelTypes.Side.P2)
 	else:
 		sim.set_input(DuelTypes.Side.P1, _attack_queued, _guard_queued)
-		_attack_queued = false
-		_guard_queued = false
-		if ai != null:
-			ai.tick(sim)
-		sim.tick()
+	if _spell_queued:
+		sim.set_spell(DuelTypes.Side.P1)
+	_clear_input_flags()
+	if mode != &"versus" and ai != null:
+		ai.tick(sim)
+	sim.tick()
 	_play_start_cue_once()
 	_hud.refresh()
 
@@ -185,6 +191,10 @@ func _settle_duel() -> void:
 		return
 	run.player_hp = sim.p1.hp
 	run.on_duel_finished(sim.winner)
+	# 结算会回血（胜利回复，U10 复元为 2）：把结果同步回 sim，
+	# 否则 HUD 读的是 sim.p1.hp，奖励界面显示的还是结算前的旧血量，
+	# 玩家会以为「回血没触发」。下一场 _start_stage 也会用 run.player_hp 覆盖。
+	sim.p1.hp = run.player_hp
 	_hud.refresh()
 	if run.phase == RunState.Phase.REWARD:
 		_hud.show_rewards(run.offers)
@@ -194,7 +204,6 @@ func _start_stage() -> void:
 	sim = DuelSim.new(run.player_data(), run.enemy_data(), 12345 + run.stage_index)
 	sim.mods = run.mods()
 	sim.p1.hp = run.player_hp
-	sim.p1.flow = run.start_flow()
 	sim.p2.flow = 40
 	sim.opening_lock_frames = 180
 
@@ -250,11 +259,17 @@ func _start_versus() -> void:
 
 
 func _clear_queued_input() -> void:
+	_clear_input_flags()
+	_restart_queued = false
+
+
+func _clear_input_flags() -> void:
 	_attack_queued = false
 	_guard_queued = false
+	_spell_queued = false
 	_p2_attack_queued = false
 	_p2_guard_queued = false
-	_restart_queued = false
+	_p2_spell_queued = false
 
 
 func _on_offer_chosen(index: int) -> void:
@@ -272,8 +287,10 @@ func _setup_input() -> void:
 	var meta := GameBootstrap.meta if GameBootstrap != null else null
 	var p1_attack: Array[Key] = KeyBindings.get_keys(meta, &"attack_p1")
 	var p1_guard: Array[Key] = KeyBindings.get_keys(meta, &"guard_p1")
+	var p1_spell: Array[Key] = KeyBindings.get_keys(meta, &"spell_p1")
 	var p2_attack: Array[Key] = KeyBindings.get_keys(meta, &"attack_p2")
 	var p2_guard: Array[Key] = KeyBindings.get_keys(meta, &"guard_p2")
+	var p2_spell: Array[Key] = KeyBindings.get_keys(meta, &"spell_p2")
 	var restart_keys: Array[Key] = KeyBindings.get_keys(meta, &"restart")
 	var pause_keys: Array[Key] = KeyBindings.get_keys(meta, &"pause")
 
@@ -286,11 +303,14 @@ func _setup_input() -> void:
 		p2_joys.append(1)
 	var p1_mouse_attack: Array[MouseButton] = [MOUSE_BUTTON_LEFT]
 	var p1_mouse_guard: Array[MouseButton] = [MOUSE_BUTTON_RIGHT]
+	var p1_mouse_spell: Array[MouseButton] = [MOUSE_BUTTON_MIDDLE]
 	var no_mouse: Array[MouseButton] = []
 	var p1_attack_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"attack_p1")]
 	var p1_guard_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"guard_p1")]
+	var p1_spell_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"spell_p1")]
 	var p2_attack_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"attack_p2")]
 	var p2_guard_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"guard_p2")]
+	var p2_spell_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"spell_p2")]
 	var pause_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"pause")]
 	var restart_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"restart")]
 	var all_joys: Array[int] = p1_joys.duplicate()
@@ -298,15 +318,19 @@ func _setup_input() -> void:
 
 	_attack_action = _add_action(&"duel_attack_p1", p1_attack, p1_mouse_attack, p1_joys, p1_attack_buttons)
 	_guard_action = _add_action(&"duel_guard_p1", p1_guard, p1_mouse_guard, p1_joys, p1_guard_buttons)
+	_spell_action = _add_action(&"duel_spell_p1", p1_spell, p1_mouse_spell, p1_joys, p1_spell_buttons)
 	_p2_attack_action = _add_action(&"duel_attack_p2", p2_attack, no_mouse, p2_joys, p2_attack_buttons)
 	_p2_guard_action = _add_action(&"duel_guard_p2", p2_guard, no_mouse, p2_joys, p2_guard_buttons)
+	_p2_spell_action = _add_action(&"duel_spell_p2", p2_spell, no_mouse, p2_joys, p2_spell_buttons)
 	_restart_action = _add_action(&"duel_restart", restart_keys, no_mouse, all_joys, restart_buttons)
 	_pause_action = _add_action(&"duel_pause", pause_keys, no_mouse, all_joys, pause_buttons)
 
 	_attack_action.just_triggered.connect(_on_attack_pressed)
 	_guard_action.just_triggered.connect(_on_guard_pressed)
+	_spell_action.just_triggered.connect(_on_spell_pressed)
 	_p2_attack_action.just_triggered.connect(_on_p2_attack_pressed)
 	_p2_guard_action.just_triggered.connect(_on_p2_guard_pressed)
+	_p2_spell_action.just_triggered.connect(_on_p2_spell_pressed)
 	_restart_action.just_triggered.connect(_on_restart_pressed)
 	_pause_action.just_triggered.connect(_on_pause_pressed)
 
@@ -379,12 +403,20 @@ func _on_guard_pressed() -> void:
 	_guard_queued = true
 
 
+func _on_spell_pressed() -> void:
+	_spell_queued = true
+
+
 func _on_p2_attack_pressed() -> void:
 	_p2_attack_queued = true
 
 
 func _on_p2_guard_pressed() -> void:
 	_p2_guard_queued = true
+
+
+func _on_p2_spell_pressed() -> void:
+	_p2_spell_queued = true
 
 
 func _on_restart_pressed() -> void:

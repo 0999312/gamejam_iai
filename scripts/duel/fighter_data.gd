@@ -8,15 +8,25 @@ extends Resource
 @export var max_hp: int = 3
 
 @export_group("Attack")
-## 「构」前摇基准帧；心流档位会在此基础上 +2 / 0 / -2。
+## 「构」前摇基准帧；心流档位会在此基础上 +6 / 0 / -6（进攻端为主）。
 ## 2026-10-19 调参：13 → 18f（300ms），让对手有反应/架招的余地，攻击本身成为大破绽。
 @export var base_commit: int = 18
+## 心流高档是否允许缩短前摇。玩家保留（这是心流的主要爽点）；
+## 对手关掉——AI 架住/完美格挡会涨心流，一旦进「流」档，18f 会被压到 12f（200ms），
+## 变成玩家物理上无法反应的一刀。AI 只吃低心流的 +6 惩罚，不吃高档加速。
+@export var flow_speeds_commit: bool = true
 ## 斩判定窗帧数；双方同时进入判定窗用于判刃鸣。
 @export var slash_frames: int = 5
 ## 取消出刀进「架」的窗口（构的前 N 帧）。
 @export var cancel_window: int = 5
 ## 取消进架消耗的心流。
 @export var cancel_cost: int = 5
+## 单刀基础伤害（重剑 2，其余 1）。
+@export var hit_damage: int = 1
+## 「破势」：命中后额外追加给受击方的硬直帧（重剑 12，令对手 24 → 36f）。
+@export var stagger: int = 0
+## 该角色绑定的符卡 id（空表示没有符卡）。
+@export var spell_id: StringName = &""
 
 @export_group("Recovery")
 ## 2026-10-19 调参：空挥 14 → 20f，被架 25 → 32f；主动出刀失败必须可被确定惩罚。
@@ -26,7 +36,11 @@ extends Resource
 @export var invuln: int = 12
 
 @export_group("Guard")
-@export var guard_startup: int = 2
+## 心流最低档（SPREAD）下的「架」持续帧数；档位在此基础上加 0 / 4 / 8f，
+## 心得 U01 与残心再叠加，因此这里要保留为基准值而不是最终值。
+## 2026-10-20 二次调参：启动 2 → 1（重剑 3 → 2）。玩家「看见再按」还要吃掉
+## 1 物理帧输入延迟，启动帧越短，按键到生效越接近即时。
+@export var guard_startup: int = 1
 @export var guard_duration_base: int = 12
 @export var guard_recovery: int = 8
 
@@ -43,6 +57,8 @@ extends Resource
 ## 心流自然恢复：IDLE 时每 N 帧 +M；新一场由 reset_for_duel 重置。
 @export var flow_regen_interval: int = 24
 @export var flow_regen_amount: int = 1
+## 受击心流损失的减免值（残心提供）。只作用于 HIT_FLOW_LOSS，不减免出刀/架的消耗。
+@export var flow_loss_reduction: int = 0
 
 
 static func player_a() -> FighterData:
@@ -57,7 +73,7 @@ static func player_a() -> FighterData:
 	data.blocked_recovery = 32
 	data.hitstun = 24
 	data.invuln = 12
-	data.guard_startup = 2
+	data.guard_startup = 1
 	data.guard_duration_base = 12
 	data.guard_recovery = 8
 	data.clash_frames = 12
@@ -68,6 +84,9 @@ static func player_a() -> FighterData:
 	data.slash_cost = 4
 	data.flow_regen_interval = 24
 	data.flow_regen_amount = 1
+	data.hit_damage = 1
+	data.stagger = 0
+	data.spell_id = &"spell_a"
 	return data
 
 
@@ -86,10 +105,15 @@ static func player_b() -> FighterData:
 	data.start_flow = 46
 	data.slash_cost = 4
 	data.flow_regen_interval = 22
+	data.hit_damage = 1
+	data.stagger = 0
+	data.spell_id = &"spell_b"
 	return data
 
 
 ## 角色 C「重剑」：前摇长、判定宽、血厚、收招慢，靠读招与一次决胜。
+## 2026-10-20：一刀 2 伤 + 破势（受击硬直 24 → 36f），否则重剑在数值上
+## 严格劣于快剑（前摇慢 50% 却打同样 1 伤，4 点 HP 换不来一次有效抵抗）。
 static func player_c() -> FighterData:
 	var data := player_a()
 	data.id = &"player_c"
@@ -98,12 +122,15 @@ static func player_c() -> FighterData:
 	data.slash_frames = 6
 	data.whiff_recovery = 24
 	data.blocked_recovery = 36
-	data.guard_startup = 3
+	data.guard_startup = 2
 	data.guard_duration_base = 14
 	data.guard_recovery = 9
 	data.start_flow = 36
 	data.slash_cost = 5
 	data.flow_regen_interval = 26
+	data.hit_damage = 2
+	data.stagger = 12
+	data.spell_id = &"spell_c"
 	return data
 
 
@@ -122,12 +149,23 @@ static func opponent_teaching() -> FighterData:
 	data.id = &"opponent_1_teaching"
 	data.max_hp = 3
 	data.base_commit = 20
+	# 教学与中段对手不带符卡：符卡是关底专属的「这一场不一样」。
+	data.spell_id = &""
+	# AI 不享受心流加速（见 flow_speeds_commit 注释）。
+	data.flow_speeds_commit = false
 	return data
 
 
 ## 五场阶梯的对手数据（内部代号 1–5；正式名称/立绘由人类后补）。
+## 2026-10-20 二次调参：前摇整体抬到 18–20f。旧值 12–15f（200–250ms）低于
+## 人类「看见→按键」的实际开销（反应 ~250ms + 1f 输入延迟 + 1f 起架），
+## 玩家在物理上不可能架住；难度改由虚招率、决策间隔与惩罚力度承担。
 static func opponent_for_stage(stage: int) -> FighterData:
 	var data := player_a()
+	# 只有关底持有符卡；1–4 场是「读招与架」的常规教学，不叠加符卡压力。
+	data.spell_id = &""
+	# AI 不享受心流加速（见 flow_speeds_commit 注释）。
+	data.flow_speeds_commit = false
 	match stage:
 		0:
 			data.id = &"opponent_1_teaching"
@@ -136,17 +174,18 @@ static func opponent_for_stage(stage: int) -> FighterData:
 		1:
 			data.id = &"opponent_2_aggressive"
 			data.max_hp = 3
-			data.base_commit = 14
+			data.base_commit = 18
 		2:
 			data.id = &"opponent_3_veteran"
 			data.max_hp = 4
-			data.base_commit = 15
+			data.base_commit = 19
 		3:
 			data.id = &"opponent_4_deceptive"
 			data.max_hp = 4
-			data.base_commit = 13
+			data.base_commit = 18
 		_:
 			data.id = &"opponent_5_boss"
 			data.max_hp = 4
-			data.base_commit = 12
+			data.base_commit = 18
+			data.spell_id = &"spell_boss"
 	return data

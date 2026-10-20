@@ -17,6 +17,9 @@ extends Resource
 @export var opening_grace_frames: int = 0
 ## 命中玩家后至少隔多少帧才再次出刀，避免「一套连到死」。
 @export var post_hit_pause_frames: int = 45
+## 符卡使用意愿：0 = 本场不用（小兵与中段对手），>0 = 到达关键时刻时以此概率发动。
+## 只有关底持有符卡（见 FighterData.opponent_for_stage）。
+@export_range(0.0, 1.0, 0.01) var spell_chance: float = 0.0
 
 
 static func teaching() -> AiProfile:
@@ -82,4 +85,5 @@ static func for_stage(stage: int) -> AiProfile:
 			profile.guard_chance = 0.45
 			profile.counter_chance = 0.55
 			profile.post_hit_pause_frames = 40
+			profile.spell_chance = 0.85
 	return profile

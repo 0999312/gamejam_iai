@@ -42,6 +42,22 @@ var flow_regen_frames: int = 0
 ## 本帧是否刚进入 SLASH，用于接触结算。
 var entered_slash: bool = false
 
+## 符卡（技能）：由 DuelSim.set_spell 消费，与角色硬绑定。
+var spell_card: SpellCardData
+var spell_uses_left: int = 0
+## 「架势」符卡：此帧之前的所有架都判定为完美格挡（0 表示未发动）。
+var spell_perfect_until_frame: int = 0
+## 「斩」类符卡：下一刀伤害覆盖值（0 表示不生效）。
+var spell_power_amount: int = 0
+## 下一刀无视「架」（破防）。
+var spell_unblockable: bool = false
+## 下一刀额外硬直。
+var spell_stagger_bonus: int = 0
+## 蓄力结束时自动出刀（斩类符卡）。
+var spell_pending_slash: bool = false
+## 符卡输入的缓冲截止帧；-1 表示没有缓存。
+var spell_buffer_expire_frame: int = -1
+
 
 func reset_for_duel() -> void:
 	state = DuelTypes.State.IDLE
@@ -64,3 +80,15 @@ func reset_for_duel() -> void:
 	commit_wait_gain = 0
 	flow_regen_frames = 0
 	entered_slash = false
+	spell_perfect_until_frame = 0
+	spell_power_amount = 0
+	spell_unblockable = false
+	spell_stagger_bonus = 0
+	spell_pending_slash = false
+	spell_buffer_expire_frame = -1
+	if data != null:
+		spell_card = SpellCardData.for_character_id(data.spell_id)
+		spell_uses_left = 0 if spell_card == null else spell_card.uses_per_duel
+	else:
+		spell_card = null
+		spell_uses_left = 0

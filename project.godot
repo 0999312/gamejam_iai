@@ -38,3 +38,15 @@ enabled=PackedStringArray("res://addons/guide/plugin.cfg", "res://addons/gut/plu
 [gui]
 
 theme/custom="res://assets/theme/minimal_vector.tres"
+
+[physics]
+
+; 战斗判定的唯一时间基准：1 逻辑帧 = 1/60 秒 = 16.67ms。
+; 所有帧数据（前摇/架窗/硬直）都以逻辑帧计数，与渲染帧率无关。
+; 显式写死而不用引擎默认值，避免引擎升级或误改项目设置时静默改变手感。
+common/physics_ticks_per_second=60
+; 卡顿时单个渲染帧最多补 8 个物理步（≈133ms）；超过则时间膨胀（整体慢动作），
+; 不会让战斗变快，也不会跳过判定帧。
+common/max_physics_steps_per_frame=8
+; 关闭物理步插值，保证物理步严格落在 1/60 网格上（输入采样时刻不抖动）。
+common/physics_jitter_fix=0.0
