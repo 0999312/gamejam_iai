@@ -27,3 +27,6 @@ Thumbs.db
 
 # 主办方参考文档（本地保留，不随仓库分发；如需公开再移除本行）
 /幻游万象展参与指南.md
+
+# Audio source library (3rd-party licenses / size; local only, not committed)
+/assets/audio/_sources/

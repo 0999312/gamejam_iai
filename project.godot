@@ -11,8 +11,18 @@ config_version=5
 [application]
 
 config/name="godot_dsh_test"
+run/main_scene="res://scenes/menu/menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
+
+[autoload]
+
+RegistryManager="*res://addons/mc_game_framework/autoload/registry_manager.gd"
+EventBus="*res://addons/mc_game_framework/autoload/event_bus.gd"
+I18NManager="*res://addons/mc_game_framework/autoload/i18n_manager.gd"
+SoundManager="*res://addons/sound_manager/sound_manager.gd"
+GameBootstrap="*res://scripts/core/game_bootstrap.gd"
+GUIDE="*res://addons/guide/guide.gd"
 
 [display]
 
