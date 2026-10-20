@@ -42,6 +42,10 @@ jobs:
           "SEMVER=0.0.0" >> $env:GITHUB_ENV
           Write-Output "Build version: $date-$build"
 
+      - name: Import resources
+        shell: pwsh
+        run: godot --headless --path . --import
+
       - name: Export Windows release
         shell: pwsh
         run: |
