@@ -51,17 +51,15 @@ jobs:
         run: |
           $root = $env:GITHUB_WORKSPACE
           New-Item -ItemType Directory -Force "$root/build/windows" | Out-Null
-          "Godot: $(godot --version)" | Add-Content $env:GITHUB_STEP_SUMMARY
-          $log = "$root/build/export.log"
-          & godot --headless --path "$root" --export-release "Windows Desktop" "$root/build/windows/iai.exe" *> $log
-          $code = $LASTEXITCODE
-          "exit=$code" | Add-Content $env:GITHUB_STEP_SUMMARY
-          if (Test-Path $log) {
-            Get-Content $log | Add-Content $env:GITHUB_STEP_SUMMARY
-          } else {
-            "export.log missing" | Add-Content $env:GITHUB_STEP_SUMMARY
-          }
-          if ($code -ne 0) { throw "Godot export failed: $code" }
+          $godot = (Get-Command godot -ErrorAction Stop).Source
+          "Godot: $godot" | Add-Content $env:GITHUB_STEP_SUMMARY
+          & $godot --version | Add-Content $env:GITHUB_STEP_SUMMARY
+          $out = "$root/build/export.out"
+          $err = "$root/build/export.err"
+          $p = Start-Process -FilePath $godot -ArgumentList @("--headless","--path",$root,"--export-release","Windows Desktop","$root/build/windows/iai.exe") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
+          "exit=$($p.ExitCode)" | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-Content $out, $err -ErrorAction SilentlyContinue | Add-Content $env:GITHUB_STEP_SUMMARY
+          if ($p.ExitCode -ne 0) { throw "Godot export failed: $($p.ExitCode)" }
           if (-not (Test-Path "$root/build/windows/iai.exe")) {
             Get-ChildItem -Recurse "$root/build" | Out-String | Add-Content $env:GITHUB_STEP_SUMMARY
             throw "Godot export produced no EXE"
@@ -72,7 +70,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: export-log
-          path: build/export.log
+          path: |
+            build/export.out
+            build/export.err
           if-no-files-found: warn
 
       - name: List build output
