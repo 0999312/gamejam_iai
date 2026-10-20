@@ -46,7 +46,25 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force build/windows | Out-Null
-          godot --headless --path . --export-release "Windows Desktop" build/windows/iai.exe
+          "Godot: $(godot --version)" | Add-Content $env:GITHUB_STEP_SUMMARY
+          $log = "build/export.log"
+          & godot --headless --path . --export-release "Windows Desktop" build/windows/iai.exe *>&1 | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE
+          "exit=$code" | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-Content $log | Add-Content $env:GITHUB_STEP_SUMMARY
+          if ($code -ne 0) { throw "Godot export failed: $code" }
+          if (-not (Test-Path build/windows/iai.exe)) {
+            Get-ChildItem -Recurse build | Out-String | Add-Content $env:GITHUB_STEP_SUMMARY
+            throw "Godot export produced no EXE"
+          }
+
+      - name: Upload export log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: export-log
+          path: build/export.log
+          if-no-files-found: warn
 
       - name: List build output
         shell: pwsh
