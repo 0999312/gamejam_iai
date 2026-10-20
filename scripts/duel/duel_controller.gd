@@ -39,12 +39,21 @@ var _p2_attack_queued := false
 var _p2_guard_queued := false
 var _restart_queued := false
 var _settled := false
+var _raw_p1_device := -1
+var _raw_p2_device := -1
+var _last_pause_ms := -1000
 
 
 func _ready() -> void:
 	mode = GameBootstrap.pending_mode if GameBootstrap != null else &"run"
 	if mode != &"versus":
 		mode = &"run"
+
+	var pads := Input.get_connected_joypads()
+	if pads.size() >= 1:
+		_raw_p1_device = pads[0]
+	if pads.size() >= 2:
+		_raw_p2_device = pads[1]
 
 	_setup_input()
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
@@ -81,6 +90,43 @@ func _exit_tree() -> void:
 		_audio.stop_ambient()
 	if _context != null:
 		GUIDE.disable_mapping_context(_context)
+
+
+## 手柄原始事件兜底：GUIDE 依赖启动时的手柄枚举，若枚举为空则 joy_index
+## 映射会失效。这里按实际 event.device 直接分发，保证已连接手柄仍可用；
+## GUIDE 正常时两条路径都只置位队列，不会重复出招。
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventJoypadButton):
+		return
+	var joy := event as InputEventJoypadButton
+	if not joy.pressed:
+		return
+
+	var device := joy.device
+	if _raw_p1_device < 0:
+		_raw_p1_device = device
+	var slot := 0
+	if mode == &"versus":
+		if _raw_p2_device < 0 and device != _raw_p1_device:
+			_raw_p2_device = device
+		slot = 1 if device == _raw_p2_device else 0
+
+	var meta := GameBootstrap.meta if GameBootstrap != null else null
+	var button := joy.button_index
+	if slot == 0:
+		if button == KeyBindings.get_joy_button(meta, &"attack_p1"):
+			_attack_queued = true
+		elif button == KeyBindings.get_joy_button(meta, &"guard_p1"):
+			_guard_queued = true
+	else:
+		if button == KeyBindings.get_joy_button(meta, &"attack_p2"):
+			_p2_attack_queued = true
+		elif button == KeyBindings.get_joy_button(meta, &"guard_p2"):
+			_p2_guard_queued = true
+	if button == KeyBindings.get_joy_button(meta, &"pause"):
+		_on_pause_pressed()
+	elif button == KeyBindings.get_joy_button(meta, &"restart"):
+		_on_restart_pressed()
 
 
 func _physics_process(_delta: float) -> void:
@@ -231,14 +277,13 @@ func _setup_input() -> void:
 	var restart_keys: Array[Key] = KeyBindings.get_keys(meta, &"restart")
 	var pause_keys: Array[Key] = KeyBindings.get_keys(meta, &"pause")
 
-	var p1_joy := InputDevices.p1_joy()
-	var p2_joy := InputDevices.p2_joy()
-	var p1_joys: Array[int] = []
+	# 不依赖启动时的设备枚举结果：始终给 P1 建“第一个手柄”映射，双人时给 P2
+	# 建“第二个手柄”映射。没有对应手柄时映射不会触发；有手柄时即使
+	# Input.get_connected_joypads() 在启动帧暂时为空也不会完全失去手柄。
+	var p1_joys: Array[int] = [0]
 	var p2_joys: Array[int] = []
-	if p1_joy >= 0:
-		p1_joys.append(p1_joy)
-	if p2_joy >= 0:
-		p2_joys.append(p2_joy)
+	if mode == &"versus":
+		p2_joys.append(1)
 	var p1_mouse_attack: Array[MouseButton] = [MOUSE_BUTTON_LEFT]
 	var p1_mouse_guard: Array[MouseButton] = [MOUSE_BUTTON_RIGHT]
 	var no_mouse: Array[MouseButton] = []
@@ -349,6 +394,10 @@ func _on_restart_pressed() -> void:
 func _on_pause_pressed() -> void:
 	if sim == null or _pause == null:
 		return
+	var now := Time.get_ticks_msec()
+	if now - _last_pause_ms < 200:
+		return
+	_last_pause_ms = now
 	_paused = not _paused
 	if _paused:
 		_pause.show_pause()

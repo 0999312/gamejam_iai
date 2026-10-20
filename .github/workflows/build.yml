@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   export:
@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Godot 4.7.2
         uses: chickensoft-games/setup-godot@v2
@@ -21,6 +23,24 @@ jobs:
           version: 4.7.2
           use-dotnet: false
           include-templates: true
+
+      - name: Compute build version
+        id: version
+        shell: pwsh
+        run: |
+          $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd")
+          git fetch --tags --force | Out-Null
+          $max = 0
+          foreach ($tag in (git tag -l "$date-*")) {
+            if ($tag -match "^$date-(\d+)$") {
+              $n = [int]$Matches[1]
+              if ($n -gt $max) { $max = $n }
+            }
+          }
+          $build = "{0:D2}" -f ($max + 1)
+          "BUILD_VERSION=$date-$build" >> $env:GITHUB_ENV
+          "SEMVER=0.0.0" >> $env:GITHUB_ENV
+          Write-Output "Build version: $date-$build"
 
       - name: Export Windows release
         shell: pwsh
@@ -32,9 +52,17 @@ jobs:
         shell: pwsh
         run: Get-ChildItem -Recurse build | Select-Object FullName, Length
 
-      - name: Upload EXE
+      - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
           name: iai-windows
           path: build/windows/
           if-no-files-found: warn
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $body = "Semantic version: $env:SEMVER`nBuild: $env:BUILD_VERSION`nCommit: $env:GITHUB_SHA"
+          gh release create $env:BUILD_VERSION build/windows/iai.exe --title $env:BUILD_VERSION --notes $body

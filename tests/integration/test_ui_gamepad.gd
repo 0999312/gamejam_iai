@@ -36,6 +36,7 @@ func test_menu_focus_moves_with_dpad() -> void:
 	assert_not_null(first)
 
 	var down := InputEventJoypadButton.new()
+	down.device = 1
 	down.button_index = JOY_BUTTON_DPAD_DOWN
 	down.pressed = true
 	Input.parse_input_event(down)
@@ -84,6 +85,7 @@ func test_joy_a_presses_focused_button() -> void:
 	button.pressed.connect(func() -> void: pressed[0] = true)
 
 	var down := InputEventJoypadButton.new()
+	down.device = 1
 	down.button_index = JOY_BUTTON_A
 	down.pressed = true
 	Input.parse_input_event(down)

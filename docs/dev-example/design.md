@@ -2,7 +2,7 @@
 
 > 副标题（PLACEHOLDER）：居合 · 心流 · 瞬息对决
 >
-> 版本 v0.13 ｜ 2026-10-20 ｜ 策划：人类 + DSH 主代理 ｜ 实现：DSH 主代理（代码）
+> 版本 v0.14 ｜ 2026-10-20 ｜ 策划：人类 + DSH 主代理 ｜ 实现：DSH 主代理（代码）
 > 性质：**内部工程文档**，不是提交给玩家的文案。文中出现的所有玩家可见文字均为占位，见 §15。
 
 ---
@@ -85,6 +85,7 @@
 | D23 | 数据驱动商店 + 手柄（2026-10-20） | 商店条目只用 `resources/unlocks/*.tres`，启动注册进 MSF `unlock` 注册表；键鼠与手柄可同时映射同一动作；P2 检测第二手柄 | 后续追加内容不改代码；本地双人支持键鼠或双手柄 |
 | D24 | 手柄改键 + 热插拔（2026-10-20） | 设置页每个动作可分别改键盘键和手柄键；手柄键写入 `settings.joy_buttons`；插拔手柄时重建 GUIDE 上下文并重新分配 P1/P2，对局不重置 | 手柄玩家不应被固定键位限制；热插拔不打断对局 |
 | D25 | 全手柄 UI（2026-10-20） | 内置 `ui_accept`/`ui_cancel` 追加手柄 A/B；菜单/商店/设置/暂停/奖励按钮统一「金色焦点环 + 初始焦点」；方向键/左摇杆移动焦点，A 确认，B 返回 | 人类反馈：UI 无法纯手柄操作 |
+| D26 | 手柄输入兜底 + Release 版本（2026-10-20） | GUIDE 枚举可能为空：下一帧强制刷新手柄表；P1/P2 映射不依赖启动枚举；`DuelController._input` 按 `event.device` 原始分发（P1/P2 隔离，暂停 200ms 去抖）；UI 动作补 `device=-1` 的 A/B/方向键。构建号 `YYYY-MM-DD-NN`（UTC，01 起），语义化版本默认 `0.0.0` | 人类实机发现手柄完全失效；同时要求 Action 输出对接 GitHub Release |
 
 ---
 
@@ -571,7 +572,9 @@ GUIDE 输入 ──► DuelController ──► DuelSim.press()
 - **键鼠 + 手柄并存**：每个动作可挂键盘、鼠标、手柄多条 `GUIDEInputMapping`；P1 鼠标左/右键 = 斩/架，手柄 1 的 A/B 同时可用；P2 默认键盘，检测到第二手柄时追加手柄 2 的 A/B。手柄键在设置页可逐项改绑，写入 `settings.joy_buttons`；冲突只在同一手柄作用域内拒绝（P1 动作之间、P2 动作之间、暂停/重开全局）。
 - 设置页可逐项改键、检测冲突、恢复默认；HUD 操作提示按当前绑定动态生成。
 - 语言：`localization/zh_CN.json` 与 `localization/en.json` 均为 122 键；设置页切换后 `I18NManager.set_language` 即时生效。
-- UI 动作（菜单/商店/设置/暂停/奖励）走 Godot 内置 `ui_accept`/`ui_cancel`/`ui_up/down/left/right`；`GameBootstrap` 在启动时为 `ui_accept` 补手柄 A、为 `ui_cancel` 补手柄 B，方向键/左摇杆由内置默认映射提供。
+- UI 动作（菜单/商店/设置/暂停/奖励）走 Godot 内置 `ui_accept`/`ui_cancel`/`ui_up/down/left/right`；`GameBootstrap` 在启动时为 A/B 与方向键补 `device=-1` 的手柄事件，任意手柄都能操作界面。
+- **手柄兜底**：GUIDE 的 `joy_index -> device_id` 表在 autoload 初始化帧可能为空，已连接手柄不会再次触发 `joy_connection_changed`；`GameBootstrap` 下一帧强制刷新一次，`DuelController` 始终给 P1 建第一个手柄映射、双人给 P2 建第二个，并额外用 `_input(event)` 按 `event.device` 分发（P1/P2 隔离；暂停 200ms 去抖）。GUIDE 与兜底同时触发时只置位队列，不会重复出招。
+- 构建版本：`project.godot` 的 `config/version`、导出预设的 `file_version/product_version` 默认 `0.0.0`；GitHub Release 构建号为 `YYYY-MM-DD-NN`（UTC，NN 从 01 起按当天已有 tag 递增），由 `.github/workflows/build.yml` 生成 tag/Release 并上传 EXE。
 - 测试：GUIDE 注入或 `GutInputFactory`，不硬编码键名。
 
 ---
@@ -709,3 +712,4 @@ GUIDE 输入 ──► DuelController ──► DuelSim.press()
 | v0.11 | 2026-10-20 | 商店改为完全数据驱动：`resources/unlocks/*.tres` 扫描后注册到 MSF `"unlock"` 注册表，`Unlocks` 只读注册表；新增 `InputDevices`，键鼠与手柄同时映射同一动作，P2 检测第二手柄；中英各 115 键；GUT 102/102 |
 | v0.12 | 2026-10-20 | 手柄改键 UI：每个动作独立手柄键，写入 `settings.joy_buttons`，同作用域冲突拒绝；手柄热插拔重建 GUIDE 上下文并重新分配 P1/P2；中英各 121 键；GUT 110/110 |
 | v0.13 | 2026-10-20 | 全手柄 UI：`UiFocus` 金色焦点环与初始焦点；`GameBootstrap` 给 `ui_accept`/`ui_cancel` 追加手柄 A/B；菜单/商店/设置/暂停/奖励支持方向键导航；改键等待时 Back 取消；中英各 122 键；GUT 116/116。导出 Windows EXE（`build/windows/iai.exe`，123,618,216 B，嵌入 PCK），本机 headless 冒烟 exit 0；新增 GitHub Actions 构建工作流（未在远端验证） |
+| v0.14 | 2026-10-20 | 修复真实手柄完全失效：GUIDE 手柄表延迟刷新、P1/P2 映射不依赖启动枚举、`_input` 按 `event.device` 原始兜底（玩家隔离/暂停去抖）；UI 动作补 `device=-1` 的 A/B/方向键；GUT 119/119。GitHub Action 对接 Release：构建号 `YYYY-MM-DD-NN`（UTC，01 起），语义化版本 `0.0.0`，tag/Release 自动创建 |

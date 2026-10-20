@@ -52,6 +52,15 @@ func _ready() -> void:
 	hard_mode = bool(meta.settings.get("hard_mode", false))
 	_ensure_audio_buses()
 	apply_settings()
+	_refresh_guide_joy_devices.call_deferred()
+
+
+## Godot 可能在 autoload 初始化帧还没枚举完已连接的手柄，GUIDE 的
+## joy_index -> device_id 表就会为空，表现为“手柄完全没反应”。下一帧再刷新一次。
+func _refresh_guide_joy_devices() -> void:
+	if GUIDE == null or GUIDE._input_state == null:
+		return
+	GUIDE._input_state._refresh_joy_device_ids(0, 0)
 
 
 ## Godot 内置 ui_accept / ui_cancel 默认只含键盘；补上手柄 A / B，
@@ -59,10 +68,15 @@ func _ready() -> void:
 func _ensure_ui_gamepad_actions() -> void:
 	_add_joy_event("ui_accept", JOY_BUTTON_A)
 	_add_joy_event("ui_cancel", JOY_BUTTON_B)
+	_add_joy_event("ui_up", JOY_BUTTON_DPAD_UP)
+	_add_joy_event("ui_down", JOY_BUTTON_DPAD_DOWN)
+	_add_joy_event("ui_left", JOY_BUTTON_DPAD_LEFT)
+	_add_joy_event("ui_right", JOY_BUTTON_DPAD_RIGHT)
 
 
 func _add_joy_event(action: StringName, button_index: JoyButton) -> void:
 	var event := InputEventJoypadButton.new()
+	event.device = -1
 	event.button_index = button_index
 	if InputMap.action_has_event(action, event):
 		return
