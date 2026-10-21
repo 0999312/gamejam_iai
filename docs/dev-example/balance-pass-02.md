@@ -61,7 +61,7 @@
 
 ### GUT
 
-`158/158` tests，`554` asserts，headless 全绿（`-gdir=res://tests -ginclude_subdirs -gexit`）。
+`159/159` tests，`556` asserts，headless 全绿（`-gdir=res://tests -ginclude_subdirs -gexit`）。
 
 新增/重写的关键回归：
 - `test_opening_lock_grants_no_flow`：礼让期内心流不涨，结束后正常恢复。
