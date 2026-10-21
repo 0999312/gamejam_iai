@@ -1,6 +1,6 @@
 extends GutTest
 
-## 符卡（技能）与 2026-10-20 平衡改动：重剑 2 伤 + 破势、心流档位放大。
+## 符卡（技能）与平衡 02：重剑 15 伤 + 破势、心流档位放大、血量 ×10。
 ## 2026-10-20（v0.20）：符卡统一为「每场一次、收益与风险都大」的规则级技能——
 ## A 必完美格挡、B/C 蓄力后自动出刀、打断有惩罚硬直、非 IDLE 输入进缓冲。
 
@@ -16,20 +16,22 @@ func _make(p1_data: FighterData, p2_data: FighterData, seed_value: int = 5) -> v
 	sim = DuelSim.new(p1_data, p2_data, seed_value)
 
 
-func test_heavy_sword_deals_two_and_staggers() -> void:
-	var light := FighterData.player_a()
-	var heavy := FighterData.player_c()
-	assert_eq(light.hit_damage, 1, "快剑/均衡仍是一刀 1 伤")
-	assert_eq(heavy.hit_damage, 2, "重剑一刀 2 伤，才配得上更长的前摇")
+func test_heavy_sword_deals_fifteen_and_staggers() -> void:
+	var light := FighterData.for_character(&"char_a")
+	var fast := FighterData.for_character(&"char_b")
+	var heavy := FighterData.for_character(&"char_c")
+	assert_eq(light.hit_damage, 10, "均衡一剑 10 伤")
+	assert_eq(fast.hit_damage, 7, "快剑靠速度吃饭，单发伤害最低")
+	assert_eq(heavy.hit_damage, 15, "重剑一剑 15 伤，才配得上更长的前摇")
 	assert_eq(heavy.stagger, 12, "破势：受击硬直 24 → 36f")
 
 
-func test_heavy_sword_needs_two_hits_on_three_hp() -> void:
-	_make(FighterData.player_c(), FighterData.player_a())
+func test_heavy_sword_leaves_half_hp() -> void:
+	_make(FighterData.for_character(&"char_c"), FighterData.for_character(&"char_a"))
 	sim.p1.flow = 100
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
 	_tick_n(20)
-	assert_eq(sim.p2.hp, 1, "3 HP 对手被重剑一刀削 2")
+	assert_eq(sim.p2.hp, 15, "30 HP 对手被重剑一刀削去一半")
 
 
 func test_flow_tier_offsets_are_perceptible() -> void:
@@ -52,7 +54,8 @@ func test_spell_data_is_bound_to_character() -> void:
 
 func test_character_can_cast_from_start_flow() -> void:
 	# 符卡是本场的底牌，开局就必须用得出来——否则它等于不存在。
-	for data in [FighterData.player_a(), FighterData.player_b(), FighterData.player_c()]:
+	for data in [FighterData.for_character(&"char_a"), FighterData.for_character(&"char_b"),
+			FighterData.for_character(&"char_c")]:
 		var card := SpellCardData.for_character_id(data.spell_id)
 		assert_true(data.start_flow >= card.flow_cost,
 				"%s 的起始心流 %d 必须够付符卡 %d" % [data.id, data.start_flow, card.flow_cost])
@@ -60,7 +63,7 @@ func test_character_can_cast_from_start_flow() -> void:
 
 ## A：60f 内所有架都判完美格挡，且架窗抬到 30f。
 func test_spell_a_grants_perfect_block_window() -> void:
-	_make(FighterData.player_a(), FighterData.player_a())
+	_make(FighterData.for_character(&"char_a"), FighterData.for_character(&"char_a"))
 	watch_signals(sim)
 	sim.p1.flow = 60
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
@@ -87,9 +90,9 @@ func test_spell_a_grants_perfect_block_window() -> void:
 	assert_eq(sim.p1.perfect_streak, 1, "完美格挡连击成立")
 
 
-## B：8f 蓄力后自动出刀，穿防 2 伤。蓄力期可被抢刀打断。
+## B：8f 蓄力后自动出刀，穿防 20 伤。蓄力期可被抢刀打断。
 func test_spell_b_charges_then_slashes_through_guard() -> void:
-	_make(FighterData.player_b(), FighterData.player_a())
+	_make(FighterData.for_character(&"char_b"), FighterData.for_character(&"char_a"))
 	sim.p1.flow = 80
 	_tick_n(3)
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
@@ -102,24 +105,24 @@ func test_spell_b_charges_then_slashes_through_guard() -> void:
 	assert_true(sim.p1.spell_pending_slash, "蓄满后会自动落刀")
 
 	_tick_n(8)
-	assert_eq(sim.p2.hp, 1, "这一刀无视架，2 伤害直接兑现")
+	assert_eq(sim.p2.hp, 10, "这一刀无视架，20 伤害直接兑现")
 
 
-## C：20f 长蓄力后自动出刀，3 伤 + 破势。
+## C：20f 长蓄力后自动出刀，30 伤 + 破势。
 func test_spell_c_crush_auto_slashes_for_three() -> void:
-	_make(FighterData.player_c(), FighterData.player_a())
+	_make(FighterData.for_character(&"char_c"), FighterData.for_character(&"char_a"))
 	sim.p1.flow = 100
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
 	sim.tick()
-	assert_eq(sim.p1.spell_power_amount, 3)
+	assert_eq(sim.p1.spell_power_amount, 30)
 
 	_tick_n(20)
-	assert_eq(sim.p2.hp, 0, "崩山：蓄力结束自动落刀，3 伤")
+	assert_eq(sim.p2.hp, 0, "崩山：蓄力结束自动落刀，30 伤")
 	assert_ne(sim.p1.state, DuelTypes.State.SPELL, "已经出刀，不再停留在蓄力")
 
 
 func test_spell_requires_enough_flow() -> void:
-	_make(FighterData.player_a(), FighterData.player_a())
+	_make(FighterData.for_character(&"char_a"), FighterData.for_character(&"char_a"))
 	watch_signals(sim)
 	sim.p1.flow = 20
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
@@ -130,7 +133,7 @@ func test_spell_requires_enough_flow() -> void:
 
 
 func test_spell_is_once_per_duel() -> void:
-	_make(FighterData.player_a(), FighterData.player_a())
+	_make(FighterData.for_character(&"char_a"), FighterData.for_character(&"char_a"))
 	watch_signals(sim)
 	sim.p1.flow = 90
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
@@ -146,7 +149,7 @@ func test_spell_is_once_per_duel() -> void:
 
 ## 收刀硬直里按下不算「没按」：先缓冲，不要立刻报失败。
 func test_spell_input_is_buffered_while_busy() -> void:
-	_make(FighterData.player_a(), FighterData.player_a())
+	_make(FighterData.for_character(&"char_a"), FighterData.for_character(&"char_a"))
 	watch_signals(sim)
 	sim.p1.flow = 90
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
@@ -163,7 +166,7 @@ func test_spell_input_is_buffered_while_busy() -> void:
 
 
 func test_fighter_without_spell_cannot_cast() -> void:
-	_make(FighterData.player_a(), FighterData.opponent_teaching())
+	_make(FighterData.for_character(&"char_a"), FighterData.opponent_teaching())
 	watch_signals(sim)
 	sim.p2.flow = 100
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.SPELL)
@@ -186,21 +189,21 @@ func test_only_boss_holds_a_spell() -> void:
 
 
 func test_boss_spell_crushes_through_guard() -> void:
-	_make(FighterData.player_a(), FighterData.opponent_for_stage(4))
+	_make(FighterData.for_character(&"char_a"), FighterData.opponent_for_stage(4))
 	sim.p2.flow = 100
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.SPELL)
 	sim.tick()
-	assert_eq(sim.p2.spell_power_amount, 3)
+	assert_eq(sim.p2.spell_power_amount, 30)
 	assert_true(sim.p2.spell_unblockable)
 
 	# 玩家架住也无效：蓄力 14f 结束后自动落刀，穿防。
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.GUARD)
 	_tick_n(15)
-	assert_eq(sim.p1.hp, 0, "3 伤穿防，架不住")
+	assert_eq(sim.p1.hp, 0, "30 伤穿防，架不住")
 
 
 func test_boss_ai_casts_spell_when_cornered() -> void:
-	_make(FighterData.player_a(), FighterData.opponent_for_stage(4))
+	_make(FighterData.for_character(&"char_a"), FighterData.opponent_for_stage(4))
 	var ai := DuelAi.new(DuelTypes.Side.P2, AiProfile.for_stage(4), 7)
 	sim.p2.hp = 1
 	sim.p2.flow = 100
@@ -217,8 +220,8 @@ func test_boss_ai_casts_spell_when_cornered() -> void:
 
 ## 蓄力被打断：驱散 + 追加惩罚硬直（一次符卡白给，必须疼）。
 func test_hit_interrupts_spell_charge_with_penalty() -> void:
-	_make(FighterData.player_a(), FighterData.player_a())
-	sim.p1.spell_power_amount = 3
+	_make(FighterData.for_character(&"char_a"), FighterData.for_character(&"char_a"))
+	sim.p1.spell_power_amount = 30
 	sim.p1.spell_unblockable = true
 	watch_signals(sim)
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.ATTACK)

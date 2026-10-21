@@ -201,13 +201,15 @@ func _settle_duel() -> void:
 
 
 func _start_stage() -> void:
-	sim = DuelSim.new(run.player_data(), run.enemy_data(), 12345 + run.stage_index)
+	# 多角色基础：一场对局 = MatchSetup（两名角色 + 对手性格），控制器不再自己拼。
+	var setup := run.build_match()
+	sim = DuelSim.new(setup.p1, setup.p2, 12345 + run.stage_index)
 	sim.mods = run.mods()
 	sim.p1.hp = run.player_hp
 	sim.p2.flow = 40
 	sim.opening_lock_frames = 180
 
-	var profile := run.enemy_profile()
+	var profile := setup.p2_profile
 	profile.opening_grace_frames = 210 if run.stage_index == 0 else 0
 	ai = DuelAi.new(DuelTypes.Side.P2, profile, 12345 + run.stage_index)
 

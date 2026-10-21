@@ -364,6 +364,11 @@ func _enter_idle(fighter: FighterState) -> void:
 	_enter(fighter, DuelTypes.State.IDLE, 0)
 
 
+## 开场心得（u09）的生效窗口：礼让结束后的 5 秒。
+## 注意不能写成「礼让期内」——礼让期内按键会被 set_input 直接丢弃，心得等于不存在。
+const OPENING_COMMIT_WINDOW: int = 300
+
+
 func _enter_commit(fighter: FighterState) -> void:
 	var tier := DuelTypes.tier_for_flow(fighter.flow)
 	var tier_offset: int = DuelTypes.COMMIT_TIER_OFFSET[tier]
@@ -372,13 +377,40 @@ func _enter_commit(fighter: FighterState) -> void:
 		# 玩家看见也来不及，变成纯粹的面板伤害。
 		tier_offset = maxi(0, tier_offset)
 	var opening_offset: int = 0
-	if fighter.side == DuelTypes.Side.P1 and frame < 180:
+	if fighter.side == DuelTypes.Side.P1 \
+			and frame < opening_lock_frames + OPENING_COMMIT_WINDOW:
 		opening_offset = int(mods.get("opening_commit", 0))
+	# 反斩：对手正处在「空挥 / 被架」硬直时可确定惩罚，且不受间合惩罚。
+	# 见 docs/dev-example/balance-pass-02-plan.md §1.5 代价 1。
+	var ripe := _is_riposte_window(fighter)
+	var riposte_offset: int = 0
+	if ripe and fighter.data.riposte_commit_bonus != 0:
+		riposte_offset = mini(-1, fighter.data.riposte_commit_bonus)
+	# 连斩惩罚（间合）：1000ms 内再次出刀，前摇加长，最多叠 2 次。
+	var repeat_offset: int = 0
+	if not ripe:
+		var gap: int = frame - fighter.last_commit_frame
+		if gap <= FighterData.REPEAT_WINDOW_FRAMES:
+			fighter.repeat_streak = mini(fighter.repeat_streak + 1, FighterData.REPEAT_STACK_CAP)
+		else:
+			fighter.repeat_streak = 0
+		repeat_offset = fighter.data.repeat_commit_penalty * fighter.repeat_streak
+	else:
+		fighter.repeat_streak = 0
+	fighter.riposte = ripe
+	fighter.repeat_penalty_frames = repeat_offset
+	fighter.last_commit_frame = frame
 	fighter.commit_total = maxi(COMMIT_MIN_FRAMES,
-			fighter.data.base_commit + tier_offset + opening_offset)
+			fighter.data.base_commit + tier_offset + opening_offset + riposte_offset + repeat_offset)
 	# 出刀本身消耗心流；档位按付出前计算，避免同一刀因扣费反而变快。
 	_sub_flow(fighter, fighter.data.slash_cost)
 	_enter(fighter, DuelTypes.State.COMMIT, fighter.commit_total)
+
+
+## 对手此刻是否处于「可被反斩」的硬直（空挥恢复 / 被架恢复）。
+func _is_riposte_window(fighter: FighterState) -> bool:
+	var foe := opponent_of(fighter)
+	return foe.state == DuelTypes.State.RECOVERY or foe.state == DuelTypes.State.GUARD_REC
 
 
 func _enter_slash(fighter: FighterState) -> void:
@@ -445,8 +477,12 @@ func _resolve_slash(attacker: FighterState) -> void:
 			pass
 
 
+## U07 追击的追加伤害（血量 ×10 后与普攻同量级，否则「伤害 +1」等于没有）。
+const PURSUIT_BONUS_DAMAGE: int = 10
+
+
 func _do_hit(attacker: FighterState, defender: FighterState) -> void:
-	# 角色基础伤害（重剑 2 / 其余 1）+ 破势硬直。
+	# 角色基础伤害（重剑 15 / 均衡 10 / 快剑 7）+ 破势硬直。
 	var damage := attacker.data.hit_damage
 	var stagger := attacker.data.stagger
 	if attacker.spell_power_amount > 0:
@@ -456,10 +492,10 @@ func _do_hit(attacker: FighterState, defender: FighterState) -> void:
 		attacker.spell_stagger_bonus = 0
 	attacker.spell_unblockable = false
 
-	# U07 追击：第一次命中标记 3 秒窗口；窗口内的下一刀 +1 伤害（每场 1 次）。
+	# U07 追击：第一次命中标记 3 秒窗口；窗口内的下一刀追加伤害（每场 1 次）。
 	if attacker.side == DuelTypes.Side.P1 and bool(mods.get("pursuit", false)) and not _pursuit_used:
 		if _pursuit_armed_until > 0 and frame <= _pursuit_armed_until:
-			damage += 1
+			damage += PURSUIT_BONUS_DAMAGE
 			_pursuit_used = true
 			_pursuit_armed_until = 0
 		else:
@@ -569,9 +605,14 @@ func _clash_gain(fighter: FighterState) -> int:
 
 func _passive_flow(fighter: FighterState) -> void:
 	var foe := opponent_of(fighter)
+	# 开场礼让期内既不算「最近有操作」，也不累计惩罚：玩家还没法操作。
+	var unlocked := frame >= opening_lock_frames
+	# 礼让结束的一帧把「最近操作」时间重置，让无输入惩罚从真正能操作时开始计时。
+	if unlocked and fighter.last_input_frame < opening_lock_frames:
+		fighter.last_input_frame = opening_lock_frames
 
 	# 自然恢复：仅「待机」且最近有操作时累计，每 24f +1；完全干等会转入下面的惩罚。
-	var recently_active := frame - fighter.last_input_frame <= NO_INPUT_GRACE
+	var recently_active := unlocked and frame - fighter.last_input_frame <= NO_INPUT_GRACE
 	if fighter.state == DuelTypes.State.IDLE and recently_active:
 		fighter.flow_regen_frames += 1
 		if fighter.flow_regen_frames >= fighter.data.flow_regen_interval:
@@ -581,7 +622,7 @@ func _passive_flow(fighter: FighterState) -> void:
 		fighter.flow_regen_frames = 0
 
 	# 对手处于「构」时保持不动：每 20f +1，单场上限 +15。
-	if fighter.state == DuelTypes.State.IDLE and foe.state == DuelTypes.State.COMMIT:
+	if unlocked and fighter.state == DuelTypes.State.IDLE and foe.state == DuelTypes.State.COMMIT:
 		fighter.commit_wait_frames += 1
 		if fighter.commit_wait_frames >= COMMIT_WAIT_INTERVAL and fighter.commit_wait_gain < COMMIT_WAIT_CAP:
 			fighter.commit_wait_frames -= COMMIT_WAIT_INTERVAL
@@ -591,7 +632,8 @@ func _passive_flow(fighter: FighterState) -> void:
 		fighter.commit_wait_frames = 0
 
 	# 连续 3 秒没有任何输入：每 30f -1（约 -2/秒）。
-	if fighter.state == DuelTypes.State.IDLE and frame - fighter.last_input_frame > NO_INPUT_GRACE:
+	if unlocked and fighter.state == DuelTypes.State.IDLE \
+			and frame - fighter.last_input_frame > NO_INPUT_GRACE:
 		if (frame - fighter.last_input_frame) % NO_INPUT_PENALTY_INTERVAL == 0:
 			_sub_flow(fighter, 1)
 

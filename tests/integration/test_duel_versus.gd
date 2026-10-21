@@ -18,11 +18,11 @@ func after_each() -> void:
 	GameBootstrap.pending_mode = &"run"
 
 
-func test_versus_has_no_run_and_both_hp3() -> void:
+func test_versus_has_no_run_and_both_same_hp() -> void:
 	assert_null(_controller.run)
 	assert_not_null(_controller.sim)
-	assert_eq(_controller.sim.p1.hp, 3)
-	assert_eq(_controller.sim.p2.hp, 3)
+	assert_eq(_controller.sim.p1.hp, 30)
+	assert_eq(_controller.sim.p2.hp, 30)
 	assert_true(_controller._hud.versus)
 
 
@@ -41,4 +41,4 @@ func test_versus_restart_keeps_mode() -> void:
 	_controller._on_restart_pressed()
 	await wait_physics_frames(3)
 	assert_not_null(_controller.sim)
-	assert_eq(_controller.sim.p2.hp, 3)
+	assert_eq(_controller.sim.p2.hp, 30)

@@ -4,6 +4,9 @@ extends RefCounted
 ## 对手 AI：只读取双方状态与帧号，不读取玩家输入。
 ## 决策频率由 AiProfile 控制；所有动作都通过 DuelSim 的公开输入接口。
 
+## 起构安全判断的兜底：玩家一直待机超过这么久，AI 也必须主动开口（否则变成傻子）。
+const IDLE_INITIATIVE_FRAMES: int = 120
+
 var side: int = DuelTypes.Side.P2
 var profile: AiProfile
 var rng: RandomNumberGenerator
@@ -20,6 +23,11 @@ var _attack_ready_frame: int = 0
 var _consecutive_hits_taken: int = 0
 ## 符卡每场只有 1 次，用过就不再考虑（不会连点）。
 var _spell_spent: bool = false
+## 确定反：每个「惩罚窗口」（对手一次硬直）只掷一次骰。
+var _counter_window_start: int = -1
+var _counter_will: bool = false
+## 玩家连续待机的帧数（起构安全判断的兜底计时）。
+var _foe_idle_frames: int = 0
 
 
 func _init(p_side: int, p_profile: AiProfile, seed_value: int = 0) -> void:
@@ -49,8 +57,21 @@ func tick(sim: DuelSim) -> void:
 	var me := sim.get_fighter(side)
 	var foe := sim.opponent_of(me)
 
-	# 关底二阶段：HP ≤2 时节奏加快、虚招更多。
-	if profile.id == &"boss" and not _phase2 and me.hp <= 2:
+	if foe.state == DuelTypes.State.IDLE:
+		_foe_idle_frames += 1
+	else:
+		_foe_idle_frames = 0
+
+	# 读招状态必须在「对手离开构」时立刻清零。
+	# 2026-10-21 修复：原先只在下面的 IDLE 分支里清零，而 AI 被打中/收招时会提前
+	# return，于是一次失败的骰子会粘住整场——AI 再也不架，无脑连砍几乎不付代价。
+	if foe.state != DuelTypes.State.COMMIT:
+		_guard_planned = false
+		_guard_will = false
+
+	# 二阶段（关底）：血量低于比例时节奏加快、虚招更多。
+	var phase_ratio := profile.two_phase_at_ratio
+	if phase_ratio > 0.0 and not _phase2 and me.hp <= int(round(me.data.max_hp * phase_ratio)):
 		_phase2 = true
 		profile.aggression = minf(1.0, profile.aggression + 0.15)
 		profile.feint_rate = minf(0.9, profile.feint_rate + 0.15)
@@ -64,7 +85,6 @@ func tick(sim: DuelSim) -> void:
 			_feint_at_frame = -1
 		return
 
-	# 已排程的架：到点且仍可行动才按下。
 	if me.state != DuelTypes.State.IDLE:
 		return
 
@@ -92,11 +112,11 @@ func tick(sim: DuelSim) -> void:
 	_guard_planned = false
 	_guard_will = false
 
-	# 惩罚窗口：对手硬直/收架时出刀。
+	# 确定反（路径 A）：对手空挥/被架时立刻出反斩。
+	# 2026-10-21：脱离决策节拍、只保留一次性骰——原先「等节拍 + 掷概率」让惩罚刀
+	# 经常来不及落下，无脑连砍因此几乎不付代价（见 balance-pass-02-plan §3.2）。
 	if foe.state == DuelTypes.State.RECOVERY or foe.state == DuelTypes.State.GUARD_REC:
-		if sim.frame >= _next_think_frame and rng.randf() < profile.counter_chance:
-			_next_think_frame = sim.frame + profile.decision_interval
-			_start_attack(sim)
+		_try_counter(sim, foe)
 		return
 
 	if sim.frame < _next_think_frame:
@@ -111,10 +131,44 @@ func tick(sim: DuelSim) -> void:
 		return
 
 	var roll := rng.randf()
-	if roll < profile.aggression:
+	if roll < profile.aggression and _safe_to_commit(foe):
 		_start_attack(sim)
 	elif roll < profile.aggression + 0.15:
 		sim.press(side, DuelTypes.Action.GUARD)
+
+
+## 确定反：每个硬直窗口掷一次骰；命中后由 sim 自动套用反斩前摇（data.riposte_commit_bonus）。
+func _try_counter(sim: DuelSim, foe: FighterState) -> void:
+	if sim.frame < _attack_ready_frame:
+		return
+	if _counter_window_start != foe.state_start_frame:
+		_counter_window_start = foe.state_start_frame
+		_counter_will = profile.counter_chance > 0.0 and rng.randf() < profile.counter_chance
+	if not _counter_will:
+		return
+	_counter_will = false
+	# 直接按攻击：反斩是「接在硬直上的刀」，不排虚招。
+	sim.press(side, DuelTypes.Action.ATTACK)
+
+
+## 起构安全判断：前摇现在长达 28–30f（467–500ms），落构就是明牌。
+## 所以只在「对手来不及抢刀」的窗口出刀：对手硬直里、或对手已经待机酝酿了两秒。
+func _safe_to_commit(foe: FighterState) -> bool:
+	if not profile.safe_start:
+		return true
+	match foe.state:
+		DuelTypes.State.IDLE:
+			# 玩家一直不动（在酝酿）时也该开口，否则 AI 变成木桩；
+			# 但绝不落构去和「随时能抢刀」的对手对拼。
+			return _foe_idle_frames >= IDLE_INITIATIVE_FRAMES
+		DuelTypes.State.COMMIT, DuelTypes.State.SLASH, DuelTypes.State.CLASH:
+			# 对攻必输：对手前摇比 AI 短得多，同时出刀死的一定是 AI。
+			return false
+		DuelTypes.State.GUARD:
+			# 打进去会被架住，然后吃 30f 的惩罚硬直。
+			return false
+		_:
+			return true
 
 
 ## 关底符卡：只在「这一招有意义」的时刻发动——能收人头、自己垂死、
@@ -125,7 +179,9 @@ func _try_spell(sim: DuelSim, me: FighterState, foe: FighterState) -> bool:
 	var card: SpellCardData = me.spell_card
 	if card == null or me.spell_uses_left <= 0 or me.flow < card.flow_cost:
 		return false
-	var worth_it := foe.hp <= 1 or me.hp <= 1 or sim.frame >= 900
+	var foe_ratio := float(foe.hp) / float(maxi(1, foe.data.max_hp))
+	var me_ratio := float(me.hp) / float(maxi(1, me.data.max_hp))
+	var worth_it := foe_ratio <= 0.34 or me_ratio <= 0.34 or sim.frame >= 900
 	if not worth_it:
 		return false
 	if rng.randf() >= profile.spell_chance:

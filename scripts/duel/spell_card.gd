@@ -65,7 +65,7 @@ static func _guard_stance() -> SpellCardData:
 	return card
 
 
-## B「快剑」：疾风连斩——8f 蓄力后自动出刀，2 伤且无视对手的架。
+## B「快剑」：疾风连斩——8f 蓄力后自动出刀，20 伤且无视对手的架。
 ## 蓄力期可被抢刀打断，打空后仍有 34f 收势。
 static func _blade_rush() -> SpellCardData:
 	var card := SpellCardData.new()
@@ -77,12 +77,12 @@ static func _blade_rush() -> SpellCardData:
 	card.cast_frames = 8
 	card.uses_per_duel = 1
 	card.effect = Effect.BLADE_RUSH
-	card.amount = 2
+	card.amount = 20
 	card.unblockable = true
 	return card
 
 
-## C「重剑」：崩山——20f 长蓄力后自动出刀，3 伤 + 追加硬直 + 穿防。
+## C「重剑」：崩山——20f 长蓄力后自动出刀，30 伤 + 追加硬直 + 穿防。
 ## 蓄力期是全场最长的明牌破绽，对手有 333ms 抢刀窗口。
 static func _crush() -> SpellCardData:
 	var card := SpellCardData.new()
@@ -94,7 +94,7 @@ static func _crush() -> SpellCardData:
 	card.cast_frames = 20
 	card.uses_per_duel = 1
 	card.effect = Effect.CRUSH
-	card.amount = 3
+	card.amount = 30
 	card.unblockable = true
 	return card
 
@@ -111,6 +111,6 @@ static func _boss() -> SpellCardData:
 	card.cast_frames = 14
 	card.uses_per_duel = 1
 	card.effect = Effect.CRUSH
-	card.amount = 3
+	card.amount = 30
 	card.unblockable = true
 	return card

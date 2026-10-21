@@ -1,10 +1,14 @@
 extends GutTest
 
 ## 心得对 DuelSim 的运行时影响（U03/U06/U07/U08/U09）。
+## 平衡 02：血量 ×10，追击追加伤害同步放大到 10。
+
+const OPENING_LOCK := 180
 
 
 func _make_sim(mods: Dictionary = {}) -> DuelSim:
-	var sim := DuelSim.new(FighterData.player_a(), FighterData.player_a(), 99)
+	var sim := DuelSim.new(FighterData.for_character(&"char_a"),
+			FighterData.for_character(&"char_a"), 99)
 	sim.mods = mods
 	return sim
 
@@ -25,11 +29,14 @@ func test_u03_perfect_block_grants_18() -> void:
 
 
 func test_u09_opening_commit_is_faster() -> void:
+	# 开场心得只在礼让期（frame < opening_lock_frames）生效。
 	var sim := _make_sim({"opening_commit": -3})
+	sim.opening_lock_frames = OPENING_LOCK
+	_tick_n(sim, OPENING_LOCK)
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
 	sim.tick()
 	assert_eq(sim.p1.state, DuelTypes.State.COMMIT)
-	assert_eq(sim.p1.commit_total, 15)
+	assert_eq(sim.p1.commit_total, FighterData.for_character(&"char_a").base_commit - 3)
 
 
 func test_u06_see_through_negates_damage() -> void:
@@ -38,22 +45,22 @@ func test_u06_see_through_negates_damage() -> void:
 	watch_signals(sim)
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.ATTACK)
 	_tick_n(sim, 19)
-	assert_eq(sim.p1.hp, 3)
+	assert_eq(sim.p1.hp, 30)
 	assert_eq(sim.p1.flow, 30)
 	assert_signal_emitted(sim, "damage_negated")
 
 
-func test_u07_pursuit_second_hit_deals_two() -> void:
+func test_u07_pursuit_second_hit_deals_ten_more() -> void:
 	var sim := _make_sim({"pursuit": true})
 	watch_signals(sim)
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
 	_tick_n(sim, 19)
-	assert_eq(sim.p2.hp, 2)
+	assert_eq(sim.p2.hp, 20)
 
 	_tick_n(sim, 21)
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
-	_tick_n(sim, 19)
-	assert_eq(sim.p2.hp, 0, "追击第二刀 2 伤害")
+	_tick_n(sim, 40)
+	assert_eq(sim.p2.hp, 0, "追击第二刀多 10 伤害")
 	assert_signal_emitted(sim, "hit_landed")
 
 
@@ -61,7 +68,7 @@ func test_u08_guts_blocks_flow_loss_after_hit() -> void:
 	var sim := _make_sim({"guts": true})
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.ATTACK)
 	_tick_n(sim, 19)
-	assert_eq(sim.p1.hp, 2)
+	assert_eq(sim.p1.hp, 20)
 	assert_eq(sim.p1.flow, 25)
 
 	_tick_n(sim, 25)

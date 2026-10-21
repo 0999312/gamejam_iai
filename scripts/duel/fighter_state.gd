@@ -36,6 +36,14 @@ var clash_count: int = 0
 var commit_wait_frames: int = 0
 var commit_wait_gain: int = 0
 
+## 连斩惩罚（间合）：上一次进入「构」的帧与连续出刀数。
+var last_commit_frame: int = -9999
+var repeat_streak: int = 0
+## 本次「构」是否走了反斩（对手正处于空挥/被架硬直）。
+var riposte: bool = false
+## 本次「构」被连斩惩罚加了多少帧（HUD/调试用）。
+var repeat_penalty_frames: int = 0
+
 ## 心流自然恢复的计时（仅 IDLE 累计）。
 var flow_regen_frames: int = 0
 
@@ -78,6 +86,10 @@ func reset_for_duel() -> void:
 	clash_count = 0
 	commit_wait_frames = 0
 	commit_wait_gain = 0
+	last_commit_frame = -9999
+	repeat_streak = 0
+	riposte = false
+	repeat_penalty_frames = 0
 	flow_regen_frames = 0
 	entered_slash = false
 	spell_perfect_until_frame = 0

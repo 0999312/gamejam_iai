@@ -23,6 +23,16 @@ const UPGRADE_IDS: Array[StringName] = [
 const UPGRADE_REGISTRY := "upgrade"
 const UPGRADE_NAMESPACE := "iai"
 
+## HARD 档 = 平衡 02 之前的历史数值（反馈 2：「现在的节奏当作困难模式」）。
+## 键为角色 id，因此收服来的角色换上场也照样有困难档。
+const HARD_COMMIT := {
+	&"opponent_1_teaching": 20, &"opponent_2_aggressive": 18, &"opponent_3_veteran": 19,
+	&"opponent_4_deceptive": 18, &"opponent_5_boss": 18,
+}
+const HARD_GUARD := {&"char_a": 12, &"char_b": 11, &"char_c": 14}
+const HARD_GUARD_DEFAULT := 12
+const HARD_ENEMY_HP_BONUS := 10
+
 var seed_value: int = 0
 var rng: RandomNumberGenerator
 var meta: MetaSave
@@ -30,8 +40,8 @@ var character_id: StringName = &"char_a"
 var hard_mode: bool = false
 
 var stage_index: int = 0
-var player_hp: int = 3
-var max_hp: int = 3
+var player_hp: int = 30
+var max_hp: int = 30
 var gold: int = 0
 var zanshin: int = 0
 var upgrades: Array[StringName] = []
@@ -92,20 +102,52 @@ func is_boss_stage() -> bool:
 
 
 func enemy_data() -> FighterData:
-	var data := FighterData.opponent_for_stage(stage_index)
+	# 多角色基础：场次只决定「谁上场」，数值全部来自角色本身。
+	var data := FighterData.for_character(FighterData.stage_enemy_id(stage_index))
 	if hard_mode:
-		data.max_hp += 1
-		data.base_commit = maxi(8, data.base_commit - 1)
+		data.max_hp += HARD_ENEMY_HP_BONUS
+		data.base_commit = int(HARD_COMMIT.get(data.id, data.base_commit))
 	return data
 
 
 func enemy_profile() -> AiProfile:
-	var profile := AiProfile.for_stage(stage_index)
-	if hard_mode:
-		profile.reaction_frames = maxi(8, profile.reaction_frames - 2)
-		profile.aggression = minf(1.0, profile.aggression + 0.10)
-		profile.feint_rate = minf(0.9, profile.feint_rate + 0.05)
-	return profile
+	var data := FighterData.for_character(FighterData.stage_enemy_id(stage_index))
+	return AiProfile.for_persona(data.persona_id, difficulty_tier())
+
+
+## 难度档位（AiProfile.TIER_NORMAL / TIER_HARD）。
+func difficulty_tier() -> int:
+	return AiProfile.TIER_HARD if hard_mode else AiProfile.TIER_NORMAL
+
+
+## 本场对局配置：两名角色 + 对手性格。多角色基础：谁都可以当 P1 或 P2。
+func build_match() -> MatchSetup:
+	return MatchSetup.of(player_data(), enemy_data(), enemy_profile(), stage_index, difficulty_tier())
+
+
+## 本场的「两名可操作角色」（收服后两者都能被玩家选）。
+func stage_cast(stage: int = -1) -> Array[StringName]:
+	var index := stage if stage >= 0 else stage_index
+	return [character_id, FighterData.stage_enemy_id(index)]
+
+
+## 当前可操作角色：均衡默认可用，其余靠局外解锁（收服后写入 meta.unlocks）。
+func roster() -> Array[StringName]:
+	var ids: Array[StringName] = [&"char_a"]
+	for id in FighterData.PLAYABLE_IDS:
+		if id == &"char_a":
+			continue
+		if meta != null and meta.has_unlock(id):
+			ids.append(id)
+	return ids
+
+
+## 选人入口：只允许 roster 里的角色，避免越权切换到未解锁角色。
+func select_character(id: StringName) -> bool:
+	if not roster().has(id):
+		return false
+	character_id = id
+	return true
 
 
 ## 把已选心得与残心换算成玩家帧数据（效果由注册表里的 UpgradeData 声明）。
@@ -118,6 +160,11 @@ func player_data() -> FighterData:
 	data.flow_floor += zan * ZANSHIN_FLOOR_BONUS
 	data.flow_loss_reduction = zan * ZANSHIN_LOSS_GUARD
 	data.guard_duration_base += zan
+	if hard_mode:
+		# HARD 把玩家的架窗也退回 02 之前（12/11/14f），这是「困难」的一部分。
+		data.guard_duration_base = int(HARD_GUARD.get(data.id, HARD_GUARD_DEFAULT)) + zan
+	# 反斩是「增强」：所有角色都有，但强度随残心成长（−4 → −10f），对手固定 −10f。
+	data.riposte_commit_bonus = -4 - 2 * zan
 	for id in upgrades:
 		var upgrade := upgrade_data(id)
 		if upgrade == null:
@@ -198,7 +245,9 @@ func on_duel_finished(winner: int) -> void:
 		return
 
 	var flawless := player_hp == max_hp
-	var gain := 10 + player_hp * 2
+	# 经济与血量比例挂钩：满血 16 金，残血 10 金（与 02 之前的 10 + hp×2 等价）。
+	var hp_ratio := float(player_hp) / float(maxi(1, max_hp))
+	var gain := 10 + roundi(6.0 * hp_ratio)
 	if flawless:
 		gain += 10
 	if is_boss_stage():
@@ -208,11 +257,12 @@ func on_duel_finished(winner: int) -> void:
 	last_flawless = flawless
 
 	zanshin = mini(ZANSHIN_CAP, zanshin + 1 + (1 if flawless else 0))
-	var heal := 1
+	# 回复也按比例：基础 1/3 血量（30 血 → 10），心得 heal_bonus 翻倍。
+	var heal := maxi(1, roundi(float(max_hp) / 3.0))
 	for id in upgrades:
 		var upgrade := upgrade_data(id)
 		if upgrade != null and upgrade.effect == &"heal_bonus":
-			heal = upgrade.amount
+			heal *= 2
 	player_hp = mini(max_hp, player_hp + heal)
 
 	if is_boss_stage():

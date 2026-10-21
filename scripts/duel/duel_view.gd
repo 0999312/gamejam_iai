@@ -240,14 +240,28 @@ func _draw_down(x: float, color: Color) -> void:
 	draw_circle(Vector2(x + 78.0, GROUND_Y - 30.0), 16.0, color.darkened(0.15))
 
 
+## 血条（2026-10-21：血量 ×10 后不再是一格一点的方块，改成连续血条 + 每 10 血一道刻度）。
+## 宽度固定，任何血量都能画得下；每 10 血一格刻度，方便读出「还剩几刀」。
+const HP_BAR_WIDTH: float = 150.0
+const HP_BAR_HEIGHT: float = 8.0
+const HP_TICK_STEP: int = 10
+
+
 func _draw_hp_pips(fighter: FighterState, x: float, y: float) -> void:
-	var max_hp := fighter.data.max_hp
-	var pip_w := 16.0
-	var total := max_hp * (pip_w + 5.0)
-	var start := x - total * 0.5
-	for i in max_hp:
-		var rect := Rect2(start + i * (pip_w + 5.0), y, pip_w, 6.0)
-		draw_rect(rect, Color("#e8eef7") if i < fighter.hp else Color("#2a313c"), true)
+	var max_hp := maxi(1, fighter.data.max_hp)
+	var ratio := clampf(float(fighter.hp) / float(max_hp), 0.0, 1.0)
+	var bar := Rect2(x - HP_BAR_WIDTH * 0.5, y, HP_BAR_WIDTH, HP_BAR_HEIGHT)
+	draw_rect(bar, Color("#2a313c"), true)
+	var fill := Rect2(bar.position, Vector2(HP_BAR_WIDTH * ratio, HP_BAR_HEIGHT))
+	draw_rect(fill, Color("#e8eef7"), true)
+	# 每 10 血一道刻度：30 血 → 2 道，40 血 → 3 道。
+	var step_ratio := float(HP_TICK_STEP) / float(max_hp)
+	var tick := step_ratio
+	while tick < 0.999:
+		var tx := bar.position.x + HP_BAR_WIDTH * tick
+		draw_line(Vector2(tx, bar.position.y), Vector2(tx, bar.position.y + HP_BAR_HEIGHT),
+				Color(0.16, 0.19, 0.24, 0.9), 1.0)
+		tick += step_ratio
 
 
 func _draw_tier_marker(fighter: FighterState, x: float, y: float) -> void:

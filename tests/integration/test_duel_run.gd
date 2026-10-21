@@ -1,6 +1,7 @@
 extends GutTest
 
 ## 对决场景的 M2 串联：胜利结算 → 三选一 → 下一场；失败 → R 重开。
+## 平衡 02：血量 ×10，金币与治疗按血量比例结算。
 
 var ctrl
 var _old_meta: MetaSave
@@ -20,16 +21,16 @@ func after_each() -> void:
 
 
 func test_win_settles_and_shows_rewards() -> void:
-	ctrl.run.player_hp = 2
-	ctrl.sim.p1.hp = 2
+	ctrl.run.player_hp = 10
+	ctrl.sim.p1.hp = 10
 	ctrl.sim.p2.hp = 0
 	ctrl.sim.finished = true
 	ctrl.sim.winner = DuelTypes.Side.P1
 	await wait_physics_frames(2)
 
 	assert_eq(ctrl.run.phase, RunState.Phase.REWARD)
-	assert_eq(ctrl.run.gold, 14)
-	assert_eq(ctrl.run.player_hp, 3)
+	assert_eq(ctrl.run.gold, 12, "10 基础 + 残血 1/3 → 2")
+	assert_eq(ctrl.run.player_hp, 20, "治疗 = 1/3 最大血量")
 	assert_eq(ctrl.run.offers.size(), 3)
 	assert_true(ctrl._hud._reward_box.visible)
 
@@ -44,14 +45,14 @@ func test_choose_offer_starts_next_stage() -> void:
 	await wait_physics_frames(1)
 	assert_eq(ctrl.run.stage_index, 1)
 	assert_eq(ctrl.run.phase, RunState.Phase.DUEL)
-	assert_eq(ctrl.sim.p2.data.max_hp, 3)
-	assert_eq(ctrl.sim.p1.hp, 3)
+	assert_eq(ctrl.sim.p2.data.max_hp, 30)
+	assert_eq(ctrl.sim.p1.hp, 30)
 
 
 func test_loss_then_restart_keeps_gold() -> void:
 	ctrl.run.gold = 30
 	ctrl.sim.p1.hp = 0
-	ctrl.sim.p2.hp = 2
+	ctrl.sim.p2.hp = 20
 	ctrl.sim.finished = true
 	ctrl.sim.winner = DuelTypes.Side.P2
 	await wait_physics_frames(2)
@@ -63,4 +64,4 @@ func test_loss_then_restart_keeps_gold() -> void:
 	assert_eq(ctrl.run.stage_index, 0)
 	assert_eq(ctrl.run.gold, 30)
 	assert_eq(ctrl.run.phase, RunState.Phase.DUEL)
-	assert_eq(ctrl.sim.p1.hp, 3)
+	assert_eq(ctrl.sim.p1.hp, 30)
