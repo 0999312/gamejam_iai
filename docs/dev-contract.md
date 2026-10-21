@@ -153,7 +153,7 @@
   `res://input/contexts/{duel_run,duel_versus}.tres`，由 `tools/generate_guide_context.gd` 生成；
   玩家改键通过 `GUIDERemappingConfig` 覆盖，不改资源。守卫测试新增 `GUIDEMappingContext.new(` 禁令。
 - **约束**：新增 §3.2「`addons/` 只读」；审计范围明确为 `res://scripts/`。
-- **结果**：GUT 168 tests / 585 asserts 全绿。
+- **结果**：GUT 169 tests / 636 asserts 全绿。
 
 ### 2026-10-21 第三轮：全量代码审计后的修复（v0.24）
 
@@ -193,7 +193,7 @@
   的空架分支从 `guard_recovery`（8/7/9f）改用它，`GUARD_REC` 只留给「格挡成功后」。
   空架仍扣 8 心流、断完美连击、发 `guard_whiffed`——惩罚保留，罚站取消。
   配合「按住防御在 `IDLE` 自动起架」，预判失败后按住不放即可续下一段架。
-- **副作用（已记录）**：空架窗口（1–4f）已短于 AI 认招迟滞 `counter_delay_frames`（≥4f），
+- **副作用（已记录）**：空架窗口（1–4f）已短于 AI 认招迟滞 `counter_delay_frames`（6–8f），
   AI 不再保证反抓空架；确定反改由「被架收招」（`blocked_recovery` 24–36f）覆盖。
   `_try_counter` 同时修正为「只有真的起构才消费骰子」，自己还在硬直里时保留机会。
 - **难度单一真相**：删除 `GameBootstrap.hard_mode` 缓存副本（与 `meta.settings["hard_mode"]` 脱钩，
@@ -231,7 +231,7 @@
 - **新增工具**：`tools/sim_balance.gd`（5 关 × 60 局自动对战，输出反应延迟曲线与 AI 架刀率对照）、
   `tools/sim_trace.gd`（单局逐帧日志）。二者都是 `--headless -s` 跑的临时工具，不进 GUT。
 - **实测根因（三条）**：① AI 架刀率是最大难度源——`guard_chance` 压到 0 / 0.15 / 0.30 时胜率
-  99.9% / 89.6% / 65.3%，原档只有 31.9%；② 玩家出刀后 33–47f 完全无法防御，而 AI 前摇 24–36f，
+  99.9% / 89.6% / 65.3%，原档只有 31.9%；② 玩家出刀后 39–47f（修复后 27–41f）完全无法防御，而 AI 前摇 24–36f，
   「出刀 → AI 起手」在数值上必挨一刀；③ 告警窗 `SLASH_WARN_FRAMES = 8`（133ms）低于人类视觉反应。
 - **改动**：`SLASH_WARN_FRAMES` 8→**16**；玩家 `guard_duration_base` 20/18/22→**24/22/26**、
   `whiff_recovery` 20/16/24→**14/12/18**、`blocked_recovery` 32/24/36→**28/22/32**、

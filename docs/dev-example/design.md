@@ -4,6 +4,7 @@
 >
 > 版本 v0.14（文档修订号，不是发布版本；发布版本见根目录 CHANGELOG.md） ｜ 2026-10-20 ｜ 策划：人类 + DSH 主代理 ｜ 实现：DSH 主代理（代码）
 > 性质：**内部工程文档**，不是提交给玩家的文案。文中出现的所有玩家可见文字均为占位，见 §15。
+> **数值与结构快照**：本文写于 v0.14（2026-10-20），正文中的战斗数值（3–4 HP、每刀 1–2 伤害、4f 输入缓冲）、目录结构与测试文件清单都是**当时的规划**，已被 0.1.0 的实现取代（HP×10、伤害 10/7/15、输入缓冲已移除、实际结构见 `README.md` §目录结构）。保留原文以便对照决策过程；**当前有效数值以 `scripts/duel/fighter_data.gd` 与 `docs/dev-example/balance-pass-05.md` 为准**。
 
 ---
 
@@ -149,7 +150,7 @@
 | `DOWN` | 败北 | HP 归零 | 本场结束 |
 
 规则：
-- `COMMIT` / `SLASH` / `RECOVERY` / `GUARD` / `GUARD_REC` / `HITSTUN` / `CLASH` / `SPELL` 期间**不接受新输入**（输入缓冲除外）。
+- `COMMIT` / `SLASH` / `RECOVERY` / `GUARD` / `GUARD_REC` / `HITSTUN` / `CLASH` / `SPELL` 期间**不接受新输入**。
 - 状态切换只发生在物理帧边界，保证可重放。
 
 ### 6.3 帧数据（玩家 A「均衡」，60 Hz）
@@ -608,7 +609,7 @@ GUIDE 输入 ──► DuelController ──► DuelSim.press()
                  DuelView            Hud              Audio
 ```
 
-- `DuelSim` 用信号暴露事件：`state_changed`、`hit_landed`、`attack_blocked`、`clash`、`flow_changed`、`duel_finished`。
+- `DuelSim` 用信号暴露事件：`state_changed`、`hit_landed`、`attack_blocked`、`clash_happened`、`flow_changed`、`duel_finished`。
 - **高频战斗事件不走 EventBus**（避免每帧字符串派发）；EventBus 只承载流程级事件（开战、结算、切场景）。
 - 场景切换/菜单走 `mc_game_framework` 的 `UIManager`。
 

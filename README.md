@@ -96,7 +96,7 @@ CHANGELOG.md       已交付变更的逐批记录（问题 → 修法 → 验证
 
 | 要加什么 | 改哪里 |
 |---|---|
-| 新角色 | `scripts/duel/fighter_data.gd` 增加 `player_x()` 与 `for_character()` 分支；菜单角色列表来自 `Unlocks.character_ids()` |
+| 新角色 | `scripts/duel/fighter_data.gd` 增加 `player_d()` 一类的静态工厂与 `for_character()` 分支；菜单角色列表来自 `Unlocks.character_ids()` |
 | 新对手/难度 | `FighterData.opponent_for_stage()`、`AiProfile.for_stage()`；AI 参数在 `ai_profile.gd` |
 | 新心得 | `GameBootstrap.UPGRADE_DEFS` + `RunState` 的 effect 解释 + 中英 JSON |
 | 新商店条目 | 在 `resources/unlocks/` 放一个 `UnlockItem` `.tres`，补 `shop.item.<id>.name/desc` |

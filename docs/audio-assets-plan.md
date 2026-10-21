@@ -96,7 +96,7 @@
 - 格式：OGG Vorbis 优先（Godot 原生循环支持好）；MP3 仅过渡用，注意编码器延迟导致的循环缝隙。
 - 响度：SFX 约 -16 LUFS，峰值 ≤ -1 dBTP；环境约 -20 ~ -18 LUFS，默认音量再低 6 dB。
 - 循环：环境音必须无缝；Godot 导入开启 `loop`，必要时用 `loop_offset` 微调；循环点不能有爆音。
-- 总线：`Master / Music / SFX / Ambience / UI` 五条；设置页可分别调音量，可一键静音。
+- 总线：`Master` + 四条子总线 `Music / SFX / UI / Ambient`（`GameBootstrap._ensure_audio_buses()` 运行时创建）；设置页可分别调音量，可一键静音。
 - 单条 SFX 时长 < 1 秒（拔刀/收刀可到 1.5 秒）；环境 loop 30–60 秒。
 
 ## 6. 工作流
@@ -105,7 +105,7 @@
 2. **选定**：在 §4 表里勾出最终文件；不确定的保留 2 个备选。
 3. **入库**：复制到 `assets/audio/sfx|amb/`，按 §5 改名；原始文件留在 `_sources/`（不入库）。
 4. **登记**：在 `docs/gamejam/ai-disclosure.md` §6 与作品 README 的 credits 写入来源/作者/许可/链接。
-5. **接入**：M2 用 `sound_manager` 播放；事件与 `DuelSim` 信号对齐（`hit_landed` / `attack_blocked` / `clash` / `duel_finished`）。
+5. **接入**：M2 用 `sound_manager` 播放；事件与 `DuelSim` 信号对齐（`hit_landed` / `attack_blocked` / `clash_happened` / `duel_finished`）。
 6. **验收**：循环无爆音、四核心音可盲听区分、静音/音量设置有效。
 
 ## 7. 待办与时间

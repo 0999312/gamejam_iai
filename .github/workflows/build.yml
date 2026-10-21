@@ -38,9 +38,11 @@ jobs:
             }
           }
           $build = "{0:D2}" -f ($max + 1)
+          $semver = (Select-String -Path "project.godot" -Pattern 'config/version="([^"]+)"').Matches.Groups[1].Value
+          if (-not $semver) { $semver = "0.0.0" }
           "BUILD_VERSION=$date-$build" >> $env:GITHUB_ENV
-          "SEMVER=0.0.0" >> $env:GITHUB_ENV
-          Write-Output "Build version: $date-$build"
+          "SEMVER=$semver" >> $env:GITHUB_ENV
+          Write-Output "Build version: $date-$build (semver $semver)"
 
       - name: Import resources
         shell: pwsh
