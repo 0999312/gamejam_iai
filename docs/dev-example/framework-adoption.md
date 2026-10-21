@@ -1,4 +1,7 @@
-# 核心框架落地（v0.23）：UIManager / EventBus / Codec / GUIDE 资源化
+# 核心框架落地：UIManager / EventBus / Codec / GUIDE 资源化
+
+> 本文记录开发期 v0.23 的框架接入，保留原文以便对照；后续审计与修复见根目录 `CHANGELOG.md` 的 `0.1.0` 一节。
+> 文中出现的 v0.23 是开发迭代号，发布版本已统一为语义化 `0.1.0`。
 
 > 起因：`docs/dev-contract.md` §6 的审计指出 `EventBus`、`UIManager`、`Codec` **零调用**，
 > 且 `GUIDE` 上下文是在 `duel_controller._setup_input()` 里用 300 行代码现搭的。

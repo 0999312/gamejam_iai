@@ -184,6 +184,6 @@
     "spell_a": {"name": "[PLACEHOLDER] Stance", "desc": "[PLACEHOLDER] Any guard within 60 frames counts as a perfect guard"},
     "spell_b": {"name": "[PLACEHOLDER] Gale Slash", "desc": "[PLACEHOLDER] After an 8-frame charge, cut for 20 damage, ignoring guard"},
     "spell_c": {"name": "[PLACEHOLDER] Mountain Fall", "desc": "[PLACEHOLDER] After a 20-frame charge, cut for 30 damage, ignoring guard and adding stagger"},
-    "spell_boss": {"name": "[PLACEHOLDER] Final Form", "desc": "[PLACEHOLDER] After a 14-frame charge, cut for 30 damage, ignoring guard"}
+    "spell_boss": {"name": "[PLACEHOLDER] Final Form", "desc": "[PLACEHOLDER] After a 14-frame charge, cut for 30 damage, ignoring guard and adding stagger"}
   }
 }

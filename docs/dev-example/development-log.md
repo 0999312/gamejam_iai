@@ -74,6 +74,7 @@ AI 的工作是**把体感拆成可测量的量**（反应窗、毫秒、胜率�
 | 10-20 下午 | M5：全手柄 UI、改键/热插拔、商店目录化、Windows 导出与 CI Release | `c248ca2` `65eec1b` `0fd1a0e`…`ef4449c` | 导出产物 + CI |
 | 10-20 晚 | 符卡 v0.20 规则级重做 + v0.21 占位补齐 + 固定 60Hz 逻辑帧 | `5851abe` | GUT 69/69 |
 | 10-21 晚 | 手感与平衡五连改：02 → 03 → 架防按住 → 04 → 04b | `9ae4997` `88f9757` `e986387` `190fbf5` `a2a8079` | 159→166 用例，575 asserts |
+| 10-21 深夜 | **全量代码审计 + 六批修复 + 版本号 0.1.0**（P0 音量键名、存档原子写、种子、AI 性格、关于页、清档、架防按住、菜单二级化、空架收势、难度量化、收招取消） | `a9fcb5c` `2b15e04` `2a7e205` `8c30dd5` `e1fc420` `6f36b27` | 169→**195** 用例、746 asserts |
 
 ---
 
@@ -235,16 +236,25 @@ Start-Process -FilePath "E:/godot_learning/Godot_v4.6.2-stable_mono_win64/godot.
 
 ## 6. 当前状态与遗留
 
-**当前**：GUT 166/166、575 asserts；NORMAL 为默认难度，HARD 在商店解锁后可切换；
-8 个角色 id（3 可操作 + 5 对手）已具备数据与 AI 性格，但「收服敌人作为可操作角色」尚未接线。
+**当前**：版本 **`0.1.0`**；GUT **195/195（746 asserts，27 个测试脚本）**；headless 冒烟 240 帧无错误；
+NORMAL 为默认难度，HARD 在商店解锁后可切换；8 个角色 id（3 可操作 + 5 对手）已具备数据与 AI 性格，
+但「收服敌人作为可操作角色」尚未接线。逐批变更见根目录 `CHANGELOG.md`。
 
-**已知遗留**（需要人类决策）：
+**已在本轮审计中修掉的历史遗留**（原文保留在下方「曾经」中，便于对照）：
 
-1. **重剑连砍仍强**：15 伤 ×2 = 30，是「HP×10 + 重剑 15 伤」的必然后果；
-2. **只守不攻可拖成僵局**：AI 缺骗架手段，纯架+反击机器人常打到 1800f 上限；
-3. **AI 读招 `reaction_frames` 在短前摇下被夹到 0**：按下时刻 `max(0, commit_total − cover)`，
-   玩家前摇 14f 短于 AI 架窗 18–22f 时 AI 第一帧就起架，反应快慢只由 `guard_chance` 决定；
-4. 教学关 `guard_chance` 0.45 偏高、`design.md` 帧表过期、符卡文案仍是 `PLACEHOLDER`（需人类撰写）。
+1. ~~重剑连砍仍强~~：伤害已从 15 降到 15 但 HP 30 + 连斩惩罚 + 被架收招 28f 已能反制，模拟器验证；
+2. ~~只守不攻可拖成僵局~~：`_check_end()` 只看 HP、格挡不造成伤害，该结论本身不成立，已在
+   `balance-pass-05.md` §7 更正；
+3. ~~AI 读招在短前摇下被夹到 0~~：`_try_counter` 已加 `counter_delay_frames`（6–8f），不再第一帧起架；
+4. 教学关 `guard_chance` 已降到 0.18；符卡文案仍是占位（需人类撰写）。
+
+**已知遗留**（需要人类决策，按影响排序）：
+
+1. **44 条玩家可见文案仍是 `[占位]`**：作品名、角色名、心得名/描述、教程、符卡名/描述；
+2. **UI 是「代码即 UI」**：7 个 `.tscn` 为空壳，节点树在 `_ready()` 里建，`%UniqueName` 零使用；
+   不满足 `AGENTS.md` §8 的实质要求，但功能正常、改造成本高（建议留到比赛后）；
+3. **未在非开发机 / 不同分辨率验证**；未做 10 分钟长跑；`submission-checklist` 对应项仍未勾；
+4. 字体重复约 29 MB + 导出 UID 重复警告；`DuelView` / `DuelAudio` 无直接测试。
 
 ---
 
@@ -260,8 +270,14 @@ Start-Process -FilePath "E:/godot_learning/Godot_v4.6.2-stable_mono_win64/godot.
 而 `godot-genre-fighting` / `godot-input-handling` 里对「读招类游戏不该用长缓冲」本就有直接论述；
 AI 读招、帧数据分析也没有先查 `godot-state-machine-advanced` 的决策树。**这轮返工是流程债，不是技术债。**
 
-**插件：4 用 3 空。** `GUIDE` ✅、`SoundManager` ✅、`I18NManager` ✅、`RegistryManager` ✅；
+**插件：4 用 3 空（2026-10-21 已补齐）。** `GUIDE` ✅、`SoundManager` ✅、`I18NManager` ✅、`RegistryManager` ✅；
 `EventBus` ❌、`UIManager` ❌（7 处裸 `change_scene_to_file`）、`Codec` ❌。
+
+**补记（同日稍晚）**：`EventBus`、`UIManager`、`Codec` 已全部接线（`8c30dd5` 之前的 v0.23 框架落地），
+7 处裸 `change_scene_to_file` 只剩 2 处真场景切换（菜单 ↔ 对局），面板一律走 `UIManager.open_panel`。
+本次全量审计后，`docs/dev-contract.md` §3.1 另登记了 5 项**不可替代**的插件豁免（AudioServer master/mute、
+`InputMap` 的 `ui_*` 手柄补充、`GUIDE._input_state`、`GUIDERemappingConfig._bind/_unbind`、
+`Input.get_connected_joypads()` 只读），每条都有「为什么插件做不到」的理由。
 
 处置：`AGENTS.md` 新增 **§0 会话启动契约**（开工先读 `docs/dev-contract.md`、声明并加载技能、插件优先、
 未接线插件不得扩大偏差），并新增守卫测试 `tests/unit/test_project_contract.gd`

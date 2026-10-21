@@ -2,7 +2,7 @@
 
 > 副标题（PLACEHOLDER）：居合 · 心流 · 瞬息对决
 >
-> 版本 v0.14 ｜ 2026-10-20 ｜ 策划：人类 + DSH 主代理 ｜ 实现：DSH 主代理（代码）
+> 版本 v0.14（文档修订号，不是发布版本；发布版本见根目录 CHANGELOG.md） ｜ 2026-10-20 ｜ 策划：人类 + DSH 主代理 ｜ 实现：DSH 主代理（代码）
 > 性质：**内部工程文档**，不是提交给玩家的文案。文中出现的所有玩家可见文字均为占位，见 §15。
 
 ---
@@ -640,10 +640,10 @@ GUIDE 输入 ──► DuelController ──► DuelSim.press()
 - 键位由 `KeyBindings` 从 `MetaSave.settings.keys` 读取，运行时程序化创建 GUIDE Action；默认 P1 J / K，P2 小键盘 1 / 2（或 I / O），R 重开，Esc 暂停。
 - **键鼠 + 手柄并存**：每个动作可挂键盘、鼠标、手柄多条 `GUIDEInputMapping`；P1 鼠标左/右键 = 斩/架，手柄 1 的 A/B 同时可用；P2 默认键盘，检测到第二手柄时追加手柄 2 的 A/B。手柄键在设置页可逐项改绑，写入 `settings.joy_buttons`；冲突只在同一手柄作用域内拒绝（P1 动作之间、P2 动作之间、暂停/重开全局）。
 - 设置页可逐项改键、检测冲突、恢复默认；HUD 操作提示按当前绑定动态生成。
-- 语言：`localization/zh_CN.json` 与 `localization/en.json` 均为 131 键；设置页切换后 `I18NManager.set_language` 即时生效。
+- 语言：`localization/zh_CN.json` 与 `localization/en.json` 均为 **151 键**（2026-10-21 起；早期为 131 键），集合完全相同；设置页切换后 `I18NManager.set_language` 即时生效。其中 44 条内容文案仍是占位（见 §15.2），其余为通用 UI 标签。
 - UI 动作（菜单/商店/设置/暂停/奖励）走 Godot 内置 `ui_accept`/`ui_cancel`/`ui_up/down/left/right`；`GameBootstrap` 在启动时为 A/B 与方向键补 `device=-1` 的手柄事件，任意手柄都能操作界面。
 - **手柄兜底**：GUIDE 的 `joy_index -> device_id` 表在 autoload 初始化帧可能为空，已连接手柄不会再次触发 `joy_connection_changed`；`GameBootstrap` 下一帧强制刷新一次，`DuelController` 始终给 P1 建第一个手柄映射、双人给 P2 建第二个，并额外用 `_input(event)` 按 `event.device` 分发（P1/P2 隔离；暂停 200ms 去抖）。GUIDE 与兜底同时触发时只置位队列，不会重复出招。
-- 构建版本：`project.godot` 的 `config/version`、导出预设的 `file_version/product_version` 默认 `0.0.0`；GitHub Release 构建号为 `YYYY-MM-DD-NN`（UTC，NN 从 01 起按当天已有 tag 递增），由 `.github/workflows/build.yml` 生成 tag/Release 并上传 EXE。
+- 构建版本：`project.godot` 的 `config/version` 为 **`0.1.0`**（2026-10-21 起，语义化版本；此前为 `0.0.0`），游戏内「关于」页显示同一版本号；GitHub Release 构建号为 `YYYY-MM-DD-NN`（UTC，NN 从 01 起按当天已有 tag 递增），由 `.github/workflows/build.yml` 生成 tag/Release 并上传 EXE。
 - 测试：GUIDE 注入或 `GutInputFactory`，不硬编码键名。
 
 ---
@@ -688,9 +688,13 @@ GUIDE 输入 ──► DuelController ──► DuelSim.press()
 | UI 文案（通用按钮/标签/结算） | ~20 | 人类 | 通用已去占位，待人类确认 |
 | 教程提示 | ~6 | 人类 | 待定 |
 | 台词/开场/胜利 | ~6 | 人类 | 待定 |
-| 关于页文本 | 1 | 人类 | 待定 |
+| 关于页文本 | 1 | 人类 | 已实现（2026-10-21）：`scenes/ui/about.tscn` + `scripts/ui/about_panel.gd`，12 条文案由 AI 按人类指定职责与东方二创规约起草，**待人类最终确认措辞** |
 | 封面 | 1 | 人类 | 待定 |
 | 战斗音效 / 环境风声 | ~8 + 2 | 检索 CC0/可商用 + 人类试听 | 候选已备，待选型 |
+
+> 上表是设计期估算。**实际落点以 `docs/gamejam/submission-checklist.md` §7 为准**：当前 44 条
+> （中英各 44），分布为作品名 1、玩家角色名 3、商店条目 8、状态名 1、教程 5、心得 20、
+> 符卡名 4、符卡描述 4（后者目前无显示路径）；关于页、通用 UI 标签、模式选择等已去占位。
 | UI 音效 | — | Kenney CC0 | 可用 |
 
 ### 15.3 二创声明（条件适用）
@@ -793,3 +797,6 @@ GUIDE 输入 ──► DuelController ──► DuelSim.press()
 | v0.19 | 2026-10-20 | 修「敌人偶尔出现无法反应的快斩」与「复元回血像没触发」：① 根因是 AI 的心流进「流」档后吃 `COMMIT_TIER_OFFSET` 的 −6f，把 18f 前摇压成 12f（200ms）；`FighterData` 新增 `flow_speeds_commit`（默认 true，所有 `opponent_*` 设 false），`DuelSim._enter_commit` 对这类角色把偏移夹到 `maxi(0, offset)`——AI 只吃低心流 +6f 惩罚，前摇恒 ≥ base_commit；玩家侧保留 −6f（心流的主爽点）；② 复元（U10）回血逻辑本身正确，但 `duel_controller._settle_duel` 只更新了 `run.player_hp`，HUD 读的是 `sim.p1.hp`，奖励界面显示结算前旧血量——结算后补 `sim.p1.hp = run.player_hp`；③ 新增测试：`test_ai_commit_ignores_flow_speedup`、`test_heal_bonus_upgrade_heals_two`、`test_heal_bonus_is_capped_by_max_hp`。GUT 139/139（439 asserts） |
 | v0.20 | 2026-10-20 | 符卡按「每场一次、收益与风险都大」重做（原三张里两张走数值路线，在 3–4 HP 模型下不可感知）：① **收益改规则级**——`spell_a` 改为「之后 60f 内任意时刻的架都判完美格挡 + 架窗固定 30f」（原「下次架 +10f」在 AI 前摇 18–20f 下是纯溢出，等于不存在）、`spell_b` 与 `spell_c` 改为「蓄力结束**自动落刀**」（原「下一刀加成」要玩家再出一刀才兑现，等于没发动）、`spell_c` 与 `spell_b` 均**穿防**（3 伤对 3HP 是一击必杀、对 4HP 与 2 伤等价，必须靠穿防兑现）；② **风险改明牌**——所有符卡付完心流后进入可见的 `SPELL` 蓄力（A 10f / B 8f / C 20f / 关底 14f），期间可被抢刀打断，打断则蓄力驱散 + `SPELL_INTERRUPT_PENALTY = 12f` 惩罚硬直、次数不还、心流不退；③ **修「按了没反应」**——`set_spell` 写入 `input_buffer`（4f）缓冲，非 `IDLE` 时不再静默丢弃，过期才 `spell_failed`；HUD 符卡行四态（就绪 / 蓄力 `▶剩余帧` / 已用 / 心流不足半透明），失败闪红 16f；④ **可见性**——`SPELL` 加蓄力收缩环（落刀前 8f 转白）、`spell_a` 生效期加青白安全区环；⑤ 成本重定：`spell_c` 40 → **34**（原值高于 C 的 `start_flow = 36` 与关底起手心流，实测按了发不出来），关底 45 → **40**；新增 `test_character_can_cast_from_start_flow` 把「开局必须发得出」锁成回归测试；⑥ 帧率固定：`project.godot` 补 `physics_ticks_per_second=60`、`max_physics_steps_per_frame=8`、`physics_jitter_fix=0.0`，保证卡顿时慢放而非跳帧。GUT 141/141 |
 | v0.21 | 2026-10-20 | 补齐缺失的显式占位文本：v0.20 新增的 8 个符卡键（`spell.spell_a/b/c/boss.name|desc`）与 `SPELL` 状态名（`state.spell`）此前在 `localization/*.json` 里没有条目，靠 `DuelHud._tr()` 回退成 `[占位] spell.spell_a.name` 这种开发者式标记。现在把它们连同中性占位文字（`[占位] 符卡 A/B/C/关底`、`[占位] 符卡`）一并写入中英两份文件，键数 122 → **131**（中英各 131，集合完全一致）；HUD 与状态行显示 `[占位] 符卡 A` 而不是键路径。**未写任何效果文案**——占位文字只标编号，正式名称与描述仍待人类提供（PH-18）。新增 `test_spell_and_spell_state_have_explicit_placeholders` 锁住这 9 个键在两语言下都必须是显式占位，防止将来再退回 `_tr()` 回退。GUT 142/142（468 asserts） |
+| v0.23 | 2026-10-21 | 核心框架落地：`UIManager` 面板栈（暂停/设置/商店统一走 `open_panel`）、`EventBus` 跨场景事件、`Codec` 存档编解码、GUIDE 上下文资源化（`input/contexts/*.tres`）。GUT 169/169（636 asserts） |
+| v0.24 | 2026-10-21 | **全量代码审计**（四路并行，产出 P0×1 / P1×9 / P2×22 / P3×30+，见 `docs/audit/code-audit-2026-10-21.md`）与**六批修复**：音量滑条键名 P0、存档原子写/坏档隔离/版本号、种子随机化、AI 性格生效、关于页、人工清档、架防按住、主菜单二级化、空架收势、文案与升级描述对齐、难度量化与收招取消。逐批的问题→修法→验证见根目录 `CHANGELOG.md` 的 `0.1.0` 一节。测试 169 → **195** |
+| 0.1.0 | 2026-10-21 | **语义化版本起点**：基本操作可确定（键鼠/手柄、暂停恢复、改键、存档/清档全链路），难度经人工简测通过。`project.godot` 的 `config/version` 与游戏内「关于」页统一为 `0.1.0`；此前的 `v0.x` 是开发迭代号，不再作为发布版本。GUT 195/195（746 asserts） |

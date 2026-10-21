@@ -126,6 +126,7 @@
 - [ ] 对应的 `docs/dev-example/*.md` 已更新（改了什么、为什么、实测数据）
 - [ ] `docs/gamejam/ai-disclosure.md` 已追加本模块一行
 - [ ] 未生成任何玩家可见文案/美术/音乐（需要时用 `PLACEHOLDER` 并登记 `submission-checklist.md`）
+- [ ] 若改版本号，`project.godot` 的 `config/version` 与 `scripts/ui/about_panel.gd` 的 `VERSION_TEXT` 一致，且 `CHANGELOG.md` 有一节对应
 
 ## 6. 审计记录
 
@@ -242,3 +243,22 @@
   `151 entries × 2 语言`、stderr 空。
 - **未做**：7 个空壳 `.tscn` 的场景化、`duel_view`/`duel_audio` 直接测试、`test_project_contract`
   对 `tools/` 以外目录的扩展。详见 `docs/dev-example/balance-pass-05.md` §9。
+
+### 2026-10-21 第七轮：文档整理与语义化版本 0.1.0
+
+人类（`m01940`）：「整理所有文档，根据对本次审计和修改经过的总结修改相关的文档，然后推送远端。
+语义化版本号可以推进为 0.1.0 —— 基本的操作可以确定且难度简测还算通过。」
+
+- **版本号**：`project.godot` 的 `config/version` 与 `about_panel.gd` 的 `VERSION_TEXT` 统一为
+  **`0.1.0`**；`design.md` 变更表补 v0.23 / v0.24 / 0.1.0 三行，并声明此前的 `v0.x` 是开发迭代号。
+- **新增 `CHANGELOG.md`**：按六批记录「问题 → 修法 → 验证」，是本次审计与修复的**唯一汇总入口**；
+  它同时承担「哪些已修、哪些没修」的边界说明。
+- **审计报告加状态头**：`docs/audit/code-audit-2026-10-21.md` 正文保持快照，但顶部写明「已处理、
+  不要按报告行号改当前代码、修法见 CHANGELOG」，并注明测试基线从 169 变成 195。
+- **文档一致性**：`README.md`（状态/存档/CI/已知限制/合规）、`development-log.md`（时间线、当前状态、
+  插件审计结论从「4 用 3 空」更新为「已补齐 + 5 项豁免」）、`framework-adoption.md`（标注为开发期快照）、
+  `design.md` §13（151 键、`0.1.0`）与 §15.2（占位实际落点）、`submission-checklist.md`（M6 记录、
+  EXE 大小、151 键、0.1.0 占位说明）、`ai-disclosure.md`（追加本轮披露行）。
+- **验证**：GUT **195 / 746**、退出码 0；headless 冒烟 240 帧、`151 entries × 2 语言`、stderr 空。
+- **未做**：README 的「已跑通 Release」仍指向 `2026-10-20-02` 的旧附件（118 MB），
+  重新导出后需人工核对大小与 sha256；44 条文案占位不动（人类 `m01536` 指示等定稿）。

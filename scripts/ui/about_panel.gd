@@ -12,8 +12,8 @@ extends UIPanel
 const FONT := preload("res://assets/fonts/MiSans-Semibold.otf")
 const CLICK := preload("res://assets/audio/sfx/sfx_ui_click.ogg")
 
-## 版本号：与 docs/gamejam/ai-disclosure.md 的模块版本保持一致。
-const VERSION_TEXT := "0.24"
+## 版本号：与 `project.godot` 的 `config/version` 保持一致（发布版本语义化）。
+const VERSION_TEXT := "0.1.0"
 
 const TEXT_COLOR := Color("#e9eef5")
 const MUTED_COLOR := Color("#9aa7b8")

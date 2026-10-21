@@ -70,14 +70,14 @@
 
 ## 5. 策划 → 开发 → 评审工作流（一句灵感起步）
 
-`docs/dev-example/README.md` 提供简化后的即插即用流程：**最小输入只有一句策划灵感**，主代理会补足需求定义、加载技能并完成策划 / 实现 / 评审。
+**最小输入只有一句策划灵感**，主代理会补足需求定义、加载技能并完成策划 / 实现 / 评审。
 
 1. **策划**: 直接说 `帮我策划：<一句话灵感>`，由主代理在当前会话完成（不启动子代理），产出 `docs/dev-example/design.md`
 2. **实现**: 主代理按 `design.md` 实现（默认主代理）
 3. **评审**: 默认主代理；**全量代码审查**或需要并行搜索时，才启动子代理
 
-`docs/agent-prompts/` 三个提示词为**可选项**：仅作为子代理提示词或角色说明，不是启动前置条件。
-示例需求单：`docs/dev-example/feature-brief-example.md`（可选；想控制细节时才替换为真实需求）
+交付记录写入根目录 `CHANGELOG.md`（按批次：问题 → 修法 → 验证）；单轮平衡与手感细节写入 `docs/dev-example/balance-pass-*.md`；过程与踩坑写入 `docs/dev-example/development-log.md`。
+（原 `docs/dev-example/README.md`、`docs/agent-prompts/`、`docs/dev-example/feature-brief-example.md` 未随当前仓库保留，故不再引用。）
 
 ## 6. 测试与运行
 
@@ -106,8 +106,8 @@ pwsh -File .dsh/skills/godot-testing-patterns/scripts/run_tests.ps1
 - **唯一本地改写**：`godot-testing-patterns` 已由 GdUnit4 版改写为 **GUT 版**（SKILL.md、references、scripts 全部重写，时间 2026-10-19），改写记录见 `ATTRIBUTION.md` §6。上游再同步该技能时**不要覆盖**，需按 GUT 版重新适配
 - **技能更新**：更新源为仓库外 `.research/Game-Dev-Agentic-Skills`（已 gitignore），`git pull` 后按 `ATTRIBUTION.md` §4 重新复制并更新提交号（需外部命令审批）
 - **C# 脚本**：DSH 会话内无法编译 C#，新增/修改 C# 后需在 Godot 编辑器内构建
-- **外部程序执行受限**：DSH 沙箱默认下启动 `godot.exe`/`git.exe` 报 `Access is denied`；需带 `sandbox_permissions` 触发一次性审批后才可执行（已用该方式完成 `git init` 与首个提交）。未审批时 §6 的 `--headless` 导入、GUT 测试、启动游戏都无法运行，验证需由人在本机执行
-- **不要修改** `addons/` 内第三方插件源码（除非明确要求）；`docs/agent-prompts/` 为上游 GodotPrompter 的 DSH 适配版（MIT）
+- **外部程序执行**：本机 `godot.exe` 与 `git.exe` 实测可直接由 DSH 执行（2026-10-21 复核，`--version`、GUT、`--headless` 冒烟、`git push` 均成功）。若后续环境变了、出现 `Access is denied`，再带 `sandbox_permissions` 触发一次性审批
+- **不要修改** `addons/` 内第三方插件源码（除非明确要求）
 
 ## 8. 编码规范
 
