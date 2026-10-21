@@ -49,6 +49,8 @@ static func can_buy(meta: MetaSave, id: StringName) -> bool:
 	return meta.gold >= item.cost
 
 
+## 纯逻辑：改内存中的 meta 并返回结果，落盘由调用方统一决定一次。
+## 这样商店一次购买只写一次档（此前 buy 内部写 + 调用方再写，审计 P2）。
 static func buy(meta: MetaSave, id: StringName) -> bool:
 	if not can_buy(meta, id):
 		return false
@@ -56,10 +58,10 @@ static func buy(meta: MetaSave, id: StringName) -> bool:
 	if item == null or not meta.spend(item.cost):
 		return false
 	meta.add_unlock(id)
-	meta.save()
 	return true
 
 
+## 纯逻辑，同上：不落盘。
 static func set_toggle(meta: MetaSave, id: StringName, enabled: bool) -> bool:
 	if meta == null:
 		return false
@@ -67,7 +69,6 @@ static func set_toggle(meta: MetaSave, id: StringName, enabled: bool) -> bool:
 	if item == null or item.toggle_setting == &"" or not meta.has_unlock(id):
 		return false
 	meta.settings[String(item.toggle_setting)] = enabled
-	meta.save()
 	return true
 
 

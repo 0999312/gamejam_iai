@@ -28,6 +28,8 @@ var _banner_side: int = -1
 ## 符卡发不出去时把对应那一行标红几帧，避免「按了没反应」。
 var _p1_spell_fail_until: int = -1
 var _p2_spell_fail_until: int = -1
+## 上一帧的数据签名：只有血量/心流/状态/符卡等真正变化时才重算文本。
+var _last_signature: String = ""
 var _run_info: Label
 var _tutorial: Label
 var _result: Label
@@ -137,6 +139,8 @@ func bind(p_sim: DuelSim) -> void:
 	_p1_spell_fail_until = -1
 	_p2_spell_fail_until = -1
 	_banner_until_frame = -1
+	# 新 sim 可能血量心流恰好与旧 sim 相同，签名缓存必须失效，否则不刷新。
+	_last_signature = ""
 	if sim != null:
 		sim.spell_cast.connect(_on_spell_cast)
 		sim.spell_interrupted.connect(_on_spell_interrupted)
@@ -155,15 +159,18 @@ func set_versus(value: bool) -> void:
 
 
 ## 当前心流档位下这一刀的实际前摇帧数（HUD 直接给出数字，不再靠体感猜）。
+## 公式统一由 DuelSim 提供：这里曾有第二份实现，漏掉 4 个 offset（审计 P1-2）。
 func _commit_frames(fighter: FighterState) -> int:
-	var tier := DuelTypes.tier_for_flow(fighter.flow)
-	return maxi(DuelSim.COMMIT_MIN_FRAMES,
-			fighter.data.base_commit + DuelTypes.COMMIT_TIER_OFFSET[tier])
+	if sim == null:
+		return DuelSim.COMMIT_MIN_FRAMES
+	return sim.projected_commit_frames(fighter)
 
 
 ## 当前心流档位下的实际「架」持续帧数（含心得/残心加成）。
 func _guard_frames(fighter: FighterState) -> int:
-	return fighter.data.guard_duration_base + DuelTypes.GUARD_TIER_OFFSET[DuelTypes.tier_for_flow(fighter.flow)]
+	if sim == null:
+		return 0
+	return sim.projected_guard_frames(fighter)
 
 
 ## 心流条随档位换色，升档时整个数值区更亮，补足「心流变强了」的即时反馈。
@@ -223,8 +230,10 @@ func _controls_text() -> String:
 	var meta := GameBootstrap.meta if GameBootstrap != null else null
 	if meta == null:
 		return _tr("ui.controls_versus" if versus else "ui.controls")
-	var template := _tr("ui.controls_versus_template" if versus else "ui.controls_template")
-	if template.begins_with("[占位]"):
+	var key := "ui.controls_versus_template" if versus else "ui.controls_template"
+	var template := I18NManager.get_text(key)
+	# 判等而非前缀：占位标记在不同语言下写法不同，不能拿中文前缀当控制流（审计 P3）。
+	if template == key:
 		return _tr("ui.controls_versus" if versus else "ui.controls")
 	return template \
 		.replace("%a", KeyBindings.label(meta, &"attack_p1")) \
@@ -238,7 +247,43 @@ func _controls_text() -> String:
 func refresh() -> void:
 	if sim == null:
 		return
+	# 高频项（开始提示 / 符卡报幕淡出 / 结算显隐）每帧更新；
+	# 其余文本只在数据签名变化时重算——此前每帧拼十几条字符串（审计 P2-2）。
+	_refresh_transient()
+	var charging: bool = _spell_charging(sim.p1) or _spell_charging(sim.p2)
+	var signature := "%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d" % [
+		sim.p1.hp, sim.p1.flow, sim.p1.state,
+		sim.p2.hp, sim.p2.flow, sim.p2.state,
+		sim.p1.spell_uses_left, sim.p2.spell_uses_left,
+		int(sim.frame < _p1_spell_fail_until),
+		int(sim.frame < _p2_spell_fail_until),
+		int(sim.finished), int(versus),
+		run.gold if run != null else -1,
+	]
+	if not charging and signature == _last_signature:
+		return
+	_last_signature = signature
+	_refresh_body()
+
+
+func _refresh_transient() -> void:
+	var cue_end := sim.opening_lock_frames + 42
+	_start_cue.visible = not sim.finished and sim.frame >= sim.opening_lock_frames and sim.frame < cue_end
+	if _start_cue.visible:
+		_start_cue.text = _tr("ui.round_start")
+	_result.visible = sim.finished
+
+	var banner_on := sim.frame < _banner_until_frame and not sim.finished
+	_spell_banner.visible = banner_on
+	if banner_on:
+		# 颜色只在开报幕时设一次，这里只改透明度，避免每帧 add_theme_override（审计 P2-2）。
+		var left := float(_banner_until_frame - sim.frame) / 96.0
+		_spell_banner.modulate = Color(1, 1, 1, clampf(left * 2.0, 0.0, 1.0))
+
+
+func _refresh_body() -> void:
 	_p1_hp.text = "%s %d/%d" % [_tr("ui.hp"), sim.p1.hp, sim.p1.data.max_hp]
+	_p1_flow_bar.max_value = sim.p1.data.max_flow
 	_p1_flow_bar.value = sim.p1.flow
 	_p1_flow_bar.modulate = _tier_color(sim.p1.flow)
 	_p1_flow_text.text = "%s %d · %df/%df" % [
@@ -250,6 +295,7 @@ func refresh() -> void:
 		_p1_spell.modulate = Color("#ff6a6a")
 
 	_p2_hp.text = "%s %d/%d" % [_tr("ui.hp"), sim.p2.hp, sim.p2.data.max_hp]
+	_p2_flow_bar.max_value = sim.p2.data.max_flow
 	_p2_flow_bar.value = sim.p2.flow
 	_p2_flow_bar.modulate = _tier_color(sim.p2.flow)
 	_p2_flow_text.text = "%s %d · %df/%df" % [
@@ -279,12 +325,6 @@ func refresh() -> void:
 	else:
 		_run_info.text = ""
 
-	_result.visible = sim.finished
-
-	var cue_end := sim.opening_lock_frames + 42
-	_start_cue.visible = not sim.finished and sim.frame >= sim.opening_lock_frames and sim.frame < cue_end
-	if _start_cue.visible:
-		_start_cue.text = _tr("ui.round_start")
 	if sim.finished:
 		if versus:
 			_result.text = _tr("ui.result_p1" if sim.winner == DuelTypes.Side.P1 else "ui.result_p2")
@@ -302,16 +342,6 @@ func refresh() -> void:
 			_result.text = ""
 
 	_tutorial.text = "" if versus else _tutorial_text()
-
-	# 符卡报幕：只显示符卡名（文案由人类提供），不附加任何 AI 撰写的动词。
-	var banner_on := sim.frame < _banner_until_frame and not sim.finished
-	_spell_banner.visible = banner_on
-	if banner_on:
-		_spell_banner.text = _banner_text
-		_spell_banner.add_theme_color_override("font_color", _spell_banner_color(_banner_side))
-		# 剩余时间越短越淡，避免硬切。
-		var left := float(_banner_until_frame - sim.frame) / 96.0
-		_spell_banner.modulate = Color(1, 1, 1, clampf(left * 2.0, 0.0, 1.0))
 
 
 func _on_spell_cast(side: int, _effect: int) -> void:
@@ -340,6 +370,9 @@ func _show_banner(side: int) -> void:
 	_banner_side = side
 	_banner_text = "◆ %s ◆" % _tr(fighter.spell_card.name_key)
 	_banner_until_frame = sim.frame + 96
+	# 文本与颜色在开报幕时设一次，逐帧只改透明度。
+	_spell_banner.text = _banner_text
+	_spell_banner.add_theme_color_override("font_color", _spell_banner_color(_banner_side))
 
 
 func _spell_banner_color(side: int) -> Color:
@@ -378,6 +411,16 @@ func hide_rewards() -> void:
 	_reward_dim.visible = false
 	if get_viewport() != null:
 		get_viewport().gui_release_focus()
+
+
+## 奖励界面重新拿回焦点：暂停恢复后调用，避免纯手柄玩家卡死（审计 P1-4）。
+func focus_rewards() -> void:
+	if not _reward_box.visible:
+		return
+	for button in _reward_buttons:
+		if button.visible and not button.disabled:
+			button.grab_focus()
+			return
 
 
 func _on_reward_button(index: int) -> void:

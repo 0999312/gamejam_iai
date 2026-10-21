@@ -11,10 +11,19 @@ const MENU_SCENE := "res://scenes/menu/menu.tscn"
 
 const OFFER_KEYS: Array[Key] = [KEY_1, KEY_2, KEY_3]
 
+## 开场礼让与对手开局心流：写进常量，避免三处魔法数字各自漂移。
+const OPENING_LOCK_FRAMES := 180
+const ENEMY_START_FLOW := 40
+const TEACHING_GRACE_FRAMES := 210
+
 var sim: DuelSim
 var ai: DuelAi
 var run: RunState
 var mode: StringName = &"run"
+
+## 本局种子：开局随机一次，同局内第 N 场由 base + 场次派生。
+## 这样「同一局可复现、不同局不重复」，而不是每局都用固定 12345（审计 P2-11）。
+var _run_seed: int = 0
 
 var _view: DuelView
 var _hud: DuelHud
@@ -53,6 +62,8 @@ func _ready() -> void:
 	if mode != &"versus":
 		mode = &"run"
 
+	_run_seed = _new_seed()
+
 	var pads := Input.get_connected_joypads()
 	if pads.size() >= 1:
 		_raw_p1_device = pads[0]
@@ -73,12 +84,25 @@ func _ready() -> void:
 		_start_versus()
 	else:
 		run = RunState.new(
-			12345,
+			_run_seed,
 			GameBootstrap.meta if GameBootstrap != null else null,
 			GameBootstrap.pending_character if GameBootstrap != null else &"char_a",
 			GameBootstrap.hard_mode if GameBootstrap != null else false
 		)
 		_start_stage()
+
+
+## 非零随机种子。0 在 DuelSim/DuelAi/RunState 里是「请自行 randomize」的哨兵值，
+## 这里显式避开，保证 seed 语义只有一种。
+static func _new_seed() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	return rng.randi_range(1, 2147483646)
+
+
+## 同一局内第 N 场的派生种子：局内可复现（便于复现 bug），跨局不重复。
+func _stage_seed(stage_index: int) -> int:
+	return (_run_seed + stage_index * 7919) % 2147483646 + 1
 
 
 func _exit_tree() -> void:
@@ -88,6 +112,9 @@ func _exit_tree() -> void:
 		_audio.stop_ambient()
 	if _context != null:
 		GUIDE.disable_mapping_context(_context)
+	# 改键配置是全局的：对局结束后必须卸掉，否则其它场景仍按对局改键生效（审计 P3）。
+	if GUIDE != null:
+		GUIDE.set_remapping_config(null)
 
 
 ## 手柄原始事件兜底：GUIDE 依赖启动时的手柄枚举，若枚举为空则 joy_index
@@ -97,12 +124,18 @@ func _input(event: InputEvent) -> void:
 	if not (event is InputEventJoypadButton):
 		return
 	var joy := event as InputEventJoypadButton
+	var meta := GameBootstrap.meta if GameBootstrap != null else null
+	if _paused:
+		# 暂停期间只允许用暂停键恢复；攻击/架/符卡/重开一律丢弃。
+		# 否则暂停时按下的键会留在队列里，恢复的第一帧立刻出刀（审计 P1-1）。
+		if joy.pressed and joy.button_index == KeyBindings.get_joy_button(meta, &"pause"):
+			_on_pause_pressed()
+		return
 	if not joy.pressed:
 		# 松手也要跟踪：架子按「按住」保持，松开立刻收势。
-		var held_meta := GameBootstrap.meta if GameBootstrap != null else null
-		if joy.button_index == KeyBindings.get_joy_button(held_meta, &"guard_p1"):
+		if joy.button_index == KeyBindings.get_joy_button(meta, &"guard_p1"):
 			_guard_held = false
-		if joy.button_index == KeyBindings.get_joy_button(held_meta, &"guard_p2"):
+		if joy.button_index == KeyBindings.get_joy_button(meta, &"guard_p2"):
 			_p2_guard_held = false
 		return
 
@@ -115,7 +148,6 @@ func _input(event: InputEvent) -> void:
 			_raw_p2_device = device
 		slot = 1 if device == _raw_p2_device else 0
 
-	var meta := GameBootstrap.meta if GameBootstrap != null else null
 	var button := joy.button_index
 	if slot == 0:
 		if button == KeyBindings.get_joy_button(meta, &"attack_p1"):
@@ -204,15 +236,15 @@ func _settle_duel() -> void:
 func _start_stage() -> void:
 	# 多角色基础：一场对局 = MatchSetup（两名角色 + 对手性格），控制器不再自己拼。
 	var setup := run.build_match()
-	sim = DuelSim.new(setup.p1, setup.p2, 12345 + run.stage_index)
+	sim = DuelSim.new(setup.p1, setup.p2, _stage_seed(run.stage_index))
 	sim.mods = run.mods()
 	sim.p1.hp = run.player_hp
-	sim.p2.flow = 40
-	sim.opening_lock_frames = 180
+	sim.p2.flow = ENEMY_START_FLOW
+	sim.opening_lock_frames = OPENING_LOCK_FRAMES
 
 	var profile := setup.p2_profile
-	profile.opening_grace_frames = 210 if run.stage_index == 0 else 0
-	ai = DuelAi.new(DuelTypes.Side.P2, profile, 12345 + run.stage_index)
+	profile.opening_grace_frames = TEACHING_GRACE_FRAMES if run.stage_index == 0 else 0
+	ai = DuelAi.new(DuelTypes.Side.P2, profile, _stage_seed(run.stage_index))
 
 	_clear_queued_input()
 	_settled = false
@@ -234,8 +266,8 @@ func _start_versus() -> void:
 	run = null
 	ai = null
 	var p1_data := FighterData.for_character(GameBootstrap.pending_character if GameBootstrap != null else &"char_a")
-	sim = DuelSim.new(p1_data, p1_data, 12345)
-	sim.opening_lock_frames = 180
+	sim = DuelSim.new(p1_data, p1_data, _new_seed())
+	sim.opening_lock_frames = OPENING_LOCK_FRAMES
 	sim.p1.hp = p1_data.max_hp
 	sim.p2.hp = p1_data.max_hp
 	sim.p1.flow = p1_data.start_flow
@@ -391,7 +423,8 @@ func _on_pause_pressed() -> void:
 		return
 	_last_pause_ms = now
 	if _paused:
-		_close_pause_panel()
+		# 与面板「继续」按钮走同一条路径：统一清队列 + 恢复奖励焦点。
+		_on_resume_requested()
 	else:
 		_open_pause_panel()
 
@@ -416,6 +449,10 @@ func _close_pause_panel() -> void:
 func _on_resume_requested() -> void:
 	_close_pause_panel()
 	_clear_queued_input()
+	# 奖励阶段被暂停打断：恢复后把焦点还给奖励按钮，
+	# 否则纯手柄玩家会卡在没有焦点的奖励界面（审计 P1-4）。
+	if _hud != null and run != null and run.phase == RunState.Phase.REWARD:
+		_hud.focus_rewards()
 
 
 func _on_pause_restart_requested() -> void:
@@ -431,8 +468,13 @@ func _on_pause_restart_requested() -> void:
 
 func _on_pause_menu_requested() -> void:
 	_close_pause_panel()
-	get_tree().change_scene_to_file(MENU_SCENE)
+	var error := get_tree().change_scene_to_file(MENU_SCENE)
+	if error != OK:
+		push_error("Duel: 无法返回主菜单 %s（错误码 %d）" % [MENU_SCENE, error])
 
 
 func _on_offer_key(index: int) -> void:
+	# 暂停期间按 1/2/3 不进选择：恢复后再按一次即可（审计 P1-1 同源）。
+	if _paused:
+		return
 	_on_offer_chosen(index)

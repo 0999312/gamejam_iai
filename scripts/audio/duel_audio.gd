@@ -31,12 +31,18 @@ const START := preload("res://assets/audio/sfx/sfx_start.ogg")
 var _sim: DuelSim
 var _wind: AudioStreamOggVorbis
 var _wind_player: AudioStreamPlayer
+## 音效随机只用本实例的 RNG，不碰全局 RNG（审计 P3）。
+var _rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
-	_wind = load("res://assets/audio/amb/amb_wind_loop.ogg") as AudioStreamOggVorbis
-	if _wind != null:
-		_wind.loop = true
+	_rng.randomize()
+	var source := load("res://assets/audio/amb/amb_wind_loop.ogg") as AudioStreamOggVorbis
+	if source != null:
+		# load() 有缓存：直接改 source.loop 会污染所有引用它的地方，先复制一份。
+		_wind = source.duplicate() as AudioStreamOggVorbis
+		if _wind != null:
+			_wind.loop = true
 
 
 func bind(sim: DuelSim) -> void:
@@ -84,12 +90,12 @@ func _disconnect_sim() -> void:
 func start_ambient() -> void:
 	if _wind == null:
 		return
-	_wind_player = SoundManager.play_ambient_sound(_wind, 0.6)
+	# play_ambient_sound 的第二个参数是「淡入时长（秒）」，不是音量。
+	# 原先传 0.6 被当成「0.6 秒淡到 0 dB」，开场偏响再突降（审计 P2）。
+	_wind_player = SoundManager.play_ambient_sound(_wind, 0.0)
 	if _wind_player == null:
 		return
-	await get_tree().create_timer(0.7).timeout
-	if is_instance_valid(_wind_player):
-		_wind_player.volume_db = -14.0
+	_wind_player.volume_db = -14.0
 
 
 func stop_ambient(immediate: bool = false) -> void:
@@ -97,8 +103,9 @@ func stop_ambient(immediate: bool = false) -> void:
 		return
 	if immediate:
 		if is_instance_valid(_wind_player):
+			# 只 stop()，不把 stream 置空：这个播放器属于 SoundManager 的池，
+			# 置空会让池在回收时对 null 取 resource_path 而报错（审计 P2）。
 			_wind_player.stop()
-			_wind_player.stream = null
 		_wind_player = null
 		return
 	SoundManager.stop_ambient_sound(_wind, 0.3)
@@ -112,7 +119,7 @@ func _on_state_changed(_side: int, _from: int, to: int) -> void:
 	if to == DuelTypes.State.SLASH:
 		_play(ATTACKS, 0.96, 1.06)
 	elif to == DuelTypes.State.COMMIT:
-		SoundManager.play_sound_with_pitch(DRAW, randf_range(1.08, 1.16))
+		SoundManager.play_sound_with_pitch(DRAW, _rng.randf_range(1.08, 1.16))
 
 
 func _on_hit_landed(_attacker: int, _defender: int, _damage: int) -> void:
@@ -158,11 +165,15 @@ func _on_slash_imminent(_side: int) -> void:
 	_play(BLOCKS, 1.52, 1.66)
 
 
+## options 的元素必须都是 AudioStream（调用点传的是上面的常量数组）；
+## 这里做一次 as 收窄，避免无类型数组把错误类型喂给 SoundManager。
 func _play(options: Array, pitch_min: float, pitch_max: float) -> void:
 	if options.is_empty():
 		return
-	var stream: AudioStream = options[randi() % options.size()]
-	SoundManager.play_sound_with_pitch(stream, randf_range(pitch_min, pitch_max))
+	var stream: AudioStream = options[_rng.randi() % options.size()] as AudioStream
+	if stream == null:
+		return
+	SoundManager.play_sound_with_pitch(stream, _rng.randf_range(pitch_min, pitch_max))
 
 
 func _exit_tree() -> void:

@@ -12,6 +12,7 @@ const DEFAULT_LANGUAGE := "zh_CN"
 const SHOP_PANEL := preload("res://scenes/ui/shop.tscn")
 const SETTINGS_PANEL := preload("res://scenes/ui/settings.tscn")
 const PAUSE_PANEL := preload("res://scenes/ui/pause_menu.tscn")
+const ABOUT_PANEL := preload("res://scenes/ui/about.tscn")
 const I18N_FILES: Dictionary = {
 	"zh_CN": "res://localization/zh_CN.json",
 	"en": "res://localization/en.json",
@@ -62,6 +63,10 @@ func _ready() -> void:
 
 ## Godot 可能在 autoload 初始化帧还没枚举完已连接的手柄，GUIDE 的
 ## joy_index -> device_id 表就会为空，表现为“手柄完全没反应”。下一帧再刷新一次。
+##
+## 契约豁免（docs/dev-contract.md §3.1）：这里碰的是 GUIDE 的私有成员。
+## GUIDE 没有提供「重新枚举设备」的公开 API，而手柄枚举时机是引擎层问题，
+## 只能由宿主在 autoload 之后补一次。升级 GUIDE 时必须重新核对这两个符号。
 func _refresh_guide_joy_devices() -> void:
 	if GUIDE == null or GUIDE._input_state == null:
 		return
@@ -70,6 +75,9 @@ func _refresh_guide_joy_devices() -> void:
 
 ## Godot 内置 ui_accept / ui_cancel 默认只含键盘；补上手柄 A / B，
 ## 让菜单、商店、设置、暂停和奖励选择都能纯手柄操作。
+##
+## 契约豁免（§3.1）：GUIDE 管的是游戏动作映射，管不到引擎内置的 ui_* 导航动作。
+## 这里只补手柄按键，不改键名、不覆盖玩家改键；重复调用是幂等的。
 func _ensure_ui_gamepad_actions() -> void:
 	_add_joy_event("ui_accept", JOY_BUTTON_A)
 	_add_joy_event("ui_cancel", JOY_BUTTON_B)
@@ -104,9 +112,27 @@ func set_language(lang: String) -> bool:
 	return true
 
 
-func save_meta() -> void:
-	if meta != null:
-		meta.save()
+func save_meta() -> bool:
+	# 返回 bool 而不是 void：调用方可以决定是否提示用户（审计 P2-4）。
+	if meta == null:
+		return false
+	return meta.save()
+
+
+## 人工清档（设置页「清除存档」）：删档 + 重建内存状态 + 应用默认设置。
+## 只清局外进度（金币/解锁/统计/设置），对局状态不归这里管。
+## 清完后不立刻回写默认档，让下一次真实保存自然生成，避免「清了又马上有文件」。
+func wipe_save() -> bool:
+	var path := MetaSave.DEFAULT_PATH
+	if meta != null and not meta.save_path.is_empty():
+		path = meta.save_path
+	var ok := MetaSave.wipe(path)
+	meta = MetaSave.load_from(path)
+	KeyBindings.normalize(meta.settings)
+	hard_mode = bool(meta.settings.get("hard_mode", false))
+	apply_settings()
+	I18NManager.set_language(current_language())
+	return ok
 
 
 func apply_settings() -> void:
@@ -116,6 +142,9 @@ func apply_settings() -> void:
 	var sfx := clampf(float(meta.settings.get("volume_sfx", 0.8)), 0.0, 1.0)
 	var ambient := clampf(float(meta.settings.get("volume_ambient", 0.7)), 0.0, 1.0)
 	var muted := bool(meta.settings.get("mute", false))
+	# 契约豁免（docs/dev-contract.md §3.1）：SoundManager 只暴露 music/sfx/ui/ambient
+	# 分轨音量，没有 Master 音量与静音 API（上游 v2.6.2 仍未提供，见豁免登记）。
+	# 主音量与静音只能走 AudioServer；sfx/ambient 仍走插件。
 	var master_index := AudioServer.get_bus_index("Master")
 	AudioServer.set_bus_volume_db(master_index, linear_to_db(maxf(master, 0.0001)))
 	AudioServer.set_bus_mute(master_index, muted)
@@ -175,9 +204,10 @@ func _register_panels() -> void:
 	else:
 		registry = UIRegistry.new()
 		RegistryManager.register_registry(UI_REGISTRY_NAME, registry)
-	registry.register_panel(PanelIds.shop(), SHOP_PANEL, UILayer.NORMAL, UIPanel.CacheMode.CACHE)
+	registry.register_panel(PanelIds.shop(), SHOP_PANEL, UILayer.NORMAL, UIPanel.CacheMode.NONE)
 	registry.register_panel(PanelIds.settings(), SETTINGS_PANEL, UILayer.NORMAL, UIPanel.CacheMode.NONE)
 	registry.register_panel(PanelIds.pause(), PAUSE_PANEL, UILayer.POPUP, UIPanel.CacheMode.NONE)
+	registry.register_panel(PanelIds.about(), ABOUT_PANEL, UILayer.NORMAL, UIPanel.CacheMode.NONE)
 
 
 func _register_upgrades() -> void:

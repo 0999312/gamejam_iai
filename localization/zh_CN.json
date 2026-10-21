@@ -36,7 +36,8 @@
     "char_b": "B · 快剑",
     "char_c": "C · 重剑",
     "quit": "退出",
-    "hint": "点击或回车选择"
+    "hint": "点击或回车选择",
+    "about": "关于"
   },
   "shop": {
     "title": "商店 / 解锁",
@@ -89,13 +90,30 @@
     "gamepads": "手柄",
     "gamepad_p2_pad": "P2：手柄 2",
     "gamepad_p2_keyboard": "P2：键盘",
-    "gamepad_hint": "键鼠与手柄可同时操作；同一动作可同时绑定两者；接入手柄 2 后 P2 自动可用手柄"
+    "gamepad_hint": "键鼠与手柄可同时操作；同一动作可同时绑定两者；接入手柄 2 后 P2 自动可用手柄",
+    "wipe_save": "清除存档",
+    "wipe_confirm": "再按一次确认清除",
+    "wipe_done": "存档已清除"
   },
   "pause": {
     "title": "暂停",
     "resume": "继续",
     "restart": "重新开始",
     "menu": "返回菜单"
+  },
+  "about": {
+    "title": "关于",
+    "theme_label": "本期主题",
+    "theme": "心",
+    "derivative": "本作是东方 Project 二次创作，版权归上海爱丽丝幻乐团及 ZUN 所有。",
+    "disclaimer": "本作与官方无任何关联，未使用原作游戏素材。",
+    "credits_title": "制作",
+    "credits": "策划 / 程序 / 系统设计：射命丸政",
+    "ai_title": "AI 使用说明",
+    "ai_body": "代码、自动化测试与构建脚本使用 AI 辅助（DeepSeek Harness）；美术、音乐、音效与文案由人类提供或为显式占位。",
+    "tech_title": "技术与素材",
+    "tech": "引擎：Godot 4.7.2\n插件：GUIDE / SoundManager / mc_game_framework / GUT\n字体：MiSans（小米）\n音效与图标：Kenney（CC0）、OpenGameArt（CC0）",
+    "back": "返回"
   },
   "state": {
     "idle": "待机",

@@ -67,13 +67,14 @@ func test_ai_guards_player_commit_when_reaction_is_fast() -> void:
 
 func test_ai_counters_whiffed_guard() -> void:
 	# 确定反（路径 A）：对手空架进入 GUARD_REC 时立刻出反斩刀，不等决策节拍。
+	# 反斩有「认招迟滞」（counter_delay_frames，性格决定快慢），故留足帧数。
 	var profile := AiProfile.teaching()
 	profile.aggression = 0.0
 	profile.counter_chance = 1.0
 	ai = DuelAi.new(DuelTypes.Side.P2, profile, 7)
 
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.GUARD)
-	for i in 30:
+	for i in 40:
 		ai.tick(sim)
 		sim.tick()
 

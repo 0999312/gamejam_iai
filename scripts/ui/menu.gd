@@ -25,7 +25,12 @@ func _exit_tree() -> void:
 
 
 func _on_language_changed(_event: Event) -> void:
-	_build_ui()
+	# 只有在焦点本来就在菜单上时才抢焦点：设置/商店/关于页打开时切语言，
+	# 菜单重建不能把焦点从正在操作的面板里抢走（审计 P3）。
+	var viewport := get_viewport()
+	var owner := viewport.gui_get_focus_owner() if viewport != null else null
+	var had_focus := owner != null and is_ancestor_of(owner)
+	_build_ui(had_focus)
 
 
 func _on_unlock_purchased(_event: Event) -> void:
@@ -33,7 +38,7 @@ func _on_unlock_purchased(_event: Event) -> void:
 	_populate_characters()
 
 
-func _build_ui() -> void:
+func _build_ui(restore_focus: bool = true) -> void:
 	for child in get_children():
 		remove_child(child)
 		child.queue_free()
@@ -129,6 +134,9 @@ func _build_ui() -> void:
 	var settings_button := _make_button(box, _tr("menu.settings"))
 	settings_button.pressed.connect(_on_settings_pressed)
 
+	var about_button := _make_button(box, _tr("menu.about"))
+	about_button.pressed.connect(_on_about_pressed)
+
 	var quit_button := _make_button(box, _tr("menu.quit"))
 	quit_button.pressed.connect(_on_quit_pressed)
 
@@ -142,7 +150,8 @@ func _build_ui() -> void:
 	hint.add_theme_color_override("font_color", Color("#7f8b9c"))
 	add_child(hint)
 
-	start_button.grab_focus()
+	if restore_focus:
+		start_button.grab_focus()
 
 
 func _make_button(parent: Control, text: String) -> Button:
@@ -160,6 +169,9 @@ func _populate_characters() -> void:
 	var meta := GameBootstrap.meta if GameBootstrap != null else null
 	var ids := Unlocks.character_ids(meta)
 	_char_option.clear()
+	if ids.is_empty():
+		# 正常路径不会发生（char_a 恒可用）；防御未初始化注册表时越界。
+		return
 	var selected := 0
 	for i in ids.size():
 		var id := ids[i]
@@ -206,13 +218,20 @@ func _on_settings_pressed() -> void:
 	UIManager.open_panel(PanelIds.settings())
 
 
+func _on_about_pressed() -> void:
+	SoundManager.play_ui_sound(CLICK)
+	UIManager.open_panel(PanelIds.about())
+
+
 func _on_quit_pressed() -> void:
 	SoundManager.play_ui_sound(CLICK)
 	get_tree().quit()
 
 
 func _go_duel() -> void:
-	get_tree().change_scene_to_file(DUEL_SCENE)
+	var error := get_tree().change_scene_to_file(DUEL_SCENE)
+	if error != OK:
+		push_error("Menu: 无法载入对局场景 %s（错误码 %d）" % [DUEL_SCENE, error])
 
 
 func _tr(key: String) -> String:

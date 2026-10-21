@@ -13,18 +13,23 @@ var _rows: Dictionary = {}
 var _back_button: Button
 
 
+## 层级与缓存策略由 GameBootstrap 的注册表统一声明（单一来源），
+## 这里只做面板自身的锚点与命中设置。
 func _on_init() -> void:
-	ui_layer = UILayer.NORMAL
-	cache_mode = CacheMode.CACHE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+
+
+## 订阅放 _enter_tree 而不是 _ready：面板若被缓存复用，_ready 只跑一次，
+## 而 EventBus 的退订发生在 _exit_tree，重开时会永久失联（审计 P1-3）。
+func _enter_tree() -> void:
+	EventBus.subscribe(&"LanguageChangedEvent", _on_language_changed)
+	EventBus.subscribe(&"UnlockPurchasedEvent", _on_unlock_purchased)
 
 
 func _ready() -> void:
 	_build_ui()
 	_refresh()
-	EventBus.subscribe(&"LanguageChangedEvent", _on_language_changed)
-	EventBus.subscribe(&"UnlockPurchasedEvent", _on_unlock_purchased)
 
 
 func _exit_tree() -> void:
@@ -54,6 +59,9 @@ func _on_unlock_purchased(_event: Event) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# 只有本面板可见时才响应取消键，避免栈底面板抢走输入（与设置页一致）。
+	if not visible:
+		return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		_on_back_pressed()
@@ -200,9 +208,10 @@ func _on_action_pressed(id: StringName) -> void:
 	SoundManager.play_ui_sound(CLICK)
 	if item.toggle_setting != &"" and meta.has_unlock(id):
 		var enabled := bool(meta.settings.get(String(item.toggle_setting), false))
-		Unlocks.set_toggle(meta, id, not enabled)
-		GameBootstrap.apply_settings()
-		EventBus.publish(UnlockPurchasedEvent.new(id))
+		if Unlocks.set_toggle(meta, id, not enabled):
+			GameBootstrap.save_meta()
+			GameBootstrap.apply_settings()
+			EventBus.publish(UnlockPurchasedEvent.new(id))
 	elif Unlocks.buy(meta, id):
 		GameBootstrap.save_meta()
 		EventBus.publish(UnlockPurchasedEvent.new(id))

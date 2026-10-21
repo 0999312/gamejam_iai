@@ -463,6 +463,45 @@ func _enter_guard_rec(fighter: FighterState) -> void:
 	_enter(fighter, DuelTypes.State.GUARD_REC, fighter.data.guard_recovery)
 
 
+## 下一次出刀的预计总帧数：与 _enter_commit 同一套公式，但不产生任何副作用。
+## HUD 用它显示「下一刀」，避免表现层再抄一份公式而漂移（审计 P1-2）。
+func projected_commit_frames(fighter: FighterState) -> int:
+	if fighter == null or fighter.data == null:
+		return COMMIT_MIN_FRAMES
+	var tier := DuelTypes.tier_for_flow(fighter.flow)
+	var tier_offset: int = DuelTypes.COMMIT_TIER_OFFSET[tier]
+	if not fighter.data.flow_speeds_commit:
+		tier_offset = maxi(0, tier_offset)
+	var opening_offset: int = 0
+	if fighter.side == DuelTypes.Side.P1 \
+			and frame < opening_lock_frames + OPENING_COMMIT_WINDOW:
+		opening_offset = int(mods.get("opening_commit", 0))
+	var ripe := _is_riposte_window(fighter)
+	var riposte_offset: int = 0
+	if ripe and fighter.data.riposte_commit_bonus != 0:
+		riposte_offset = mini(-1, fighter.data.riposte_commit_bonus)
+	var repeat_offset: int = 0
+	if not ripe:
+		var gap: int = frame - fighter.last_commit_frame
+		var streak: int = mini(fighter.repeat_streak + 1, FighterData.REPEAT_STACK_CAP) \
+				if gap <= FighterData.REPEAT_WINDOW_FRAMES else 0
+		repeat_offset = fighter.data.repeat_commit_penalty * streak
+	return maxi(COMMIT_MIN_FRAMES,
+			fighter.data.base_commit + tier_offset + opening_offset + riposte_offset
+					+ repeat_offset + fighter.pending_commit_bonus)
+
+
+## 下一次架刀的有效帧数：与 _enter_guard 同源，不产生副作用（审计 P1-2）。
+func projected_guard_frames(fighter: FighterState) -> int:
+	if fighter == null or fighter.data == null:
+		return 0
+	var tier := DuelTypes.tier_for_flow(fighter.flow)
+	var duration: int = fighter.data.guard_duration_base + DuelTypes.GUARD_TIER_OFFSET[tier]
+	if fighter.spell_perfect_until_frame > frame:
+		duration = maxi(duration, SPELL_STANCE_GUARD_FRAMES)
+	return duration
+
+
 func _finish_guard(fighter: FighterState) -> void:
 	if not fighter.guard_blocked:
 		if fighter.whiff_lock <= 0:

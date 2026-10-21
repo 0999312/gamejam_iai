@@ -36,7 +36,8 @@
     "char_b": "B · Swift",
     "char_c": "C · Heavy",
     "quit": "Quit",
-    "hint": "Click or press Enter"
+    "hint": "Click or press Enter",
+    "about": "About"
   },
   "shop": {
     "title": "Shop / Unlocks",
@@ -89,13 +90,30 @@
     "gamepads": "Gamepads",
     "gamepad_p2_pad": "P2: Gamepad 2",
     "gamepad_p2_keyboard": "P2: Keyboard",
-    "gamepad_hint": "Keyboard/mouse and gamepad work at the same time; an action can bind both; P2 can use gamepad 2 when connected"
+    "gamepad_hint": "Keyboard/mouse and gamepad work at the same time; an action can bind both; P2 can use gamepad 2 when connected",
+    "wipe_save": "Erase Save Data",
+    "wipe_confirm": "Press again to confirm",
+    "wipe_done": "Save data erased"
   },
   "pause": {
     "title": "Paused",
     "resume": "Resume",
     "restart": "Restart",
     "menu": "Main Menu"
+  },
+  "about": {
+    "title": "About",
+    "theme_label": "Theme",
+    "theme": "Kokoro (Heart)",
+    "derivative": "This is a Touhou Project derivative work. Copyright belongs to Team Shanghai Alice and ZUN.",
+    "disclaimer": "This work is not affiliated with or endorsed by the official rights holders, and uses no assets from the original games.",
+    "credits_title": "Credits",
+    "credits": "Design / Programming / Systems: Shameimaru Masakazu",
+    "ai_title": "AI Usage",
+    "ai_body": "Code, automated tests and build scripts were written with AI assistance (DeepSeek Harness). Art, music, sound effects and copy are human-provided or explicit placeholders.",
+    "tech_title": "Technology & Assets",
+    "tech": "Engine: Godot 4.7.2\nAddons: GUIDE / SoundManager / mc_game_framework / GUT\nFont: MiSans (Xiaomi)\nSFX & icons: Kenney (CC0), OpenGameArt (CC0)",
+    "back": "Back"
   },
   "state": {
     "idle": "Idle",

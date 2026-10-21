@@ -7,6 +7,7 @@ extends RefCounted
 const SHOP := "iai:shop"
 const SETTINGS := "iai:settings"
 const PAUSE := "iai:pause"
+const ABOUT := "iai:about"
 
 
 static func shop() -> ResourceLocation:
@@ -19,3 +20,7 @@ static func settings() -> ResourceLocation:
 
 static func pause() -> ResourceLocation:
 	return ResourceLocation.from_string(PAUSE)
+
+
+static func about() -> ResourceLocation:
+	return ResourceLocation.from_string(ABOUT)

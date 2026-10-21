@@ -26,6 +26,9 @@ extends Resource
 @export_range(0.0, 1.0, 0.01) var guard_chance: float = 0.2
 ## 「确定反」概率：看到玩家进入空挥/被架硬直时立刻出反斩的机会（0 = 不反）。
 @export_range(0.0, 1.0, 0.01) var counter_chance: float = 0.45
+## 反斩起手迟滞（帧）：由性格基准表的 counter 值派生，越高越果断。
+## 概率本身恒为 1.0——「确定反」是平衡承诺，性格差异体现在认招快慢上。
+@export var counter_delay_frames: int = 0
 ## 起构安全判断：玩家处于 IDLE（随时能抢刀）时不起构，只在玩家
 ## GUARD / GUARD_REC / RECOVERY / SPELL 时落构。前摇拉长后必须开，否则 AI 是活靶子。
 @export var safe_start: bool = true
@@ -33,8 +36,6 @@ extends Resource
 @export_group("Match")
 ## 开场礼让帧：教学对手让玩家有时间读提示，不做任何动作。
 @export var opening_grace_frames: int = 0
-## 心流高档是否让该角色缩短前摇。AI 关掉——否则 AI 涨到「流」档后玩家物理上反应不了。
-@export var flow_speeds_commit: bool = false
 ## 二阶段触发血线（占最大血量的比例，0 = 无二阶段）。
 @export_range(0.0, 1.0, 0.01) var two_phase_at_ratio: float = 0.0
 
@@ -73,6 +74,8 @@ static func for_persona(persona_id: StringName, tier: int = TIER_NORMAL) -> AiPr
 	profile.feint_rate = base["feint"]
 	profile.reaction_frames = base["react"]
 	profile.spell_chance = base["spell"]
+	# 性格基准表的 counter 现在真实生效：高 counter 性格认招迟滞更短（更果断）。
+	profile.counter_delay_frames = maxi(0, roundi((1.0 - float(base["counter"])) * 8.0))
 	profile.two_phase_at_ratio = 0.5 if persona_id == &"persona_5_boss" else 0.0
 	if hard:
 		profile.aggression = base["agg"]

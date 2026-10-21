@@ -16,8 +16,8 @@ var _resume_button: Button
 
 
 func _on_init() -> void:
-	ui_layer = UILayer.POPUP
-	cache_mode = CacheMode.NONE
+	# ui_layer / cache_mode 由 GameBootstrap 注册表统一给出（单一来源），
+	# 面板里再声明一次会覆盖注册值（审计 P2）。
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 

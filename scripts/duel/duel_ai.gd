@@ -16,8 +16,12 @@ var _feint_at_frame: int = -1
 var _guard_planned: bool = false
 var _guard_will: bool = false
 var _phase2: bool = false
+## 二阶段加成只存在本 AI 内部，不改外部 AiProfile Resource（审计 P2）。
+var _aggression_offset: float = 0.0
+var _feint_offset: float = 0.0
+var _react_offset: int = 0
+var _decide_offset: int = 0
 var _sim: DuelSim
-var _hit_connected: bool = false
 var _attack_ready_frame: int = 0
 ## 本回合连续被命中的次数：AI 会据此提高防御意愿（信息全部公开，不作弊）。
 var _consecutive_hits_taken: int = 0
@@ -41,12 +45,14 @@ func _init(p_side: int, p_profile: AiProfile, seed_value: int = 0) -> void:
 
 
 func tick(sim: DuelSim) -> void:
-	if not _hit_connected:
+	if sim != _sim:
+		# 换 sim（重开 / 换场）必须重连信号：旧写法用 _hit_connected 置位后永不重连，
+		# 第二次对局 AI 的间合与读招全部失效（审计 P2）。
+		_disconnect_sim()
 		_sim = sim
 		sim.hit_landed.connect(_on_hit_landed)
 		sim.attack_blocked.connect(_on_attack_blocked)
 		sim.spell_failed.connect(_on_spell_failed)
-		_hit_connected = true
 	if sim.finished:
 		return
 	if sim.frame < sim.opening_lock_frames:
@@ -70,13 +76,14 @@ func tick(sim: DuelSim) -> void:
 		_guard_will = false
 
 	# 二阶段（关底）：血量低于比例时节奏加快、虚招更多。
+	# 偏移只作用于本实例，不写回共享的 profile 资源。
 	var phase_ratio := profile.two_phase_at_ratio
 	if phase_ratio > 0.0 and not _phase2 and me.hp <= int(round(me.data.max_hp * phase_ratio)):
 		_phase2 = true
-		profile.aggression = minf(1.0, profile.aggression + 0.15)
-		profile.feint_rate = minf(0.9, profile.feint_rate + 0.15)
-		profile.reaction_frames = maxi(6, profile.reaction_frames - 2)
-		profile.decision_interval = maxi(8, profile.decision_interval - 2)
+		_aggression_offset = 0.15
+		_feint_offset = 0.15
+		_react_offset = -2
+		_decide_offset = -2
 
 	# 「构」中按计划取消（虚招）。
 	if me.state == DuelTypes.State.COMMIT:
@@ -99,7 +106,7 @@ func tick(sim: DuelSim) -> void:
 				+ DuelTypes.GUARD_TIER_OFFSET[DuelTypes.tier_for_flow(me.flow)]
 		var cover := guard_len + me.data.guard_startup
 		var read_deadline := maxi(0, foe.commit_total - cover)
-		if not _guard_planned and elapsed >= mini(profile.reaction_frames, read_deadline):
+		if not _guard_planned and elapsed >= mini(_reaction_frames(), read_deadline):
 			_guard_planned = true
 			_guard_will = rng.randf() < _guard_chance_now()
 		if _guard_will:
@@ -121,7 +128,7 @@ func tick(sim: DuelSim) -> void:
 
 	if sim.frame < _next_think_frame:
 		return
-	_next_think_frame = sim.frame + profile.decision_interval
+	_next_think_frame = sim.frame + _decision_interval()
 
 	# 关底符卡：在最「值得」的一刻发动，而不是随机丢。
 	if _try_spell(sim, me, foe):
@@ -131,13 +138,15 @@ func tick(sim: DuelSim) -> void:
 		return
 
 	var roll := rng.randf()
-	if roll < profile.aggression and _safe_to_commit(foe):
+	var aggression := _aggression()
+	if roll < aggression and _safe_to_commit(foe):
 		_start_attack(sim)
-	elif roll < profile.aggression + 0.15:
+	elif roll < aggression + 0.15:
 		sim.press(side, DuelTypes.Action.GUARD)
 
 
 ## 确定反：每个硬直窗口掷一次骰；命中后由 sim 自动套用反斩前摇（data.riposte_commit_bonus）。
+## 「确定反」概率恒为 1.0 是平衡承诺；性格差异体现在认招迟滞（counter_delay_frames）。
 func _try_counter(sim: DuelSim, foe: FighterState) -> void:
 	if sim.frame < _attack_ready_frame:
 		return
@@ -145,6 +154,8 @@ func _try_counter(sim: DuelSim, foe: FighterState) -> void:
 		_counter_window_start = foe.state_start_frame
 		_counter_will = profile.counter_chance > 0.0 and rng.randf() < profile.counter_chance
 	if not _counter_will:
+		return
+	if sim.frame - foe.state_start_frame < profile.counter_delay_frames:
 		return
 	_counter_will = false
 	# 直接按攻击：反斩是「接在硬直上的刀」，不排虚招。
@@ -195,7 +206,7 @@ func _start_attack(sim: DuelSim) -> void:
 	if sim.frame < _attack_ready_frame:
 		return
 	sim.press(side, DuelTypes.Action.ATTACK)
-	if rng.randf() < profile.feint_rate:
+	if rng.randf() < _feint_rate():
 		# 只在可取消窗内（0..4f）取消；下一帧起算，取 3–4。
 		_feint_at_frame = sim.frame + rng.randi_range(3, 4)
 
@@ -228,3 +239,30 @@ func _on_spell_failed(failed_side: int) -> void:
 func _guard_chance_now() -> float:
 	var bias := 0.15 * mini(_consecutive_hits_taken, 3)
 	return clampf(profile.guard_chance + bias, 0.0, 0.75)
+
+
+func _aggression() -> float:
+	return clampf(profile.aggression + _aggression_offset, 0.0, 1.0)
+
+
+func _feint_rate() -> float:
+	return clampf(profile.feint_rate + _feint_offset, 0.0, 0.9)
+
+
+func _reaction_frames() -> int:
+	return maxi(6, profile.reaction_frames + _react_offset)
+
+
+func _decision_interval() -> int:
+	return maxi(8, profile.decision_interval + _decide_offset)
+
+
+func _disconnect_sim() -> void:
+	if _sim == null:
+		return
+	if _sim.hit_landed.is_connected(_on_hit_landed):
+		_sim.hit_landed.disconnect(_on_hit_landed)
+	if _sim.attack_blocked.is_connected(_on_attack_blocked):
+		_sim.attack_blocked.disconnect(_on_attack_blocked)
+	if _sim.spell_failed.is_connected(_on_spell_failed):
+		_sim.spell_failed.disconnect(_on_spell_failed)

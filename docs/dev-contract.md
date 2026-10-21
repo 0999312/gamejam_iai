@@ -69,6 +69,16 @@
 
 在此之前：**新增代码不得扩大偏差**（不许再写裸 `change_scene_to_file` 做面板切换、不许再自建全局单例信号）。
 
+**已登记的豁免（2026-10-21，人类确认「无更新则登记豁免」）**：
+
+| 能力 | 现状 | 豁免理由 | 约束 |
+|---|---|---|---|
+| Master 音量 / 静音 | `GameBootstrap.apply_settings()` 直连 `AudioServer.set_bus_volume_db` / `set_bus_mute` | SoundManager 上游最新 **v2.6.2** 仍只提供 music/sfx/ui/ambient 分轨音量与 getter，**没有** Master 音量与 mute API | 只允许 Master 总线；分轨一律走 `SoundManager.set_*_volume`；守卫把该模式限制在 `game_bootstrap.gd` |
+| 内置 `ui_*` 动作的手柄事件 | `GameBootstrap._ensure_ui_gamepad_actions()` 运行时 `InputMap.action_add_event` | UIManager 与内置 UI 走引擎 `ui_accept` 等动作，GUIDE 不管内置动作 | 只在启动时补一次，不改 `project.godot` 输入资源；守卫限制在 `game_bootstrap.gd` |
+| 手柄热插拔即时生效 | `GameBootstrap._refresh_guide_joy_devices()` 调 `GUIDE._input_state._refresh_joy_device_ids(0, 0)` | GUIDE 没有公开的「重新枚举设备」入口 | 只调用不改插件；守卫限制在 `game_bootstrap.gd` |
+| 改键资源生命周期 | `InputGuide.build_remap_config()` 调 `GUIDERemappingConfig._bind` / `_unbind` | 插件公开 API 只能整体替换 config，无法逐槽改 | 全部收在 `input_guide.gd` 一个包装层；对局结束 `GUIDE.set_remapping_config(null)` 复位 |
+| `Input.get_connected_joypads()` | `input_devices.gd`、`duel_controller.gd`、`settings.gd` | GUIDE 不暴露「已连接手柄数」，且切换上下文前需要判空 | 只读设备数量，不读按键状态 |
+
 ### 3.2 `addons/` 只读
 
 `addons/` 下的插件源码属于第三方依赖，**本项目不修改**：
@@ -86,10 +96,18 @@
 
 | 模式 | 原因 |
 |---|---|
-| `Input.is_action_` / `Input.get_axis(` / `Input.is_key_pressed` / `Input.is_physical_key_pressed` | 输入必须经 GUIDE |
-| `AudioStreamPlayer.new(` | 音频必须经 SoundManager |
+| `Input.is_action_*` / `Input.get_axis(` / `Input.get_vector(` / `Input.get_joy_axis(` / `Input.get_action_strength(` … | 输入必须经 GUIDE |
+| `var x := Input`（把单例整个赋给变量） | 防止用别名绕过上一条 |
+| `AudioStreamPlayer.new(` / `AudioStreamPlayer2D.new(` / `AudioStreamPlayer3D.new(` | 音频必须经 SoundManager |
 | `TranslationServer.` | 翻译必须经 I18NManager |
-| `GUIDEMappingContext.new(` | GUIDE 上下文必须是资源，用 `InputGuide.context_for()` 载入（唯一例外：`scripts/core/input_guide.gd` 内部把资源复制成对局独占实例） |
+| `GUIDEMappingContext.new(` | GUIDE 上下文必须是资源，用 `InputGuide.context_for()` 载入（例外：`input_guide.gd` 复制实例、`tools/generate_guide_context.gd` 生成资源） |
+| `AudioServer.set_bus_volume_db(` / `set_bus_mute(` | §3.1 豁免，仅 `game_bootstrap.gd`（Master 总线） |
+| `InputMap.action_add_event(` | §3.1 豁免，仅 `game_bootstrap.gd`（内置 `ui_*`） |
+| `GUIDE._input_state` | §3.1 豁免，仅 `game_bootstrap.gd`（热插拔兜底） |
+| `config._bind(` / `config._unbind(` | §3.1 豁免，仅 `input_guide.gd` |
+
+扫描前会剥离**注释与字符串字面量**：注释里的示例代码不算违规，字符串里提到 API 名也不算。
+扫描失败（目录打不开 / 文件读不到 / 扫到的脚本数异常少）直接失败，不再「零文件 = 零违规」。
 
 同时校验：
 
@@ -135,3 +153,32 @@
   玩家改键通过 `GUIDERemappingConfig` 覆盖，不改资源。守卫测试新增 `GUIDEMappingContext.new(` 禁令。
 - **约束**：新增 §3.2「`addons/` 只读」；审计范围明确为 `res://scripts/`。
 - **结果**：GUT 168 tests / 585 asserts 全绿。
+
+### 2026-10-21 第三轮：全量代码审计后的修复（v0.24）
+
+人类要求「先审计、人工审核后再改」。审计报告见 `docs/audit/code-audit-2026-10-21.md`
+（P0 ×1 / P1 ×9 / P2 ×22 / P3 ×30+），本轮回合修复了全部 P0 与 P1，并清掉可安全落地的 P2/P3。
+
+- **P0**：设置页音量滑条曾把 I18N 键（`settings.master`）当设置键写入，而 `apply_settings()` 读
+  `volume_master` → 三个滑条零生效 + 永久脏键。现已把「显示键」与「存储键」拆成两个参数。
+- **存档**：`MetaSave.save()` 改为三步原子写（`.tmp` → `.bak` → 正档，失败回滚）；坏档加载时隔离为
+  `.corrupt` 而不是被下一次 save 覆盖；`version` 因 MapCodec 裁剪默认值而从未落盘的问题修复
+  （`optional_field_of("version", 0)`），并加了 `_migrate()` 补默认键；新增人工清档
+  `MetaSave.wipe()` / `GameBootstrap.wipe_save()` 与设置页「清除存档」（二次确认）。
+- **暂停**：`_input` 增加 `_paused` 守卫；Esc/Start 二次按下与面板「继续」统一走
+  `_on_resume_requested()`（清队列 + 归还奖励焦点），修复「暂停时按刀 → 恢复第一帧出刀」。
+- **表现层**：HUD 的「下一刀/下一次架」改调 `DuelSim.projected_commit_frames()` /
+  `projected_guard_frames()`，删掉第二份公式（原先漏 4 个 offset）；`refresh()` 加数据签名脏检查，
+  报幕颜色不再每帧 `add_theme_color_override`。
+- **AI**：`AiProfile._BASE` 的 `counter` 从死数据变为真实生效（`counter_delay_frames` 认招迟滞）；
+  二阶段加成改为 AI 内部偏移，不再改写共享 Resource；换 sim 时重连信号；删除死字段 `flow_speeds_commit`。
+- **种子**：`RunState` 不再写死 `12345`，改为开局 `randomize()` 一次、局内按场次派生
+  （`_stage_seed`），跨局不重复。
+- **守卫**：`test_project_contract.gd` 重写为正则 + 标识符边界、剥离注释与字符串、扫描失败即失败，
+  并新增扫描器自检用例；规则表同步到 §4 与 §3.1。
+- **新增测试**：`test_meta_save_atomic.gd`（5）、`test_duel_sim_projection.gd`（4）、
+  `test_settings_volume.gd`（3）、`test_duel_pause.gd` +2（Esc 清队列 / 暂停吞咽输入）。
+- **结果**：GUT **185 tests / 723 asserts** 全绿（退出码 0）；headless 冒烟 240 帧无错误，
+  本地化 **147 keys × 2 语言**。
+- **未修（留待人工决策）**：7 个 `.tscn` 仍是空壳（UI 仍由代码构建，改为编辑器场景是独立重构）；
+  `MetaSave` 设置去抖只做到 0.35s 合并写入；`duel_view.gd` / `duel_audio.gd` 仍无直接测试。

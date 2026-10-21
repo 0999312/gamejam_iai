@@ -23,21 +23,45 @@ var _hint: Label
 var _pads: Label
 var _rebinding: StringName = &""
 var _joy_rebinding: StringName = &""
+## 音量拖动去抖：滑条每动 1 像素都会触发 value_changed，
+## 直接写盘会变成几十次截断重写（审计 P2-14）。
+var _save_timer: Timer
+## 「清除存档」二次确认：第一次按下只是上膛，3 秒内再按才真的删。
+var _wipe_button: Button
+var _wipe_timer: Timer
+var _wipe_armed := false
 
 
+## 层级与缓存策略由 GameBootstrap 的注册表统一声明（单一来源），
+## 这里只做面板自身的锚点与命中设置。
 func _on_init() -> void:
-	ui_layer = UILayer.NORMAL
-	cache_mode = CacheMode.NONE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 
 func _ready() -> void:
+	_ensure_timers()
 	_build_ui()
 	_load_values()
 	_refresh_keys()
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	EventBus.subscribe(&"LanguageChangedEvent", _on_language_changed)
+
+
+## 计时器不是 UI 节点，_build_ui() 重建时不会删它们。
+func _ensure_timers() -> void:
+	if _save_timer == null:
+		_save_timer = Timer.new()
+		_save_timer.one_shot = true
+		_save_timer.wait_time = 0.35
+		_save_timer.timeout.connect(_flush_save)
+		add_child(_save_timer)
+	if _wipe_timer == null:
+		_wipe_timer = Timer.new()
+		_wipe_timer.one_shot = true
+		_wipe_timer.wait_time = 3.0
+		_wipe_timer.timeout.connect(_disarm_wipe)
+		add_child(_wipe_timer)
 
 
 func _on_open(_data: Dictionary = {}) -> void:
@@ -52,6 +76,8 @@ func _focus_default() -> void:
 
 
 func _exit_tree() -> void:
+	# 面板关闭时把去抖中的设置立刻落盘，避免「刚拖完就关页」丢设置。
+	_flush_save()
 	EventBus.unsubscribe(&"LanguageChangedEvent", _on_language_changed)
 	if Input.joy_connection_changed.is_connected(_on_joy_connection_changed):
 		Input.joy_connection_changed.disconnect(_on_joy_connection_changed)
@@ -175,6 +201,9 @@ func _build_ui() -> void:
 
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# 给标题留出 90px：标题仍是绝对定位（y=42..102），内容从 90 起排，
+	# 避免 CenterContainer 把 592px 高的内容顶上来压住标题（审计 P2-3）。
+	center.offset_top = 90.0
 	add_child(center)
 
 	var outer := VBoxContainer.new()
@@ -192,14 +221,26 @@ func _build_ui() -> void:
 	left.add_theme_constant_override("separation", 10)
 	columns.add_child(left)
 
-	var right := VBoxContainer.new()
-	right.custom_minimum_size = Vector2(450, 430)
-	right.add_theme_constant_override("separation", 6)
-	columns.add_child(right)
+	# 右列条目多（8 个动作 × 3 列 + 重置 + 提示），固定 430px 会溢出，
+	# 用 ScrollContainer 兜住，手柄/键盘焦点仍按容器顺序滚动到可见区。
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(466, 430)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	columns.add_child(scroll)
 
-	_master = _add_slider_row(left, "settings.master", 0.8)
-	_sfx = _add_slider_row(left, "settings.sfx", 0.8)
-	_ambient = _add_slider_row(left, "settings.ambient", 0.7)
+	var right := VBoxContainer.new()
+	right.custom_minimum_size = Vector2(450, 0)
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.add_theme_constant_override("separation", 6)
+	scroll.add_child(right)
+
+	# 第一个参数是显示文案的 I18N 键，第二个是写入 MetaSave.settings 的键。
+	# 之前两者共用同一个值，导致滑条写入 "settings.master" 这类脏键，
+	# 而 apply_settings() 读的是 "volume_master" → 音量完全不生效（审计 P0-1）。
+	_master = _add_slider_row(left, "settings.master", "volume_master", 0.8)
+	_sfx = _add_slider_row(left, "settings.sfx", "volume_sfx", 0.8)
+	_ambient = _add_slider_row(left, "settings.ambient", "volume_ambient", 0.7)
 
 	_mute = _add_check_row(left, "settings.mute", _on_mute_toggled)
 	_fullscreen = _add_check_row(left, "settings.fullscreen", _on_fullscreen_toggled)
@@ -279,6 +320,17 @@ func _build_ui() -> void:
 	_pads.tooltip_text = _tr("settings.gamepad_hint")
 	right.add_child(_pads)
 
+	# 人工清档入口（用户 2026-10-21 决策）：先上膛再确认，避免误触。
+	_wipe_button = Button.new()
+	_wipe_button.text = _tr("settings.wipe_save")
+	_wipe_button.custom_minimum_size = Vector2(240, 44)
+	_wipe_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_wipe_button.add_theme_font_override("font", FONT)
+	_wipe_button.add_theme_font_size_override("font_size", 18)
+	_wipe_button.pressed.connect(_on_wipe_pressed)
+	UiFocus.prepare(_wipe_button)
+	outer.add_child(_wipe_button)
+
 	var back := Button.new()
 	back.text = _tr("settings.back")
 	back.custom_minimum_size = Vector2(240, 48)
@@ -290,14 +342,14 @@ func _build_ui() -> void:
 	outer.add_child(back)
 
 
-func _add_slider_row(parent: VBoxContainer, key: String, default_value: float) -> HSlider:
+func _add_slider_row(parent: VBoxContainer, label_key: String, setting_key: String, default_value: float) -> HSlider:
 	var row := HBoxContainer.new()
 	row.custom_minimum_size = Vector2(430, 48)
 	row.add_theme_constant_override("separation", 12)
 	parent.add_child(row)
 
 	var label := Label.new()
-	label.text = _tr(key)
+	label.text = _tr(label_key)
 	label.custom_minimum_size = Vector2(130, 44)
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_override("font", FONT)
@@ -311,7 +363,7 @@ func _add_slider_row(parent: VBoxContainer, key: String, default_value: float) -
 	slider.step = 1
 	slider.value = default_value * 100.0
 	slider.custom_minimum_size = Vector2(280, 36)
-	slider.value_changed.connect(_on_volume_changed.bind(key))
+	slider.value_changed.connect(_on_volume_changed.bind(setting_key))
 	UiFocus.prepare(slider)
 	row.add_child(slider)
 	return slider
@@ -418,23 +470,66 @@ func _load_values() -> void:
 	var meta := GameBootstrap.meta if GameBootstrap != null else null
 	if meta == null:
 		return
-	_master.value = float(meta.settings.get("volume_master", 0.8)) * 100.0
-	_sfx.value = float(meta.settings.get("volume_sfx", 0.8)) * 100.0
-	_ambient.value = float(meta.settings.get("volume_ambient", 0.7)) * 100.0
-	_mute.button_pressed = bool(meta.settings.get("mute", false))
-	_fullscreen.button_pressed = bool(meta.settings.get("fullscreen", false))
+	# 用 set_*_no_signal：直接赋值会触发 value_changed / toggled，
+	# 每次打开设置页就白跑 5 次 apply_settings() + 5 次写盘（审计 P2-2）。
+	_master.set_value_no_signal(float(meta.settings.get("volume_master", 0.8)) * 100.0)
+	_sfx.set_value_no_signal(float(meta.settings.get("volume_sfx", 0.8)) * 100.0)
+	_ambient.set_value_no_signal(float(meta.settings.get("volume_ambient", 0.7)) * 100.0)
+	_mute.set_pressed_no_signal(bool(meta.settings.get("mute", false)))
+	_fullscreen.set_pressed_no_signal(bool(meta.settings.get("fullscreen", false)))
 	var lang := String(meta.settings.get("language", "zh_CN"))
 	var index := LANGUAGES.find(lang)
 	_language.select(maxi(index, 0))
 
 
-func _on_volume_changed(value: float, key: String) -> void:
+func _on_volume_changed(value: float, setting_key: String) -> void:
 	var meta := GameBootstrap.meta if GameBootstrap != null else null
 	if meta == null:
 		return
-	meta.settings[key] = clampf(value / 100.0, 0.0, 1.0)
+	meta.settings[setting_key] = clampf(value / 100.0, 0.0, 1.0)
 	GameBootstrap.apply_settings()
-	GameBootstrap.save_meta()
+	_schedule_save()
+
+
+## 拖动时只应用、不落盘；停手 350ms 后写一次（审计 P2-14）。
+func _schedule_save() -> void:
+	if _save_timer == null:
+		GameBootstrap.save_meta()
+		return
+	_save_timer.start()
+
+
+func _flush_save() -> void:
+	if _save_timer != null:
+		_save_timer.stop()
+	if GameBootstrap != null:
+		GameBootstrap.save_meta()
+
+
+## 清除存档（二次确认）：第一次上膛，3 秒内再按一次才真的删。
+func _on_wipe_pressed() -> void:
+	SoundManager.play_ui_sound(CLICK)
+	if not _wipe_armed:
+		_wipe_armed = true
+		if _wipe_button != null:
+			_wipe_button.text = _tr("settings.wipe_confirm")
+		if _wipe_timer != null:
+			_wipe_timer.start()
+		return
+	_disarm_wipe()
+	if GameBootstrap != null:
+		GameBootstrap.wipe_save()
+	_load_values()
+	_refresh_keys()
+	_hint.text = _tr("settings.wipe_done")
+
+
+func _disarm_wipe() -> void:
+	_wipe_armed = false
+	if _wipe_timer != null:
+		_wipe_timer.stop()
+	if _wipe_button != null:
+		_wipe_button.text = _tr("settings.wipe_save")
 
 
 func _on_mute_toggled(pressed: bool) -> void:
@@ -443,7 +538,7 @@ func _on_mute_toggled(pressed: bool) -> void:
 		return
 	meta.settings["mute"] = pressed
 	GameBootstrap.apply_settings()
-	GameBootstrap.save_meta()
+	_schedule_save()
 
 
 func _on_fullscreen_toggled(pressed: bool) -> void:
@@ -452,7 +547,7 @@ func _on_fullscreen_toggled(pressed: bool) -> void:
 		return
 	meta.settings["fullscreen"] = pressed
 	GameBootstrap.apply_settings()
-	GameBootstrap.save_meta()
+	_schedule_save()
 
 
 func _on_language_selected(index: int) -> void:
