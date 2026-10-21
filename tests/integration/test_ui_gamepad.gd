@@ -16,6 +16,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	UIManager.close_all()
 	GameBootstrap.meta = _old_meta
 
 
@@ -48,30 +49,29 @@ func test_menu_focus_moves_with_dpad() -> void:
 
 
 func test_shop_focuses_first_available_action() -> void:
-	var shop := SHOP_SCENE.instantiate() as Control
-	add_child_autofree(shop)
-	await wait_process_frames(2)
+	# 面板经 UIManager 打开：焦点在 _on_open() 里给，而不是 _ready()。
+	var panel := UIManager.open_panel(PanelIds.shop())
+	assert_not_null(panel, "商店面板应从 UIRegistry 实例化成功")
+	await wait_process_frames(3)
 	var focus := get_viewport().gui_get_focus_owner()
 	assert_not_null(focus)
 	assert_true(focus is Button)
 
 
 func test_settings_focuses_first_slider() -> void:
-	var settings := SETTINGS_SCENE.instantiate() as Control
-	add_child_autofree(settings)
-	await wait_process_frames(2)
+	var panel := UIManager.open_panel(PanelIds.settings())
+	assert_not_null(panel, "设置面板应从 UIRegistry 实例化成功")
+	await wait_process_frames(3)
 	var focus := get_viewport().gui_get_focus_owner()
 	assert_not_null(focus)
 	assert_true(focus is HSlider)
 
 
 func test_pause_focuses_resume() -> void:
-	var pause := PAUSE_SCENE.instantiate() as PauseMenu
-	add_child_autofree(pause)
-	await wait_process_frames(1)
-	pause.show_pause()
-	await wait_process_frames(1)
-	assert_eq(get_viewport().gui_get_focus_owner(), pause._resume_button)
+	var panel := UIManager.open_panel(PanelIds.pause()) as PauseMenu
+	assert_not_null(panel, "暂停面板应作为 POPUP 层打开")
+	await wait_process_frames(2)
+	assert_eq(get_viewport().gui_get_focus_owner(), panel._resume_button)
 
 
 func test_joy_a_presses_focused_button() -> void:

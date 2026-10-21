@@ -1,10 +1,11 @@
-extends Control
+class_name ShopPanel
+extends UIPanel
 
-## 局外商店：目录由 Unlocks.catalog() 提供，按 category 自动分组。
+## 局外商店（UIManager 面板）：目录由 Unlocks.catalog() 提供，按 category 自动分组。
 ## 新增条目只需改目录，本脚本不需要改。
+## 常驻面板：语言切换与解锁变化靠 EventBus 广播刷新，不再重开场景。
 
 const FONT := preload("res://assets/fonts/MiSans-Semibold.otf")
-const MENU_SCENE := "res://scenes/menu/menu.tscn"
 const CLICK := preload("res://assets/audio/sfx/sfx_ui_click.ogg")
 
 var _gold_label: Label
@@ -12,10 +13,44 @@ var _rows: Dictionary = {}
 var _back_button: Button
 
 
+func _on_init() -> void:
+	ui_layer = UILayer.NORMAL
+	cache_mode = CacheMode.CACHE
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+
+
 func _ready() -> void:
 	_build_ui()
 	_refresh()
+	EventBus.subscribe(&"LanguageChangedEvent", _on_language_changed)
+	EventBus.subscribe(&"UnlockPurchasedEvent", _on_unlock_purchased)
+
+
+func _exit_tree() -> void:
+	EventBus.unsubscribe(&"LanguageChangedEvent", _on_language_changed)
+	EventBus.unsubscribe(&"UnlockPurchasedEvent", _on_unlock_purchased)
+
+
+func _on_open(_data: Dictionary = {}) -> void:
+	_refresh()
 	call_deferred("_focus_first")
+
+
+func _on_language_changed(_event: Event) -> void:
+	_rebuild_ui()
+
+
+## 语言变了：原地重建文本与行，不重开场景。
+func _rebuild_ui() -> void:
+	if not is_inside_tree():
+		return
+	_build_ui()
+	_refresh()
+
+
+func _on_unlock_purchased(_event: Event) -> void:
+	_refresh()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -25,6 +60,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _build_ui() -> void:
+	for child in get_children():
+		remove_child(child)
+		child.queue_free()
+	_rows.clear()
+	_gold_label = null
+	_back_button = null
+
 	var bg := ColorRect.new()
 	bg.color = Color("#0b0e13")
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -160,8 +202,10 @@ func _on_action_pressed(id: StringName) -> void:
 		var enabled := bool(meta.settings.get(String(item.toggle_setting), false))
 		Unlocks.set_toggle(meta, id, not enabled)
 		GameBootstrap.apply_settings()
+		EventBus.publish(UnlockPurchasedEvent.new(id))
 	elif Unlocks.buy(meta, id):
 		GameBootstrap.save_meta()
+		EventBus.publish(UnlockPurchasedEvent.new(id))
 	_refresh()
 
 
@@ -179,7 +223,7 @@ func _focus_first() -> void:
 
 func _on_back_pressed() -> void:
 	SoundManager.play_ui_sound(CLICK)
-	get_tree().change_scene_to_file(MENU_SCENE)
+	UIManager.back(UILayer.NORMAL)
 
 
 func _tr(key: String) -> String:

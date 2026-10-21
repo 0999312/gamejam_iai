@@ -1,10 +1,12 @@
-extends Control
+class_name SettingsPanel
+extends UIPanel
 
-## 设置页：音量 / 静音 / 全屏 / 语言 / 按键。
+## 设置页（UIManager 面板）：音量 / 静音 / 全屏 / 语言 / 按键。
 ## 设置写入 MetaSave.settings，应用交给 GameBootstrap。
+## 语言切换走 I18NManager → LanguageChangedEvent，本面板自行重建文案，
+## 不再 reload_current_scene。
 
 const FONT := preload("res://assets/fonts/MiSans-Semibold.otf")
-const MENU_SCENE := "res://scenes/menu/menu.tscn"
 const CLICK := preload("res://assets/audio/sfx/sfx_ui_click.ogg")
 const LANGUAGES: Array[String] = ["zh_CN", "en"]
 const LANGUAGE_LABELS: Array[String] = ["中文", "English"]
@@ -23,21 +25,51 @@ var _rebinding: StringName = &""
 var _joy_rebinding: StringName = &""
 
 
+func _on_init() -> void:
+	ui_layer = UILayer.NORMAL
+	cache_mode = CacheMode.NONE
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+
+
 func _ready() -> void:
 	_build_ui()
 	_load_values()
 	_refresh_keys()
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
+	EventBus.subscribe(&"LanguageChangedEvent", _on_language_changed)
+
+
+func _on_open(_data: Dictionary = {}) -> void:
+	_load_values()
+	_refresh_keys()
 	call_deferred("_focus_default")
 
 
 func _focus_default() -> void:
-	_master.grab_focus()
+	if _master != null:
+		_master.grab_focus()
 
 
 func _exit_tree() -> void:
+	EventBus.unsubscribe(&"LanguageChangedEvent", _on_language_changed)
 	if Input.joy_connection_changed.is_connected(_on_joy_connection_changed):
 		Input.joy_connection_changed.disconnect(_on_joy_connection_changed)
+
+
+func _on_language_changed(_event: Event) -> void:
+	_rebuild_ui()
+
+
+## 语言变了：原地重建所有文本，保留当前焦点语义（回到第一个滑条）。
+func _rebuild_ui() -> void:
+	if not is_inside_tree():
+		return
+	_cancel_rebind()
+	_build_ui()
+	_load_values()
+	_refresh_keys()
+	call_deferred("_focus_default")
 
 
 func _on_joy_connection_changed(_device: int, _connected: bool) -> void:
@@ -45,6 +77,8 @@ func _on_joy_connection_changed(_device: int, _connected: bool) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if not visible:
+		return
 	if _joy_rebinding != &"":
 		_handle_joy_rebind(event)
 		return
@@ -117,6 +151,12 @@ func _handle_joy_rebind(event: InputEvent) -> void:
 
 
 func _build_ui() -> void:
+	for child in get_children():
+		remove_child(child)
+		child.queue_free()
+	_key_buttons.clear()
+	_joy_buttons.clear()
+
 	var bg := ColorRect.new()
 	bg.color = Color("#0b0e13")
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -418,12 +458,8 @@ func _on_fullscreen_toggled(pressed: bool) -> void:
 func _on_language_selected(index: int) -> void:
 	SoundManager.play_ui_sound(CLICK)
 	var code := String(_language.get_item_metadata(index))
-	if GameBootstrap.set_language(code):
-		call_deferred("_reload_scene")
-
-
-func _reload_scene() -> void:
-	get_tree().reload_current_scene()
+	# set_language 会通过 EventBus 发 LanguageChangedEvent，_on_language_changed 负责重建本页文案。
+	GameBootstrap.set_language(code)
 
 
 func _on_reset_keys() -> void:
@@ -439,7 +475,7 @@ func _on_reset_keys() -> void:
 
 func _on_back_pressed() -> void:
 	SoundManager.play_ui_sound(CLICK)
-	get_tree().change_scene_to_file(MENU_SCENE)
+	UIManager.back(UILayer.NORMAL)
 
 
 func _tr(key: String) -> String:

@@ -5,8 +5,9 @@
 
 ## 0. 会话启动契约（最高优先级，先做这一步）
 
-> 2026-10-21 审计发现：项目引入了 33 个 GDAS 技能与 5 个插件，但**技能一次都没被实际加载使用**，
-> 插件使用也不完整（`EventBus`/`UIManager`/`Codec` 零调用）。因此把「使用约定」升级为强制契约。
+> 2026-10-21 审计发现：项目引入了 33 个 GDAS 技能与 5 个插件，但**技能一次都没被实际加载使用**；
+> 插件的使用也是不完整的（`EventBus`/`UIManager`/`Codec` 零调用）。因此把「使用约定」升级为强制契约，
+> 并在同日完成第二轮：`EventBus`/`UIManager`/`Codec` 与 GUIDE 上下文资源化全部落地。
 > 详细规则、技能↔任务映射表、插件允许/禁止用法、验收清单见 **`docs/dev-contract.md`**。
 
 1. **开工第一步**：读取 `docs/dev-contract.md`。**在读完之前，不得创建、修改或删除仓库内任何文件**
@@ -17,8 +18,9 @@
 4. **插件优先**：输入一律 `GUIDE`（禁止 `Input.is_action_*` 等直读）；音频一律 `SoundManager`
    （禁止 `AudioStreamPlayer.new()`）；文本一律 `I18NManager`（禁止 `TranslationServer`）；
    数据表用 `RegistryManager`；测试只用 `GUT`。不得绕过插件自建替代实现。
-5. **不留新债**：`EventBus`/`UIManager`/`Codec` 当前零调用属已知偏差，处置只能是「接线」或「人类确认豁免」，
-   二选一后写进 `docs/dev-contract.md` §3.1；在此之前新增代码不得扩大偏差。
+5. **框架优先**：`EventBus`（跨场景事件）、`UIManager`（面板/遮罩/返回栈）、`Codec`（存档编解码）已全部接线，
+   新功能一律沿用；出现新的零调用插件时，处置只能是「接线」或「人类确认豁免」，二选一后写进
+   `docs/dev-contract.md` §3.1。`addons/` 只读，不在本项目内修改插件源码（§3.2）。
 6. **留痕**：模块完成后在 `docs/gamejam/ai-disclosure.md` 追加一行，其中写明所用技能名；
    并在对应 `docs/dev-example/*.md` 记录改动与验证数据。
 7. **冲突即停**：本契约与技能原文冲突时，`AGENTS.md`（尤其 §2 活动硬约束、§8 编码规范）优先；
@@ -61,7 +63,8 @@
 - `assets/fonts/` — MiSans-Semibold（中文友好字体，otf/ttf）
 - `assets/theme/` — `minimal_vector.tres`（已接线到 project.godot）/ `modern_flat.tres`
 - `assets/icons/` — 220 个单色 SVG 图标（按功能分类）
-- `tools/generate_guide_context.gd` — GUIDE 上下文生成脚本（headless 运行，依赖 `res://input/actions/*.tres`，创建对应 Action 后使用）
+- `input/actions/*.tres` / `input/contexts/*.tres` — GUIDE 动作与上下文的**资源定义**（代码里不得现搭上下文，见 `docs/dev-contract.md` §3）
+- `tools/generate_guide_context.gd` — 生成上面两类资源的 headless 脚本：默认绑定取自 `KeyBindings.DEFAULT_KEYS` / `DEFAULT_JOY_BUTTONS`，改完默认值重跑即可
 - 新功能按模块放入 `scenes/`、`scripts/`、`resources/`、`input/` 等目录（按需创建），保持模块化
 - `.dsh/skills/` — 项目级技能目录（第三方 GDAS 技能库的 2D 剪枝副本，33 个），DSH 自动发现；来源与许可见 `.dsh/skills/ATTRIBUTION.md`，使用约定见 §9
 

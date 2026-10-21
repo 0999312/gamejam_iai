@@ -5,9 +5,13 @@ extends Node
 
 const REGISTRY_NAME := "upgrade"
 const UNLOCK_REGISTRY_NAME := "unlock"
+const UI_REGISTRY_NAME := "ui"
 const UNLOCK_DIR := "res://resources/unlocks"
 const NAMESPACE := "iai"
 const DEFAULT_LANGUAGE := "zh_CN"
+const SHOP_PANEL := preload("res://scenes/ui/shop.tscn")
+const SETTINGS_PANEL := preload("res://scenes/ui/settings.tscn")
+const PAUSE_PANEL := preload("res://scenes/ui/pause_menu.tscn")
 const I18N_FILES: Dictionary = {
 	"zh_CN": "res://localization/zh_CN.json",
 	"en": "res://localization/en.json",
@@ -44,6 +48,7 @@ func _ready() -> void:
 	_ensure_ui_gamepad_actions()
 	_ensure_registry(REGISTRY_NAME)
 	_ensure_registry(UNLOCK_REGISTRY_NAME)
+	_register_panels()
 	_register_upgrades()
 	_register_unlocks()
 	meta = MetaSave.load_from()
@@ -155,6 +160,24 @@ func _ensure_registry(registry_name: String) -> void:
 			existing.clear()
 		return
 	RegistryManager.register_registry(registry_name, RegistryBase.new())
+
+
+## UI 面板注册：商店 / 设置 / 暂停都在 UIManager 的面板栈里，
+## 不再靠 change_scene_to_file 整场重开。层级与缓存策略也在这里声明。
+func _register_panels() -> void:
+	var registry: UIRegistry = null
+	if RegistryManager.has_registry(UI_REGISTRY_NAME):
+		registry = RegistryManager.get_registry(UI_REGISTRY_NAME) as UIRegistry
+		if registry == null:
+			push_error("GameBootstrap: ui registry has wrong type")
+			return
+		registry.clear()
+	else:
+		registry = UIRegistry.new()
+		RegistryManager.register_registry(UI_REGISTRY_NAME, registry)
+	registry.register_panel(PanelIds.shop(), SHOP_PANEL, UILayer.NORMAL, UIPanel.CacheMode.CACHE)
+	registry.register_panel(PanelIds.settings(), SETTINGS_PANEL, UILayer.NORMAL, UIPanel.CacheMode.NONE)
+	registry.register_panel(PanelIds.pause(), PAUSE_PANEL, UILayer.POPUP, UIPanel.CacheMode.NONE)
 
 
 func _register_upgrades() -> void:

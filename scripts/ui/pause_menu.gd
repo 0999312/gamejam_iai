@@ -1,8 +1,9 @@
 class_name PauseMenu
-extends Control
+extends UIPanel
 
-## 对决内暂停层：继续 / 重新开始 / 返回菜单。
-## 不暂停 SceneTree，由 DuelController 跳过 sim.tick()。
+## 对决暂停层（UIManager POPUP 面板）：继续 / 重新开始 / 返回菜单。
+## 不暂停 SceneTree，由 DuelController 跳过 sim.tick()；
+## 面板只发意图信号，开合与状态由控制器统一管理。
 
 signal resume_requested()
 signal restart_requested()
@@ -14,18 +15,23 @@ const CLICK := preload("res://assets/audio/sfx/sfx_ui_click.ogg")
 var _resume_button: Button
 
 
+func _on_init() -> void:
+	ui_layer = UILayer.POPUP
+	cache_mode = CacheMode.NONE
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+
+
 func _ready() -> void:
 	_build_ui()
-	visible = false
+
+
+func _on_open(_data: Dictionary = {}) -> void:
+	if _resume_button != null:
+		_resume_button.grab_focus()
 
 
 func _build_ui() -> void:
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.72)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(dim)
-
 	var title := Label.new()
 	title.text = _tr("pause.title")
 	title.position = Vector2(0, 150)
@@ -70,15 +76,6 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		_on_resume_pressed()
-
-
-func show_pause() -> void:
-	visible = true
-	_resume_button.grab_focus()
-
-
-func hide_pause() -> void:
-	visible = false
 
 
 func _on_resume_pressed() -> void:

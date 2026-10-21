@@ -7,7 +7,6 @@ extends Node2D
 
 const VIEW_SCENE := preload("res://scenes/duel/duel_view.tscn")
 const HUD_SCENE := preload("res://scenes/duel/hud.tscn")
-const PAUSE_SCENE := preload("res://scenes/ui/pause_menu.tscn")
 const MENU_SCENE := "res://scenes/menu/menu.tscn"
 
 const OFFER_KEYS: Array[Key] = [KEY_1, KEY_2, KEY_3]
@@ -20,7 +19,6 @@ var mode: StringName = &"run"
 var _view: DuelView
 var _hud: DuelHud
 var _audio: DuelAudio
-var _pause: PauseMenu
 var _paused := false
 var _start_cue_played := false
 
@@ -70,12 +68,6 @@ func _ready() -> void:
 	_hud.offer_chosen.connect(_on_offer_chosen)
 	_audio = DuelAudio.new()
 	add_child(_audio)
-
-	_pause = PAUSE_SCENE.instantiate() as PauseMenu
-	_hud.add_child(_pause)
-	_pause.resume_requested.connect(_on_resume_requested)
-	_pause.restart_requested.connect(_on_pause_restart_requested)
-	_pause.menu_requested.connect(_on_pause_menu_requested)
 
 	if mode == &"versus":
 		_start_versus()
@@ -225,9 +217,7 @@ func _start_stage() -> void:
 	_clear_queued_input()
 	_settled = false
 	_start_cue_played = false
-	_paused = false
-	if _pause != null:
-		_pause.visible = false
+	_close_pause_panel()
 
 	if _view != null:
 		_view.bind(sim)
@@ -254,9 +244,7 @@ func _start_versus() -> void:
 	_clear_queued_input()
 	_settled = false
 	_start_cue_played = false
-	_paused = false
-	if _pause != null:
-		_pause.visible = false
+	_close_pause_panel()
 
 	if _view != null:
 		_view.bind(sim)
@@ -291,67 +279,52 @@ func _on_offer_chosen(index: int) -> void:
 
 
 func _setup_input() -> void:
-	_context = GUIDEMappingContext.new()
-	_context.display_name = "duel_m3"
+	_context = InputGuide.context_for(mode)
 	_offer_actions.clear()
+	if _context == null:
+		push_error("DuelController: 缺少 GUIDE 上下文资源 %s" % InputGuide.context_path(mode))
+		return
 
 	var meta := GameBootstrap.meta if GameBootstrap != null else null
-	var p1_attack: Array[Key] = KeyBindings.get_keys(meta, &"attack_p1")
-	var p1_guard: Array[Key] = KeyBindings.get_keys(meta, &"guard_p1")
-	var p1_spell: Array[Key] = KeyBindings.get_keys(meta, &"spell_p1")
-	var p2_attack: Array[Key] = KeyBindings.get_keys(meta, &"attack_p2")
-	var p2_guard: Array[Key] = KeyBindings.get_keys(meta, &"guard_p2")
-	var p2_spell: Array[Key] = KeyBindings.get_keys(meta, &"spell_p2")
-	var restart_keys: Array[Key] = KeyBindings.get_keys(meta, &"restart")
-	var pause_keys: Array[Key] = KeyBindings.get_keys(meta, &"pause")
+	# 资源里是默认绑定；玩家改过的键用 GUIDERemappingConfig 覆盖，不动资源本身。
+	var remap := InputGuide.build_remap_config(_context, meta)
+	if remap != null:
+		GUIDE.set_remapping_config(remap)
 
-	# 不依赖启动时的设备枚举结果：始终给 P1 建“第一个手柄”映射，双人时给 P2
-	# 建“第二个手柄”映射。没有对应手柄时映射不会触发；有手柄时即使
-	# Input.get_connected_joypads() 在启动帧暂时为空也不会完全失去手柄。
-	var p1_joys: Array[int] = [0]
-	var p2_joys: Array[int] = []
-	if mode == &"versus":
-		p2_joys.append(1)
-	var p1_mouse_attack: Array[MouseButton] = [MOUSE_BUTTON_LEFT]
-	var p1_mouse_guard: Array[MouseButton] = [MOUSE_BUTTON_RIGHT]
-	var p1_mouse_spell: Array[MouseButton] = [MOUSE_BUTTON_MIDDLE]
-	var no_mouse: Array[MouseButton] = []
-	var p1_attack_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"attack_p1")]
-	var p1_guard_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"guard_p1")]
-	var p1_spell_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"spell_p1")]
-	var p2_attack_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"attack_p2")]
-	var p2_guard_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"guard_p2")]
-	var p2_spell_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"spell_p2")]
-	var pause_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"pause")]
-	var restart_buttons: Array[JoyButton] = [KeyBindings.get_joy_button(meta, &"restart")]
-	var all_joys: Array[int] = p1_joys.duplicate()
-	all_joys.append_array(p2_joys)
+	_attack_action = InputGuide.action(_context, &"duel_attack_p1")
+	_guard_action = InputGuide.action(_context, &"duel_guard_p1")
+	_spell_action = InputGuide.action(_context, &"duel_spell_p1")
+	_p2_attack_action = InputGuide.action(_context, &"duel_attack_p2")
+	_p2_guard_action = InputGuide.action(_context, &"duel_guard_p2")
+	_p2_spell_action = InputGuide.action(_context, &"duel_spell_p2")
+	_restart_action = InputGuide.action(_context, &"duel_restart")
+	_pause_action = InputGuide.action(_context, &"duel_pause")
 
-	_attack_action = _add_action(&"duel_attack_p1", p1_attack, p1_mouse_attack, p1_joys, p1_attack_buttons)
-	_guard_action = _add_action(&"duel_guard_p1", p1_guard, p1_mouse_guard, p1_joys, p1_guard_buttons)
-	_spell_action = _add_action(&"duel_spell_p1", p1_spell, p1_mouse_spell, p1_joys, p1_spell_buttons)
-	_p2_attack_action = _add_action(&"duel_attack_p2", p2_attack, no_mouse, p2_joys, p2_attack_buttons)
-	_p2_guard_action = _add_action(&"duel_guard_p2", p2_guard, no_mouse, p2_joys, p2_guard_buttons)
-	_p2_spell_action = _add_action(&"duel_spell_p2", p2_spell, no_mouse, p2_joys, p2_spell_buttons)
-	_restart_action = _add_action(&"duel_restart", restart_keys, no_mouse, all_joys, restart_buttons)
-	_pause_action = _add_action(&"duel_pause", pause_keys, no_mouse, all_joys, pause_buttons)
-
-	_attack_action.just_triggered.connect(_on_attack_pressed)
-	_guard_action.just_triggered.connect(_on_guard_pressed)
-	_guard_action.completed.connect(_on_guard_released)
-	_spell_action.just_triggered.connect(_on_spell_pressed)
-	_p2_attack_action.just_triggered.connect(_on_p2_attack_pressed)
-	_p2_guard_action.just_triggered.connect(_on_p2_guard_pressed)
-	_p2_guard_action.completed.connect(_on_p2_guard_released)
-	_p2_spell_action.just_triggered.connect(_on_p2_spell_pressed)
-	_restart_action.just_triggered.connect(_on_restart_pressed)
-	_pause_action.just_triggered.connect(_on_pause_pressed)
+	if _attack_action != null:
+		_attack_action.just_triggered.connect(_on_attack_pressed)
+	if _guard_action != null:
+		_guard_action.just_triggered.connect(_on_guard_pressed)
+		_guard_action.completed.connect(_on_guard_released)
+	if _spell_action != null:
+		_spell_action.just_triggered.connect(_on_spell_pressed)
+	if _p2_attack_action != null:
+		_p2_attack_action.just_triggered.connect(_on_p2_attack_pressed)
+	if _p2_guard_action != null:
+		_p2_guard_action.just_triggered.connect(_on_p2_guard_pressed)
+		_p2_guard_action.completed.connect(_on_p2_guard_released)
+	if _p2_spell_action != null:
+		_p2_spell_action.just_triggered.connect(_on_p2_spell_pressed)
+	if _restart_action != null:
+		_restart_action.just_triggered.connect(_on_restart_pressed)
+	if _pause_action != null:
+		_pause_action.just_triggered.connect(_on_pause_pressed)
 
 	for i in OFFER_KEYS.size():
-		var offer_keys: Array[Key] = [OFFER_KEYS[i]]
-		var action := _add_action(StringName("duel_offer_%d" % (i + 1)), offer_keys, no_mouse, [], [])
-		action.just_triggered.connect(_on_offer_key.bind(i))
-		_offer_actions.append(action)
+		var offer := InputGuide.action(_context, StringName("duel_offer_%d" % (i + 1)))
+		if offer == null:
+			continue
+		offer.just_triggered.connect(_on_offer_key.bind(i))
+		_offer_actions.append(offer)
 
 	GUIDE.enable_mapping_context(_context, true)
 
@@ -370,42 +343,6 @@ func _rebuild_input() -> void:
 	_setup_input()
 	if _hud != null:
 		_hud.refresh()
-
-
-## 一个动作可以挂多条映射：键盘、鼠标、手柄同时生效，互不排斥。
-func _add_action(action_name: StringName, keys: Array[Key], mouse_buttons: Array[MouseButton], joy_indices: Array[int], joy_buttons: Array[JoyButton]) -> GUIDEAction:
-	var action := GUIDEAction.new()
-	action.name = action_name
-	action.action_value_type = GUIDEAction.GUIDEActionValueType.BOOL
-
-	var mapping := GUIDEActionMapping.new()
-	mapping.action = action
-
-	for key in keys:
-		var input_mapping := GUIDEInputMapping.new()
-		var key_input := GUIDEInputKey.new()
-		key_input.key = key
-		input_mapping.input = key_input
-		mapping.input_mappings.append(input_mapping)
-
-	for mouse_button in mouse_buttons:
-		var input_mapping := GUIDEInputMapping.new()
-		var mouse_input := GUIDEInputMouseButton.new()
-		mouse_input.button = mouse_button
-		input_mapping.input = mouse_input
-		mapping.input_mappings.append(input_mapping)
-
-	for joy_index in joy_indices:
-		for joy_button in joy_buttons:
-			var input_mapping := GUIDEInputMapping.new()
-			var joy_input := GUIDEInputJoyButton.new()
-			joy_input.joy_index = joy_index
-			joy_input.button = joy_button
-			input_mapping.input = joy_input
-			mapping.input_mappings.append(input_mapping)
-
-	_context.mappings.append(mapping)
-	return action
 
 
 func _on_attack_pressed() -> void:
@@ -447,30 +384,42 @@ func _on_restart_pressed() -> void:
 
 
 func _on_pause_pressed() -> void:
-	if sim == null or _pause == null:
+	if sim == null:
 		return
 	var now := Time.get_ticks_msec()
 	if now - _last_pause_ms < 200:
 		return
 	_last_pause_ms = now
-	_paused = not _paused
 	if _paused:
-		_pause.show_pause()
+		_close_pause_panel()
 	else:
-		_pause.hide_pause()
+		_open_pause_panel()
+
+
+## 暂停面板走 UIManager 的 POPUP 层：遮罩、层级、关闭生命周期都由插件管。
+func _open_pause_panel() -> void:
+	var panel := UIManager.open_panel(PanelIds.pause()) as PauseMenu
+	if panel == null:
+		return
+	panel.resume_requested.connect(_on_resume_requested)
+	panel.restart_requested.connect(_on_pause_restart_requested)
+	panel.menu_requested.connect(_on_pause_menu_requested)
+	_paused = true
+
+
+func _close_pause_panel() -> void:
+	if UIManager.is_panel_open(PanelIds.pause()):
+		UIManager.close_panel(PanelIds.pause())
+	_paused = false
 
 
 func _on_resume_requested() -> void:
-	_paused = false
+	_close_pause_panel()
 	_clear_queued_input()
-	if _pause != null:
-		_pause.hide_pause()
 
 
 func _on_pause_restart_requested() -> void:
-	_paused = false
-	if _pause != null:
-		_pause.visible = false
+	_close_pause_panel()
 	_clear_queued_input()
 	if mode == &"versus":
 		_start_versus()
@@ -481,7 +430,7 @@ func _on_pause_restart_requested() -> void:
 
 
 func _on_pause_menu_requested() -> void:
-	_paused = false
+	_close_pause_panel()
 	get_tree().change_scene_to_file(MENU_SCENE)
 
 

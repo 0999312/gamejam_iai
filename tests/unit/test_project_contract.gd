@@ -33,6 +33,12 @@ const _BANNED: Array[Dictionary] = [
 		"needle": "TranslationServer.",
 		"reason": "翻译必须经 I18NManager",
 	},
+	{
+		"needle": "GUIDEMappingContext.new(",
+		"reason": "GUIDE 上下文必须是 res://input/contexts 下的资源（用 InputGuide.context_for 载入），不得在代码里现搭",
+		# 唯一例外：包装层只把资源复制成对局独占实例，不定义任何动作/输入。
+		"allow": ["res://scripts/core/input_guide.gd"],
+	},
 ]
 
 ## 必须保持启用的插件单例。
@@ -42,6 +48,13 @@ const _REQUIRED_AUTOLOADS: Array[String] = [
 	"I18NManager",
 	"RegistryManager",
 	"EventBus",
+	"UIManager",
+]
+
+## 输入资源的固定位置（生成器见 tools/generate_guide_context.gd）。
+const _INPUT_CONTEXTS: Array[String] = [
+	"res://input/contexts/duel_run.tres",
+	"res://input/contexts/duel_versus.tres",
 ]
 
 
@@ -52,6 +65,8 @@ func test_scripts_do_not_bypass_plugins() -> void:
 		if text.is_empty():
 			continue
 		for rule in _BANNED:
+			if path in rule.get("allow", []):
+				continue
 			var needle: String = rule["needle"]
 			if text.contains(needle):
 				offenders.append("%s 含「%s」→ %s" % [path, needle, rule["reason"]])
@@ -63,6 +78,20 @@ func test_required_plugins_are_enabled() -> void:
 	for autoload_name in _REQUIRED_AUTOLOADS:
 		assert_true(ProjectSettings.has_setting("autoload/" + autoload_name),
 				"插件单例 %s 必须在 project.godot 启用（docs/dev-contract.md §3）" % autoload_name)
+
+
+func test_input_contexts_are_resources() -> void:
+	for path in _INPUT_CONTEXTS:
+		assert_true(ResourceLoader.exists(path), "缺少 GUIDE 上下文资源：%s" % path)
+		var context := load(path) as GUIDEMappingContext
+		assert_not_null(context, "%s 必须能载入为 GUIDEMappingContext" % path)
+		if context == null:
+			continue
+		assert_gt(context.mappings.size(), 0, "%s 里必须有动作映射" % path)
+		for mapping in context.mappings:
+			assert_not_null(mapping.action, "%s 里有映射没绑动作" % path)
+			assert_gt(mapping.input_mappings.size(), 0,
+					"%s 的动作 %s 没有输入" % [path, mapping.action.name])
 
 
 ## 递归收集 .gd 文件（不依赖编辑器状态，headless 可用）。

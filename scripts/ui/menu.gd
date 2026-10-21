@@ -5,8 +5,6 @@ extends Control
 
 const FONT := preload("res://assets/fonts/MiSans-Semibold.otf")
 const DUEL_SCENE := "res://scenes/duel/duel.tscn"
-const SHOP_SCENE := "res://scenes/ui/shop.tscn"
-const SETTINGS_SCENE := "res://scenes/ui/settings.tscn"
 const CLICK := preload("res://assets/audio/sfx/sfx_ui_click.ogg")
 
 var _gold_label: Label
@@ -15,9 +13,33 @@ var _char_option: OptionButton
 
 func _ready() -> void:
 	_build_ui()
+	# 菜单是常驻基座：商店/设置以面板叠加在上面，返回时本场景不重建。
+	# 所以金币、可选角色、文案都必须靠事件刷新。
+	EventBus.subscribe(&"LanguageChangedEvent", _on_language_changed)
+	EventBus.subscribe(&"UnlockPurchasedEvent", _on_unlock_purchased)
+
+
+func _exit_tree() -> void:
+	EventBus.unsubscribe(&"LanguageChangedEvent", _on_language_changed)
+	EventBus.unsubscribe(&"UnlockPurchasedEvent", _on_unlock_purchased)
+
+
+func _on_language_changed(_event: Event) -> void:
+	_build_ui()
+
+
+func _on_unlock_purchased(_event: Event) -> void:
+	_refresh_gold()
+	_populate_characters()
 
 
 func _build_ui() -> void:
+	for child in get_children():
+		remove_child(child)
+		child.queue_free()
+	_gold_label = null
+	_char_option = null
+
 	var bg := ColorRect.new()
 	bg.color = Color("#0b0e13")
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -176,12 +198,12 @@ func _on_versus_pressed() -> void:
 
 func _on_shop_pressed() -> void:
 	SoundManager.play_ui_sound(CLICK)
-	get_tree().change_scene_to_file(SHOP_SCENE)
+	UIManager.open_panel(PanelIds.shop())
 
 
 func _on_settings_pressed() -> void:
 	SoundManager.play_ui_sound(CLICK)
-	get_tree().change_scene_to_file(SETTINGS_SCENE)
+	UIManager.open_panel(PanelIds.settings())
 
 
 func _on_quit_pressed() -> void:

@@ -12,14 +12,24 @@ func test_joy_button_mapping_triggers_action() -> void:
 	add_child_autofree(duel)
 	await wait_process_frames(2)
 
-	var no_keys: Array[Key] = []
-	var no_mouse: Array[MouseButton] = []
+	# 测试自己造一个只挂虚拟手柄的动作：生产环境的动作都来自 res://input/contexts，
+	# 但虚拟手柄的 device 与真实手柄的 joy_index 解析方式不同，需要专用动作。
 	var virtual_id: int = GUIDE._input_state.connect_virtual_stick(0)
-	var joy_indices: Array[int] = [virtual_id]
-	var joy_buttons: Array[JoyButton] = [JOY_BUTTON_A]
-	var action: GUIDEAction = duel._add_action(&"test_joy_button", no_keys, no_mouse, joy_indices, joy_buttons)
+	var action := GUIDEAction.new()
+	action.name = &"test_joy_button"
+	action.action_value_type = GUIDEAction.GUIDEActionValueType.BOOL
+	var mapping := GUIDEActionMapping.new()
+	mapping.action = action
+	var input_mapping := GUIDEInputMapping.new()
+	var joy_input := GUIDEInputJoyButton.new()
+	joy_input.joy_index = virtual_id
+	joy_input.button = JOY_BUTTON_A
+	input_mapping.input = joy_input
+	mapping.input_mappings.append(input_mapping)
+	duel._context.mappings.append(mapping)
 	GUIDE.disable_mapping_context(duel._context)
 	GUIDE.enable_mapping_context(duel._context, true)
+	assert_not_null(action, "上下文里应当有 P1 攻击动作")
 
 	var triggered := [0]
 	action.just_triggered.connect(func() -> void: triggered[0] += 1)
