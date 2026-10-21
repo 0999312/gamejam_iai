@@ -648,7 +648,12 @@ func _do_block(attacker: FighterState, defender: FighterState) -> void:
 	if perfect:
 		defender.perfect_streak += 1
 		var bonus := mini((defender.perfect_streak - 1) * PERFECT_STREAK_BONUS, PERFECT_STREAK_BONUS_CAP)
-		gain = int(mods.get("perfect_gain", PERFECT_BLOCK_FLOW_GAIN)) + bonus
+		# 2026-10-21：「完美」心得只属于玩家。原来这里直接读 mods，对手完美格挡
+		# 也会吃到 18 心流，等于把玩家的强化白送给 AI。
+		var perfect_base := PERFECT_BLOCK_FLOW_GAIN
+		if defender.side == DuelTypes.Side.P1:
+			perfect_base = int(mods.get("perfect_gain", PERFECT_BLOCK_FLOW_GAIN))
+		gain = perfect_base + bonus
 	else:
 		defender.perfect_streak = 0
 

@@ -175,8 +175,11 @@ func _draw_fighter(fighter: FighterState, x: float, base_color: Color) -> void:
 	# 2026-10-20 二次调参：收束环之外再加「落刀预警」——剩余 SLASH_WARN_FRAMES
 	# 帧时整环转白并起脉冲，给玩家一个不需要读进度的确认点。
 	if fighter.state == DuelTypes.State.COMMIT:
+		# 2026-10-21：「看破」心得（hint_lead）的语义是「提前看到对手的刀」，
+		# 所以提前量只加在对手（P2）的环上。此前加在 P1 自己的环上，
+		# 效果是「自己的刀光提前」，与心得名和描述都不符。
 		var lead := 0.0
-		if fighter.side == DuelTypes.Side.P1 and sim != null:
+		if sim != null and fighter.side == DuelTypes.Side.P2:
 			lead = float(int(sim.mods.get("hint_lead", 0)))
 		var total := maxf(1.0, float(fighter.commit_total))
 		var progress := clampf((float(fighter.state_frame) + lead) / total, 0.0, 1.0)

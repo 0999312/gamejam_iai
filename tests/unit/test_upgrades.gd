@@ -20,12 +20,23 @@ func _tick_n(sim: DuelSim, count: int) -> void:
 
 func test_u03_perfect_block_grants_18() -> void:
 	var sim := _make_sim({"perfect_gain": 18})
-	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	sim.press(DuelTypes.Side.P2, DuelTypes.Action.ATTACK)
 	# 构 14f：第 15 帧落刀；第 12 帧起架（startup 1）→ 生效 2 帧后挡下，算完美。
+	_tick_n(sim, 11)
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.GUARD)
+	_tick_n(sim, 4)
+	assert_eq(sim.p1.flow, 58)
+	assert_eq(sim.p1.perfect_streak, 1)
+
+
+func test_u03_does_not_leak_to_opponent() -> void:
+	# 「完美」是玩家心得：对手完美格挡时应按基础 12 回复，而不是 18。
+	var sim := _make_sim({"perfect_gain": 18})
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
 	_tick_n(sim, 11)
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
 	_tick_n(sim, 4)
-	assert_eq(sim.p2.flow, 58)
+	assert_eq(sim.p2.flow, 52)
 	assert_eq(sim.p2.perfect_streak, 1)
 
 

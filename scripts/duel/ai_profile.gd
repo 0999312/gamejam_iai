@@ -75,7 +75,10 @@ static func for_persona(persona_id: StringName, tier: int = TIER_NORMAL) -> AiPr
 	profile.reaction_frames = base["react"]
 	profile.spell_chance = base["spell"]
 	# 性格基准表的 counter 现在真实生效：高 counter 性格认招迟滞更短（更果断）。
-	profile.counter_delay_frames = maxi(0, roundi((1.0 - float(base["counter"])) * 8.0))
+	# 2026-10-21 难度回调：系数 8 → 14、下限 6 帧。原来 4–5 帧的迟滞等于「玩家一出刀
+	# 就必被反斩」（玩家出刀总硬直 39–47f，AI 反斩前摇 18–20f），人类试玩反馈「难度意外上调」。
+	# 现在 6–8 帧迟滞给玩家 100–133ms 的收手/架刀窗口。
+	profile.counter_delay_frames = maxi(6, roundi((1.0 - float(base["counter"])) * 14.0))
 	profile.two_phase_at_ratio = 0.5 if persona_id == &"persona_5_boss" else 0.0
 	if hard:
 		profile.aggression = base["agg"]

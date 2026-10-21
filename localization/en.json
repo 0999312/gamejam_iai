@@ -58,10 +58,10 @@
       "mode": "Modes"
     },
     "item": {
-      "char_b": {"name": "[PLACEHOLDER] Character B", "desc": "[PLACEHOLDER] Swift: short windup, fast recovery"},
-      "char_c": {"name": "[PLACEHOLDER] Character C", "desc": "[PLACEHOLDER] Heavy: more HP, wider hit window"},
-      "start_slot": {"name": "[PLACEHOLDER] Starting Insight Slot", "desc": "[PLACEHOLDER] Begin each run with one random insight"},
-      "hard_mode": {"name": "[PLACEHOLDER] Hard Mode", "desc": "[PLACEHOLDER] Faster, fiercer, tougher opponents"}
+      "char_b": {"name": "[PLACEHOLDER] B · Swift", "desc": "[PLACEHOLDER] 11-frame windup, fastest recovery, 7 damage per cut"},
+      "char_c": {"name": "[PLACEHOLDER] C · Heavy", "desc": "[PLACEHOLDER] 40 HP, 15 damage plus 12 frames of stagger, longest windup"},
+      "start_slot": {"name": "[PLACEHOLDER] Starting Insight", "desc": "[PLACEHOLDER] Gain one random insight at the start of each run"},
+      "hard_mode": {"name": "[PLACEHOLDER] Hard Mode", "desc": "[PLACEHOLDER] Opponents start with more flow and act more often; guard windows drop one tier"}
     }
   },
   "settings": {
@@ -132,58 +132,58 @@
     "spell": "[PLACEHOLDER] Spell"
   },
   "tutorial": {
-    "start": "[PLACEHOLDER] Watch the tell, do not rush",
-    "guard": "[PLACEHOLDER] K Guard: block before the blade lands",
-    "attack": "[PLACEHOLDER] J Slash: attacking leaves you open",
-    "flow": "[PLACEHOLDER] Higher flow widens the guard window",
-    "wait": "[PLACEHOLDER] Wait for the moment"
+    "start": "[PLACEHOLDER] Opening: read the tell before you move",
+    "guard": "[PLACEHOLDER] Opponent commits: hold guard before the blade lands",
+    "attack": "[PLACEHOLDER] Opponent recovering: strike now, they cannot block",
+    "flow": "[PLACEHOLDER] Low flow: your guard window narrows, steady yourself",
+    "wait": "[PLACEHOLDER] Standoff: do not strike first, wait for the opening"
   },
   "upgrade": {
     "u01": {
       "name": "[PLACEHOLDER] Guard Window",
-      "desc": "[PLACEHOLDER] Guard lasts 2 more frames"
+      "desc": "[PLACEHOLDER] Guard lasts 3 more frames, easier to catch fast cuts"
     },
     "u02": {
       "name": "[PLACEHOLDER] Quick Commit",
-      "desc": "[PLACEHOLDER] Slash windup -2 frames"
+      "desc": "[PLACEHOLDER] Slash windup -3 frames, win the race"
     },
     "u03": {
       "name": "[PLACEHOLDER] Perfect",
-      "desc": "[PLACEHOLDER] Perfect guard returns 18 flow"
+      "desc": "[PLACEHOLDER] Perfect guard returns 18 flow (base is 12)"
     },
     "u04": {
       "name": "[PLACEHOLDER] Calm Mind",
-      "desc": "[PLACEHOLDER] Start with +10 flow"
+      "desc": "[PLACEHOLDER] Start each duel with +10 flow"
     },
     "u05": {
       "name": "[PLACEHOLDER] Read",
-      "desc": "[PLACEHOLDER] Tell hint appears 4 frames earlier"
+      "desc": "[PLACEHOLDER] The opponent's blade warning appears 6 frames earlier"
     },
     "u06": {
       "name": "[PLACEHOLDER] See-Through",
-      "desc": "[PLACEHOLDER] At 50+ flow, negate one hit"
+      "desc": "[PLACEHOLDER] At 50+ flow, negate one hit for an extra 30 flow (once per duel)"
     },
     "u07": {
       "name": "[PLACEHOLDER] Pursuit",
-      "desc": "[PLACEHOLDER] Next hit after a hit deals +1 damage"
+      "desc": "[PLACEHOLDER] The next hit within 3s after a hit deals +10 damage (once per duel)"
     },
     "u08": {
       "name": "[PLACEHOLDER] Guts",
-      "desc": "[PLACEHOLDER] No flow loss for 2s after a hit"
+      "desc": "[PLACEHOLDER] No flow loss for 5s after taking a hit"
     },
     "u09": {
       "name": "[PLACEHOLDER] First Strike",
-      "desc": "[PLACEHOLDER] Slash windup -3 frames in the first 3s"
+      "desc": "[PLACEHOLDER] Slash windup -3 frames from second 3 to 8"
     },
     "u10": {
       "name": "[PLACEHOLDER] Recovery",
-      "desc": "[PLACEHOLDER] Heal 2 HP per win"
+      "desc": "[PLACEHOLDER] Healing after each win is doubled"
     }
   },
   "spell": {
-    "spell_a": {"name": "[PLACEHOLDER] Spell A", "desc": "[PLACEHOLDER] Spell A description"},
-    "spell_b": {"name": "[PLACEHOLDER] Spell B", "desc": "[PLACEHOLDER] Spell B description"},
-    "spell_c": {"name": "[PLACEHOLDER] Spell C", "desc": "[PLACEHOLDER] Spell C description"},
-    "spell_boss": {"name": "[PLACEHOLDER] Boss Spell", "desc": "[PLACEHOLDER] Boss spell description"}
+    "spell_a": {"name": "[PLACEHOLDER] Stance", "desc": "[PLACEHOLDER] Any guard within 60 frames counts as a perfect guard"},
+    "spell_b": {"name": "[PLACEHOLDER] Gale Slash", "desc": "[PLACEHOLDER] After an 8-frame charge, cut for 20 damage, ignoring guard"},
+    "spell_c": {"name": "[PLACEHOLDER] Mountain Fall", "desc": "[PLACEHOLDER] After a 20-frame charge, cut for 30 damage, ignoring guard and adding stagger"},
+    "spell_boss": {"name": "[PLACEHOLDER] Final Form", "desc": "[PLACEHOLDER] After a 14-frame charge, cut for 30 damage, ignoring guard"}
   }
 }

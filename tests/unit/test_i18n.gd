@@ -1,6 +1,6 @@
 extends GutTest
 
-## 多语言：第二语言可加载，通用 UI 已翻译，内容仍保持占位。
+## 多语言：第二语言可加载，通用 UI 已翻译，内容仍保持占位（2026-10-21：占位保留，描述同步实际数值）。
 
 
 func after_each() -> void:
@@ -22,7 +22,7 @@ func test_english_has_all_generic_keys() -> void:
 
 
 func test_spell_and_spell_state_have_explicit_placeholders() -> void:
-	# 符卡键与新增的 SPELL 状态名都必须在 JSON 里有显式占位，不能靠 _tr() 回退。
+	# 符卡键与 SPELL 状态名都必须在 JSON 里有显式占位，不能靠 _tr() 回退。
 	var keys: Array[String] = [
 		"spell.spell_a.name", "spell.spell_a.desc",
 		"spell.spell_b.name", "spell.spell_b.desc",

@@ -20,12 +20,16 @@ const I18N_FILES: Dictionary = {
 }
 
 ## 10 个心得。effect 由 RunState 解释，amount 为效果数值。
+##
+## 2026-10-21 随战斗系统调整：空架收势缩短后「架窗」价值上升（u01 +2→+3）；
+## 前摇基准已从 18f 降到 14f，-2f 只有 14% 而 -3f 才可感知（u02 -2→-3）；
+## 刀光预警 SLASH_WARN_FRAMES 是 8f，hint 提前 4f 不够用（u05 4→6）。
 const UPGRADE_DEFS := [
-	{"id": "u01", "effect": "guard_duration", "amount": 2},
-	{"id": "u02", "effect": "commit", "amount": -2},
+	{"id": "u01", "effect": "guard_duration", "amount": 3},
+	{"id": "u02", "effect": "commit", "amount": -3},
 	{"id": "u03", "effect": "perfect_gain", "amount": 18},
 	{"id": "u04", "effect": "start_flow", "amount": 10},
-	{"id": "u05", "effect": "hint_lead", "amount": 4},
+	{"id": "u05", "effect": "hint_lead", "amount": 6},
 	{"id": "u06", "effect": "see_through", "amount": 1},
 	{"id": "u07", "effect": "pursuit", "amount": 1},
 	{"id": "u08", "effect": "guts", "amount": 1},

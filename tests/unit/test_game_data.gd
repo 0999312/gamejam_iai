@@ -11,12 +11,13 @@ func test_upgrade_registry_contains_ten_entries() -> void:
 	var data := registry.get_entry(ResourceLocation.new("iai", "u01")) as UpgradeData
 	assert_not_null(data)
 	assert_eq(data.effect, &"guard_duration")
-	assert_eq(data.amount, 2)
+	assert_eq(data.amount, 3)
 
 
 func test_upgrade_text_comes_from_i18n_placeholder() -> void:
+	# 2026-10-21：占位形态保留（文案待人类定稿），但描述已同步实际数值。
 	assert_true(I18NManager.get_text("upgrade.u01.name").begins_with("[占位]"))
-	assert_true(I18NManager.get_text("upgrade.u01.desc").begins_with("[占位]"))
+	assert_true(I18NManager.get_text("upgrade.u01.desc").contains("+3"))
 	assert_true(I18NManager.get_text("tutorial.start").begins_with("[占位]"))
 
 
