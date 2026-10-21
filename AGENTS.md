@@ -3,6 +3,27 @@
 > 本文件由 DeepSeek Harness (DSH) 自动加载到本项目的每个会话，作为项目级工作指令。
 > 更具体的指令优先于更宽泛的指令；本文件不覆盖系统、开发者或用户的直接指令。
 
+## 0. 会话启动契约（最高优先级，先做这一步）
+
+> 2026-10-21 审计发现：项目引入了 33 个 GDAS 技能与 5 个插件，但**技能一次都没被实际加载使用**，
+> 插件使用也不完整（`EventBus`/`UIManager`/`Codec` 零调用）。因此把「使用约定」升级为强制契约。
+> 详细规则、技能↔任务映射表、插件允许/禁止用法、验收清单见 **`docs/dev-contract.md`**。
+
+1. **开工第一步**：读取 `docs/dev-contract.md`。**在读完之前，不得创建、修改或删除仓库内任何文件**
+   （只读勘察除外，但勘察完仍要先读契约再动手）。
+2. **声明**：第一条回复里写明「本次任务加载的技能：…；使用的插件：…」。没有匹配技能时，写明为什么没有。
+3. **真加载**：用 `skill` 工具实际加载技能（只写名字不算），按其决策树执行；技能示例代码必须适配本项目
+   （`GUIDE` 输入、`sound_manager`、`mc_game_framework`、GUT、§8 规范）。
+4. **插件优先**：输入一律 `GUIDE`（禁止 `Input.is_action_*` 等直读）；音频一律 `SoundManager`
+   （禁止 `AudioStreamPlayer.new()`）；文本一律 `I18NManager`（禁止 `TranslationServer`）；
+   数据表用 `RegistryManager`；测试只用 `GUT`。不得绕过插件自建替代实现。
+5. **不留新债**：`EventBus`/`UIManager`/`Codec` 当前零调用属已知偏差，处置只能是「接线」或「人类确认豁免」，
+   二选一后写进 `docs/dev-contract.md` §3.1；在此之前新增代码不得扩大偏差。
+6. **留痕**：模块完成后在 `docs/gamejam/ai-disclosure.md` 追加一行，其中写明所用技能名；
+   并在对应 `docs/dev-example/*.md` 记录改动与验证数据。
+7. **冲突即停**：本契约与技能原文冲突时，`AGENTS.md`（尤其 §2 活动硬约束、§8 编码规范）优先；
+   与人类当次指令冲突时，停下来说明，由人类裁决。
+
 ## 1. 项目概况
 
 - **引擎**: Godot **4.7.2** stable (mono，支持 C#)。引擎路径 `E:/godot_learning/Godot_v4.6.2-stable_mono_win64/godot.exe`（目录名为旧版遗留，二进制实测 `4.7.2.stable.mono.official`）
@@ -105,7 +126,7 @@ pwsh -File .dsh/skills/godot-testing-patterns/scripts/run_tests.ps1
 
 **分组**：架构与工程（9）、2D 玩法与表现（12）、UI/音频/存档（4）、构建与质量（6）、类型参考（2：格斗 + AI 导航）。
 
-**使用约定**：
+**使用约定**（**强制门见 §0 与 `docs/dev-contract.md`**，本节是背景说明）：
 1. 实现前先按任务匹配加载对应技能（如玩家角色 → `godot-characterbody-2d`；判定 → `godot-combat-system` / `godot-2d-physics`；状态 → `godot-state-machine-advanced`）。
 2. 技能为**参考**而非成品：其示例代码默认面向纯 Godot，需适配本项目插件约定（`GUIDE` 输入、`mc_game_framework`、`sound_manager`）、静态类型与命名规范（§8）。
 3. 技能只解决工程实现；**涉及文案/美术/音乐的需求仍受 §2 约束**（AI 不得生成，由人类提供或 `PLACEHOLDER`）。

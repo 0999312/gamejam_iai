@@ -245,3 +245,25 @@ Start-Process -FilePath "E:/godot_learning/Godot_v4.6.2-stable_mono_win64/godot.
 3. **AI 读招 `reaction_frames` 在短前摇下被夹到 0**：按下时刻 `max(0, commit_total − cover)`，
    玩家前摇 14f 短于 AI 架窗 18–22f 时 AI 第一帧就起架，反应快慢只由 `guard_chance` 决定；
 4. 教学关 `guard_chance` 0.45 偏高、`design.md` 帧表过期、符卡文案仍是 `PLACEHOLDER`（需人类撰写）。
+
+---
+
+## 7. 补记：技能与插件的实际使用审计（2026-10-21）
+
+开发完成后做了一次回溯审计，结论写在这里，避免以后误以为「技能已经用过了」。
+
+**技能：0 次加载。** `scripts/`、`tests/`、`docs/dev-example/` 中没有任何技能引用，
+`ai-disclosure.md` 的历史行里也没有技能名。M1–M5、符卡 v0.20 重做、平衡 02–04b 全部是
+「凭经验推导 + 探针验证」，没有走 GDAS 技能。
+
+代价是可见的：输入缓冲先后做了「4f → 覆盖整段硬直 → 整体删除」三次迭代，
+而 `godot-genre-fighting` / `godot-input-handling` 里对「读招类游戏不该用长缓冲」本就有直接论述；
+AI 读招、帧数据分析也没有先查 `godot-state-machine-advanced` 的决策树。**这轮返工是流程债，不是技术债。**
+
+**插件：4 用 3 空。** `GUIDE` ✅、`SoundManager` ✅、`I18NManager` ✅、`RegistryManager` ✅；
+`EventBus` ❌、`UIManager` ❌（7 处裸 `change_scene_to_file`）、`Codec` ❌。
+
+处置：`AGENTS.md` 新增 **§0 会话启动契约**（开工先读 `docs/dev-contract.md`、声明并加载技能、插件优先、
+未接线插件不得扩大偏差），并新增守卫测试 `tests/unit/test_project_contract.gd`
+（扫描 `res://scripts/` 的禁止 API + 校验 5 个 autoload 存在），把这套约束变成会失败的红灯。
+
