@@ -221,3 +221,24 @@
   但**保留 `[占位]` / `[PLACEHOLDER]` 前缀**，等人类定稿；`spell.*.desc` 4 键仍无显示路径。
 - **结果**：GUT **192 tests / 738 asserts** 全绿（退出码 0）；headless 冒烟 240 帧无错误，
   本地化 151 keys × 2 语言。
+
+### 2026-10-21 第六轮：难度量化与结构性修复（v0.29）
+
+人类（`m01664`）：「难度似乎还是会有点吃力，我自己都过不去……或许是空挥，或许是其他原因。
+可能需要大幅度检查。」→ 本轮先写可复现的量化工具，再按证据改数值，而不是继续猜单点。
+
+- **新增工具**：`tools/sim_balance.gd`（5 关 × 60 局自动对战，输出反应延迟曲线与 AI 架刀率对照）、
+  `tools/sim_trace.gd`（单局逐帧日志）。二者都是 `--headless -s` 跑的临时工具，不进 GUT。
+- **实测根因（三条）**：① AI 架刀率是最大难度源——`guard_chance` 压到 0 / 0.15 / 0.30 时胜率
+  99.9% / 89.6% / 65.3%，原档只有 31.9%；② 玩家出刀后 33–47f 完全无法防御，而 AI 前摇 24–36f，
+  「出刀 → AI 起手」在数值上必挨一刀；③ 告警窗 `SLASH_WARN_FRAMES = 8`（133ms）低于人类视觉反应。
+- **改动**：`SLASH_WARN_FRAMES` 8→**16**；玩家 `guard_duration_base` 20/18/22→**24/22/26**、
+  `whiff_recovery` 20/16/24→**14/12/18**、`blocked_recovery` 32/24/36→**28/22/32**、
+  `cancel_cost` 5→**10**；`ai_profile.gd` 五性格 `guard_chance` 约 -40%；
+  `duel_sim.gd` 新增**收招取消**（`RECOVERY` 第 2 帧起按防可取消转防，代价 10 心流 + 架窗减半），
+  并让 `_guard_held` 的「按住即起架」覆盖 `RECOVERY`。
+- **验证**：模拟延迟 9f（150ms）胜率 31.9%→**100%**，延迟 15f（250ms）**50%**，延迟 0（告警即按）
+  **53.3%**（早按会空架 -8 心流）；GUT **195 tests / 746 asserts** 全绿；headless 冒烟 240 帧
+  `151 entries × 2 语言`、stderr 空。
+- **未做**：7 个空壳 `.tscn` 的场景化、`duel_view`/`duel_audio` 直接测试、`test_project_contract`
+  对 `tools/` 以外目录的扩展。详见 `docs/dev-example/balance-pass-05.md` §9。

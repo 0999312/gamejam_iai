@@ -19,9 +19,9 @@ func before_each() -> void:
 func test_player_a_balance_values() -> void:
 	var data := FighterData.for_character(&"char_a")
 	assert_eq(data.base_commit, 14, "主动出刀前摇 233ms：够对手读，又不至于让玩家觉得按了不出刀")
-	assert_eq(data.whiff_recovery, 20)
-	assert_eq(data.blocked_recovery, 32, "被架必须能被确定惩罚")
-	assert_eq(data.guard_duration_base, 20, "架窗要能覆盖 100–300ms 的按下延迟")
+	assert_eq(data.whiff_recovery, 14)
+	assert_eq(data.blocked_recovery, 28, "被架必须能被确定惩罚")
+	assert_eq(data.guard_duration_base, 24, "架窗要能覆盖 100–300ms 的按下延迟")
 	assert_eq(data.hit_damage, 10)
 	assert_eq(data.slash_cost, 4, "主动出刀消耗心流")
 	assert_eq(data.flow_regen_interval, 24, "待机自然恢复心流")
@@ -174,7 +174,7 @@ func test_guard_cancel_only_in_early_commit_window() -> void:
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.GUARD)
 	_tick_n(1)
 	assert_eq(sim.p1.state, DuelTypes.State.GUARD)
-	assert_eq(sim.p1.flow, 31)
+	assert_eq(sim.p1.flow, 26)
 
 
 ## 防御转攻：架窗内按斩 = 放弃剩余格挡、立刻出刀。
@@ -186,7 +186,51 @@ func test_guard_can_cancel_into_attack() -> void:
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
 	_tick_n(1)
 	assert_eq(sim.p1.state, DuelTypes.State.COMMIT, "架中按斩应立刻收架出刀")
-	assert_eq(sim.p1.flow, 31, "取消税 5 + 出刀 4")
+	assert_eq(sim.p1.flow, 26, "取消税 10 + 出刀 4")
+
+
+## 2026-10-21 收招取消：出刀后的 RECOVERY 里按架可以转防，
+## 代价 = cancel_cost 心流 + 架窗减半。这是「出刀即判死刑」的体验修复。
+func test_recovery_can_cancel_into_guard() -> void:
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	_wait_for_state(DuelTypes.Side.P1, DuelTypes.State.RECOVERY)
+	_tick_n(2)
+	var flow_before := sim.p1.flow
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.GUARD)
+	_tick_n(1)
+	assert_eq(sim.p1.state, DuelTypes.State.GUARD, "收招中按架应立刻转防")
+	assert_eq(sim.p1.flow, flow_before - 10, "收招取消要付取消税")
+	var tier := DuelTypes.tier_for_flow(sim.p1.flow)
+	var expected := maxi(6, (24 + DuelTypes.GUARD_TIER_OFFSET[tier]) / 2)
+	assert_eq(sim.p1.guard_duration, expected, "收招取消进来的架窗减半")
+
+
+## 收招最前 2 帧不能取消：否则「出刀 → 立刻取消」等于没有前摇。
+func test_recovery_cancel_blocked_in_first_two_frames() -> void:
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	_wait_for_state(DuelTypes.Side.P1, DuelTypes.State.RECOVERY)
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.GUARD)
+	_tick_n(1)
+	assert_eq(sim.p1.state, DuelTypes.State.RECOVERY, "收招第 0 帧不允许取消")
+
+
+## 心流不够时收招取消不生效（避免「无资源也能无限防守」）。
+func test_recovery_cancel_needs_flow() -> void:
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	_wait_for_state(DuelTypes.Side.P1, DuelTypes.State.RECOVERY)
+	sim.p1.flow = 9
+	_tick_n(2)
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.GUARD)
+	_tick_n(1)
+	assert_eq(sim.p1.state, DuelTypes.State.RECOVERY, "心流不足 10 不能取消")
+
+
+func _wait_for_state(side: int, state: int) -> void:
+	var guard := 0
+	while sim.get_fighter(side).state != state and guard < 120:
+		sim.tick()
+		guard += 1
+	assert_eq(sim.get_fighter(side).state, state, "等待状态超时")
 
 
 ## 架住之后：GUARD_REC 的前 GUARD_COUNTER_WINDOW 帧内按斩，取消收架反打。

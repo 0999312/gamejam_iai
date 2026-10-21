@@ -28,7 +28,7 @@ extends Resource
 ## 至少有一次按得出来的机会；5f（83ms）低于人类反应下限，等于不存在。
 @export var cancel_window: int = 10
 ## 取消出架消耗的心流。
-@export var cancel_cost: int = 5
+@export var cancel_cost: int = 10
 ## 单刀基础伤害（均衡/对手 10，快剑 7，重剑 15）。
 @export var hit_damage: int = 10
 ## 「破势」：命中后额外追加给受击方的硬直帧（重剑 12f = 200ms）。
@@ -59,7 +59,7 @@ extends Resource
 ## 2026-10-21：12 → 20f（333ms）。反应的瓶颈是前摇（见 base_commit），架窗修的是
 ## 「按早了会不会空架」；基准抬到 20f 后，心流跌到 SPREAD 也不会直接变成防不住。
 @export var guard_startup: int = 1
-@export var guard_duration_base: int = 20
+@export var guard_duration_base: int = 24
 @export var guard_recovery: int = 8
 ## 架窗按满也没挡到（空架）后的收势帧数。2026-10-21 决策：从 guard_recovery
 ## （8/7/9f）缩到 1–2f、重剑最多 4f —— 空架仍然扣心流，但不再罚站，
@@ -106,13 +106,13 @@ static func player_a() -> FighterData:
 	data.base_commit = 14
 	data.slash_frames = 5
 	data.cancel_window = 10
-	data.cancel_cost = 5
-	data.whiff_recovery = 20
-	data.blocked_recovery = 32
+	data.cancel_cost = 10
+	data.whiff_recovery = 14
+	data.blocked_recovery = 28
 	data.hitstun = 24
 	data.invuln = 12
 	data.guard_startup = 1
-	data.guard_duration_base = 20
+	data.guard_duration_base = 24
 	data.guard_recovery = 8
 	data.whiff_guard_recovery = 2
 	data.clash_frames = 12
@@ -140,9 +140,9 @@ static func player_b() -> FighterData:
 	data.base_commit = 11
 	data.cancel_window = 8
 	data.slash_frames = 4
-	data.whiff_recovery = 16
-	data.blocked_recovery = 24
-	data.guard_duration_base = 18
+	data.whiff_recovery = 12
+	data.blocked_recovery = 22
+	data.guard_duration_base = 22
 	data.guard_recovery = 7
 	data.whiff_guard_recovery = 1
 	data.start_flow = 46
@@ -161,10 +161,10 @@ static func player_c() -> FighterData:
 	data.max_hp = 40
 	data.base_commit = 17
 	data.slash_frames = 6
-	data.whiff_recovery = 24
-	data.blocked_recovery = 36
+	data.whiff_recovery = 18
+	data.blocked_recovery = 32
 	data.guard_startup = 2
-	data.guard_duration_base = 22
+	data.guard_duration_base = 26
 	data.guard_recovery = 9
 	data.whiff_guard_recovery = 4
 	data.start_flow = 36

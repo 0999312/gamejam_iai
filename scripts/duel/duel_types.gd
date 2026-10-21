@@ -49,9 +49,11 @@ const GUARD_TIER_OFFSET: Array[int] = [0, 4, 8]
 const PERFECT_TIER_OFFSET: Array[int] = [0, 1, 2]
 
 ## 出刀预警：COMMIT 剩余帧数降到该值时，通知表现层把气环转白并出声。
-## 取 8f（133ms）——它不是给人「反应」用的，而是给已经看着气环收束的人
-## 一个「就是现在」的确认点；真正的反应余量来自前摇本身（≥18f）。
-const SLASH_WARN_FRAMES: int = 8
+## 2026-10-21 由 8f（133ms）改为 16f（267ms）。原因：模拟实测「看到亮白再按」的
+## 玩家如果按人类反应（150–250ms）会永远晚于判定，胜率从 100% 掉到 28%；
+## 而架窗只有 18–22f，早按又会在对手 28–30f 前摇结束前过期。16f 把「确认点」
+## 拉回人类反应窗内，架刀才有可操作的路径；真正的「看破」仍是提前读收束环。
+const SLASH_WARN_FRAMES: int = 16
 
 const FLOW_TIER_SPREAD_MAX := 33
 const FLOW_TIER_CALM_MAX := 66

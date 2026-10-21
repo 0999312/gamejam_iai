@@ -45,12 +45,19 @@ const TIER_HARD: int = 1
 
 ## 各性格的「基准表」（HARD = 历史值；NORMAL 由基准表衍生）。
 ## aggression / guard_chance / counter_chance / decision_interval / post_hit_pause 见 for_persona。
+##
+## 2026-10-21 架刀率整体下调约 40%（0.30/0.25/0.40/0.40/0.45 → 0.18/0.15/0.24/0.24/0.28）。
+## 原因：模拟实测（300 局 × 5 关，玩家反应 150ms）把 guard_chance 压到 0 时胜率 99.9%、
+## 0.15 时 89.6%、0.30 时 65.3%，而原档（含 reaction bias）只有 32%。玩家前摇 14f 短于
+## AI 架窗 22–26f，AI 用「剩余帧数」精确起架，玩家每一次出刀都在掷一枚 30–45% 的
+## 「被架 → 32f blocked_recovery 挨反击」硬币，而且玩家没有虚招可以反制。
+## 架刀仍是 AI 的主要防御手段，只是不再吃掉玩家大半的进攻尝试。
 const _BASE := {
-	&"persona_1_teaching": {"agg": 0.30, "feint": 0.03, "react": 15, "decide": 20, "guard": 0.30, "counter": 0.40, "post": 75, "spell": 0.0},
-	&"persona_2_aggressive": {"agg": 0.65, "feint": 0.08, "react": 16, "decide": 15, "guard": 0.25, "counter": 0.50, "post": 50, "spell": 0.0},
-	&"persona_3_veteran": {"agg": 0.45, "feint": 0.25, "react": 14, "decide": 19, "guard": 0.40, "counter": 0.55, "post": 50, "spell": 0.0},
-	&"persona_4_deceptive": {"agg": 0.50, "feint": 0.45, "react": 13, "decide": 17, "guard": 0.40, "counter": 0.50, "post": 50, "spell": 0.0},
-	&"persona_5_boss": {"agg": 0.60, "feint": 0.35, "react": 12, "decide": 15, "guard": 0.45, "counter": 0.55, "post": 40, "spell": 0.85},
+	&"persona_1_teaching": {"agg": 0.30, "feint": 0.03, "react": 15, "decide": 20, "guard": 0.18, "counter": 0.40, "post": 75, "spell": 0.0},
+	&"persona_2_aggressive": {"agg": 0.65, "feint": 0.08, "react": 16, "decide": 15, "guard": 0.15, "counter": 0.50, "post": 50, "spell": 0.0},
+	&"persona_3_veteran": {"agg": 0.45, "feint": 0.25, "react": 14, "decide": 19, "guard": 0.24, "counter": 0.55, "post": 50, "spell": 0.0},
+	&"persona_4_deceptive": {"agg": 0.50, "feint": 0.45, "react": 13, "decide": 17, "guard": 0.24, "counter": 0.50, "post": 50, "spell": 0.0},
+	&"persona_5_boss": {"agg": 0.60, "feint": 0.35, "react": 12, "decide": 15, "guard": 0.28, "counter": 0.55, "post": 40, "spell": 0.85},
 }
 
 ## NORMAL 档对基准表的修正（§2.2「慢刀快心」：刀慢 167ms，但出手不更少）。

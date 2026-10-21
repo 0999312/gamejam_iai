@@ -240,9 +240,12 @@ func _apply_pending_input(fighter: FighterState) -> void:
 		# ① 礼让期就按着防（礼让期内输入被丢，之后没有新边沿）；
 		# ② 硬直 / 构 / 架中按下并按住（边沿被丢弃，之后一直按着也不会再起架）；
 		# ③ 架满上限后仍按着（收架回 IDLE 后无边沿）。
-		# 玩家感知就是「敌人出刀时按防没反应」。这里只补 IDLE：
+		# 玩家感知就是「敌人出刀时按防没反应」。这里补 IDLE 与 RECOVERY：
+		# 前者是常规起架，后者是「收招取消」（见 _apply_action 的 RECOVERY 分支）；
 		# 构中取消出刀仍需一次明确的按下，避免「按住防御键就永远出不了刀」。
-		if _guard_held[fighter.side] == 1 and fighter.state == DuelTypes.State.IDLE:
+		if _guard_held[fighter.side] == 1 \
+				and (fighter.state == DuelTypes.State.IDLE \
+					or fighter.state == DuelTypes.State.RECOVERY):
 			action = DuelTypes.Action.GUARD
 	if action != DuelTypes.Action.NONE:
 		_apply_action(fighter, action)
@@ -315,6 +318,16 @@ func _apply_action(fighter: FighterState, action: int) -> void:
 			# 架住之后：反击预备窗口内按斩 = 顺势斩；窗口外按下即作废。
 			if action == DuelTypes.Action.ATTACK:
 				_try_counter_strike(fighter)
+		DuelTypes.State.RECOVERY:
+			# 2026-10-21 收招取消：出刀 / 被架后的收招（14–32f）原本完全无法防御，
+			# 而 AI 前摇只有 24–36f，等于「主动出刀 = 把先手交给对手」，模拟里
+			# 玩家出刀后紧接着 AI 起手就必挨一刀。现在收招第 2 帧起可以按架取消，
+			# 代价 = 取消税（cancel_cost 心流）+ 架自身 1f 起手；出刀仍然有风险，
+			# 但不再是「出刀即判死刑」。只对 GUARD 开放，不开放反打取消。
+			if action == DuelTypes.Action.GUARD and fighter.state_frame >= 2 \
+					and fighter.flow >= fighter.data.cancel_cost:
+				_sub_flow(fighter, fighter.data.cancel_cost)
+				_enter_guard(fighter, true)
 		_:
 			pass
 
@@ -457,11 +470,15 @@ func _enter_recovery(fighter: FighterState, duration: int) -> void:
 	_enter(fighter, DuelTypes.State.RECOVERY, duration)
 
 
-func _enter_guard(fighter: FighterState) -> void:
+func _enter_guard(fighter: FighterState, short: bool = false) -> void:
 	var tier := DuelTypes.tier_for_flow(fighter.flow)
 	# 档位偏移 + 心得/残心叠加（guard_duration_base 已含 U01 与残心加成）。
 	fighter.guard_duration = fighter.data.guard_duration_base \
 			+ DuelTypes.GUARD_TIER_OFFSET[tier]
+	# 2026-10-21：「收招取消」进来的架窗减半。出刀后立刻按住防就能无代价转防，
+	# 等于抹掉出刀风险（模拟里胜率直接顶到 100%），所以要付一半的架窗当学费。
+	if short:
+		fighter.guard_duration = maxi(6, fighter.guard_duration / 2)
 	# 架势符卡有效期内架窗不低于 SPELL_STANCE_GUARD_FRAMES，给必完美判定留余量。
 	if fighter.spell_perfect_until_frame > frame:
 		fighter.guard_duration = maxi(fighter.guard_duration, SPELL_STANCE_GUARD_FRAMES)

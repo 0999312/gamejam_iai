@@ -84,7 +84,7 @@ func test_boss_clear_ends_run() -> void:
 func test_upgrade_data_modifiers() -> void:
 	run.upgrades = [&"u01", &"u02", &"u04"]
 	var data := run.player_data()
-	assert_eq(data.guard_duration_base, 23)
+	assert_eq(data.guard_duration_base, 27)
 	assert_eq(data.base_commit, 11, "基础 14f − 心得 3f")
 	assert_eq(data.start_flow, 50)
 
@@ -117,7 +117,7 @@ func test_zanshin_guarantees_flow_floor() -> void:
 	var reinforced := run.player_data()
 	assert_eq(reinforced.flow_floor, 33, "3 层残心的下限直接越过最低档上限")
 	assert_eq(reinforced.flow_loss_reduction, 9, "受击只掉 6 心流")
-	assert_eq(reinforced.guard_duration_base, 23, "同时多 3f 架窗")
+	assert_eq(reinforced.guard_duration_base, 27, "同时多 3f 架窗")
 	assert_eq(reinforced.riposte_commit_bonus, -10, "反斩随残心成长到 -10f")
 
 
