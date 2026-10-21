@@ -96,7 +96,11 @@ static func player_a() -> FighterData:
 	var data := FighterData.new()
 	data.id = &"char_a"
 	data.max_hp = 30
-	data.base_commit = 18
+	# 2026-10-21 平衡 04：玩家前摇 18 → 14f（233ms）。
+	# 前摇同时是「手感延迟」和「AI 的读招余量」，18f 让主动出刀必然被读死，
+	# 玩家体感是「按下去半天不出刀」。缩短后仍高于动作游戏的舒适区（~150ms），
+	# 保留「构」的仪式感；对手前摇 28–30f 不受影响（见 opponent_* 的显式覆盖）。
+	data.base_commit = 14
 	data.slash_frames = 5
 	data.cancel_window = 10
 	data.cancel_cost = 5
@@ -122,14 +126,16 @@ static func player_a() -> FighterData:
 	return data
 
 
-## 快剑：最短前摇（250ms）、最短空挥/被架硬直，用来换单刀 7 伤。
+## 快剑：最短前摇（183ms）、最短空挥/被架硬直，用来换单刀 7 伤。
 ## 2026-10-21：前摇 16 → 15f、架窗 20 → 18f、被架 28 → 24f、空挥 18 → 16f；
 ## 连斩惩罚 8 → 4（「快」的代价应该是伤害，不该再罚它连斩）。
+## 平衡 04：前摇 15 → 11f，取消窗随前摇收到 8f（否则「构→架」几乎覆盖整个前摇）。
 static func player_b() -> FighterData:
 	var data := player_a()
 	data.id = &"char_b"
 	data.max_hp = 30
-	data.base_commit = 15
+	data.base_commit = 11
+	data.cancel_window = 8
 	data.slash_frames = 4
 	data.whiff_recovery = 16
 	data.blocked_recovery = 24
@@ -143,12 +149,13 @@ static func player_b() -> FighterData:
 	return data
 
 
-## 重剑：最长前摇（350ms）、最长被架硬直，单刀 15 伤 + 12f（200ms）破势。
+## 重剑：最长前摇（283ms）、最长被架硬直，单刀 15 伤 + 12f（200ms）破势。
+## 平衡 04：前摇 21 → 17f，仍是三剑里最慢的一把，但不再是「按下后能抽完一口气」。
 static func player_c() -> FighterData:
 	var data := player_a()
 	data.id = &"char_c"
 	data.max_hp = 40
-	data.base_commit = 21
+	data.base_commit = 17
 	data.slash_frames = 6
 	data.whiff_recovery = 24
 	data.blocked_recovery = 36

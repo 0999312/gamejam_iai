@@ -90,6 +90,16 @@ func _flow_color(flow: int) -> Color:
 	return COLOR_FLOW_LOW
 
 
+## 刀是否正扫过去。SLASH 状态只存在一个逻辑帧（命中当帧即转收招），
+## 所以「收招的头 slash_frames 帧」也算挥砍期——纯表现，不读判定结果。
+func _is_swinging(fighter: FighterState) -> bool:
+	if fighter.state == DuelTypes.State.SLASH:
+		return true
+	if fighter.state != DuelTypes.State.RECOVERY:
+		return false
+	return fighter.state_frame < fighter.data.slash_frames
+
+
 func _draw_fighter(fighter: FighterState, x: float, base_color: Color) -> void:
 	var color := base_color
 	var body_center := Vector2(x, GROUND_Y - BODY_H * 0.5)
@@ -145,9 +155,15 @@ func _draw_fighter(fighter: FighterState, x: float, base_color: Color) -> void:
 		DuelTypes.State.HITSTUN:
 			angle = 0.9 if fighter.side == DuelTypes.Side.P1 else PI - 0.9
 	var tip := hand + Vector2(cos(angle), sin(angle)) * blade_len
+	# 出刀那一帧刀就该扫过去：SLASH 在命中当帧就转收招，只按状态画的话
+	# 刀光一次都不会出现，玩家看到的就是「按下去→人一歪→对面掉血」。
+	var swing := _is_swinging(fighter)
+	if swing and fighter.state != DuelTypes.State.SLASH:
+		angle = 0.15 if fighter.side == DuelTypes.Side.P1 else PI - 0.15
+		tip = hand + Vector2(cos(angle), sin(angle)) * blade_len
 	draw_line(hand, tip, Color("#dfe7f2"), 4.0, true)
 
-	if fighter.state == DuelTypes.State.SLASH:
+	if swing:
 		var arc_center := Vector2(cx, top + 70.0)
 		var start := -0.9 if fighter.side == DuelTypes.Side.P1 else PI - 0.9
 		var end := 0.9 if fighter.side == DuelTypes.Side.P1 else PI + 0.9

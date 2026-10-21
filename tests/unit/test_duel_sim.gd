@@ -18,7 +18,7 @@ func before_each() -> void:
 
 func test_player_a_balance_values() -> void:
 	var data := FighterData.for_character(&"char_a")
-	assert_eq(data.base_commit, 18, "主动出刀前摇应足够长，给对手反应空间")
+	assert_eq(data.base_commit, 14, "主动出刀前摇 233ms：够对手读，又不至于让玩家觉得按了不出刀")
 	assert_eq(data.whiff_recovery, 20)
 	assert_eq(data.blocked_recovery, 32, "被架必须能被确定惩罚")
 	assert_eq(data.guard_duration_base, 20, "架窗要能覆盖 100–300ms 的按下延迟")
@@ -317,6 +317,34 @@ func test_buffered_attack_survives_recovery() -> void:
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
 	_tick_n(30)
 	assert_eq(sim.p1.state, DuelTypes.State.COMMIT, "预输入跨过硬直，收招结束立刻出刀")
+
+
+## 预读连斩：在「构」里按的第二刀不能丢，要一路活过斩与收招。
+## 旧实现在 COMMIT 状态直接把 ATTACK 丢进 `_: pass`，玩家连按第二下毫无反应。
+func test_attack_pressed_during_commit_is_buffered() -> void:
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	_tick_n(2)
+	assert_eq(sim.p1.state, DuelTypes.State.COMMIT)
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	_tick_n(3)
+	assert_eq(sim.p1.buffer_action, DuelTypes.Action.ATTACK, "构中第二刀进缓冲而不是被吞")
+
+	# 构 13f → 斩 5f → 收招 14f（before_each 的 whiff_recovery），第 33 帧回 IDLE。
+	_tick_n(40)
+	assert_eq(sim.p1.state, DuelTypes.State.COMMIT, "收招结束立刻接上缓冲的第二刀")
+	assert_eq(sim.p1.repeat_streak, 1, "预读连斩同样吃连斩惩罚")
+
+
+## 缓冲不能无限长：过了整条「构→斩→收招」链就该作废，否则会出现
+## 「几秒前按的一刀自己冒出来」的鬼畜操作。
+func test_buffered_attack_expires_after_combo_chain() -> void:
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	_tick_n(2)
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	var expire := sim.p1.buffer_expire_frame
+	_tick_n(80)
+	assert_eq(sim.p1.buffer_action, DuelTypes.Action.NONE)
+	assert_lt(expire, sim.frame, "缓冲窗口应只覆盖这一条连段")
 
 
 ## 架住后 15f（250ms 反应）按斩：仍在 30f 反击窗内，前摇 -6f（顺势斩）。

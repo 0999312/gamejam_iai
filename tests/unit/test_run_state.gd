@@ -85,7 +85,7 @@ func test_upgrade_data_modifiers() -> void:
 	run.upgrades = [&"u01", &"u02", &"u04"]
 	var data := run.player_data()
 	assert_eq(data.guard_duration_base, 22)
-	assert_eq(data.base_commit, 16)
+	assert_eq(data.base_commit, 12, "基础 14f − 心得 2f")
 	assert_eq(data.start_flow, 50)
 
 

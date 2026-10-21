@@ -320,6 +320,13 @@ func _apply_action(fighter: FighterState, action: int) -> void:
 			if action == DuelTypes.Action.GUARD and fighter.state_frame < fighter.data.cancel_window:
 				_sub_flow(fighter, fighter.data.cancel_cost)
 				_enter_guard(fighter)
+			elif action == DuelTypes.Action.ATTACK:
+				# 预读连斩：构中按的第二刀不再被吞，而是排到「斩→收招」之后。
+				_buffer_next_attack(fighter)
+		DuelTypes.State.SLASH:
+			# 刀已经挥出去时按的第二刀同理，必须活过接下来的收招。
+			if action == DuelTypes.Action.ATTACK:
+				_buffer_next_attack(fighter)
 		DuelTypes.State.GUARD:
 			# 架中转攻：架窗还没结束就按斩，等于放弃剩下的格挡机会强行出刀。
 			# 2026-10-21：原先 GUARD 状态直接丢弃输入，导致「防御转攻」根本打不出来。
@@ -365,6 +372,18 @@ func _buffer(fighter: FighterState, action: int) -> void:
 	# 玩家在 GUARD_REC 第一帧按下去，等能动时缓冲早已过期——等于「按了没反应」。
 	fighter.buffer_expire_frame = maxi(frame + fighter.data.input_buffer,
 			fighter.state_start_frame + fighter.state_duration + 1)
+
+
+## 预读连斩：在「构」或「斩」期间按下的斩，要活到「本次刀落完 + 收招结束」。
+## 只按当前状态长度算（_buffer 的做法）不够——构之后还有斩和收招，
+## 玩家在动作中途按的第二刀会在半路过期，手感就是「连按没反应」。
+func _buffer_next_attack(fighter: FighterState) -> void:
+	_buffer(fighter, DuelTypes.Action.ATTACK)
+	var tail: int = fighter.data.slash_frames + maxi(fighter.data.whiff_recovery,
+			fighter.data.blocked_recovery)
+	fighter.buffer_expire_frame = maxi(fighter.buffer_expire_frame,
+			fighter.state_start_frame + fighter.state_duration + tail
+			+ fighter.data.input_buffer)
 
 
 func _advance(fighter: FighterState) -> void:

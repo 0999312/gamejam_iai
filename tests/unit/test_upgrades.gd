@@ -21,7 +21,8 @@ func _tick_n(sim: DuelSim, count: int) -> void:
 func test_u03_perfect_block_grants_18() -> void:
 	var sim := _make_sim({"perfect_gain": 18})
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
-	_tick_n(sim, 15)
+	# 构 14f：第 15 帧落刀；第 12 帧起架（startup 1）→ 生效 2 帧后挡下，算完美。
+	_tick_n(sim, 11)
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
 	_tick_n(sim, 4)
 	assert_eq(sim.p2.flow, 58)
