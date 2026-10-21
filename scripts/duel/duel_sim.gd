@@ -518,6 +518,9 @@ func _finish_guard(fighter: FighterState) -> void:
 			_sub_flow(fighter, WHIFF_GUARD_FLOW_LOSS)
 		fighter.perfect_streak = 0
 		guard_whiffed.emit(fighter.side)
+		# 空架不罚站：只付 whiff_guard_recovery（1/2/4f），仍扣心流、断完美连击。
+		_enter(fighter, DuelTypes.State.GUARD_REC, fighter.data.whiff_guard_recovery)
+		return
 	_enter_guard_rec(fighter)
 
 

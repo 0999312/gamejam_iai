@@ -61,6 +61,10 @@ extends Resource
 @export var guard_startup: int = 1
 @export var guard_duration_base: int = 20
 @export var guard_recovery: int = 8
+## 架窗按满也没挡到（空架）后的收势帧数。2026-10-21 决策：从 guard_recovery
+## （8/7/9f）缩到 1–2f、重剑最多 4f —— 空架仍然扣心流，但不再罚站，
+## 让「预判起架」失败后能无感转回，同时保留轻/重剑的切换手感差异。
+@export var whiff_guard_recovery: int = 2
 
 @export_group("Clash")
 @export var clash_frames: int = 12
@@ -110,6 +114,7 @@ static func player_a() -> FighterData:
 	data.guard_startup = 1
 	data.guard_duration_base = 20
 	data.guard_recovery = 8
+	data.whiff_guard_recovery = 2
 	data.clash_frames = 12
 	data.start_flow = 40
 	data.max_flow = 100
@@ -139,6 +144,7 @@ static func player_b() -> FighterData:
 	data.blocked_recovery = 24
 	data.guard_duration_base = 18
 	data.guard_recovery = 7
+	data.whiff_guard_recovery = 1
 	data.start_flow = 46
 	data.flow_regen_interval = 22
 	data.hit_damage = 7
@@ -160,6 +166,7 @@ static func player_c() -> FighterData:
 	data.guard_startup = 2
 	data.guard_duration_base = 22
 	data.guard_recovery = 9
+	data.whiff_guard_recovery = 4
 	data.start_flow = 36
 	data.slash_cost = 5
 	data.flow_regen_interval = 26

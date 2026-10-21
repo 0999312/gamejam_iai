@@ -182,3 +182,19 @@
   本地化 **147 keys × 2 语言**。
 - **未修（留待人工决策）**：7 个 `.tscn` 仍是空壳（UI 仍由代码构建，改为编辑器场景是独立重构）；
   `MetaSave` 设置去抖只做到 0.35s 合并写入；`duel_view.gd` / `duel_audio.gd` 仍无直接测试。
+
+### 2026-10-21 第四轮：架防手感与难度单一真相
+
+人类决策（`m01110`）：空架收势「缩短到 1 到 2 帧，重剑最多 4 帧，然后扣除心流」，理由是
+「架防过期可以让人无感切换，但总有操作空间，也便于区分角色」。
+
+- **架防**：新增 `FighterData.whiff_guard_recovery`（均衡 2f / 快剑 1f / 重剑 4f）；`_finish_guard`
+  的空架分支从 `guard_recovery`（8/7/9f）改用它，`GUARD_REC` 只留给「格挡成功后」。
+  空架仍扣 8 心流、断完美连击、发 `guard_whiffed`——惩罚保留，罚站取消。
+  配合「按住防御在 `IDLE` 自动起架」，预判失败后按住不放即可续下一段架。
+- **副作用（已记录）**：空架窗口（1–4f）已短于 AI 认招迟滞 `counter_delay_frames`（≥4f），
+  AI 不再保证反抓空架；确定反改由「被架收招」（`blocked_recovery` 24–36f）覆盖。
+  `_try_counter` 同时修正为「只有真的起构才消费骰子」，自己还在硬直里时保留机会。
+- **难度单一真相**：删除 `GameBootstrap.hard_mode` 缓存副本（与 `meta.settings["hard_mode"]` 脱钩，
+  测试替换 meta 后第 2 关敌人血量被错算成 40），`duel_controller` 改读 `_meta_hard_mode()`。
+- **结果**：GUT **191 tests / 736 asserts** 全绿（退出码 0）。

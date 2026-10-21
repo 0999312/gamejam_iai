@@ -42,8 +42,8 @@ var pending_mode: StringName = &"run"
 ## 菜单选择：char_a / char_b / char_c；由 RunState 读取。
 var pending_character: StringName = &"char_a"
 
-## 困难模式：局外解锁 + 设置开关。
-var hard_mode: bool = false
+## 注意：困难模式只存在 meta.settings["hard_mode"] 一处真相，这里不再缓存副本。
+## 缓存副本会与 meta 脱钩（测试替换 meta、读档后重载都会读到旧值）。
 
 
 func _ready() -> void:
@@ -56,7 +56,6 @@ func _ready() -> void:
 	meta = MetaSave.load_from()
 	KeyBindings.normalize(meta.settings)
 	_load_i18n(current_language())
-	hard_mode = bool(meta.settings.get("hard_mode", false))
 	_ensure_audio_buses()
 	apply_settings()
 	_refresh_guide_joy_devices.call_deferred()
@@ -130,7 +129,6 @@ func wipe_save() -> bool:
 	var ok := MetaSave.wipe(path)
 	meta = MetaSave.load_from(path)
 	KeyBindings.normalize(meta.settings)
-	hard_mode = bool(meta.settings.get("hard_mode", false))
 	apply_settings()
 	I18NManager.set_language(current_language())
 	return ok
@@ -152,7 +150,6 @@ func apply_settings() -> void:
 	if SoundManager != null:
 		SoundManager.set_sound_volume(sfx)
 		SoundManager.set_ambient_sound_volume(ambient)
-	hard_mode = bool(meta.settings.get("hard_mode", false))
 	_set_fullscreen(bool(meta.settings.get("fullscreen", false)))
 
 

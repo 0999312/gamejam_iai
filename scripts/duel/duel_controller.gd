@@ -87,9 +87,16 @@ func _ready() -> void:
 			_run_seed,
 			GameBootstrap.meta if GameBootstrap != null else null,
 			GameBootstrap.pending_character if GameBootstrap != null else &"char_a",
-			GameBootstrap.hard_mode if GameBootstrap != null else false
+			_meta_hard_mode()
 		)
 		_start_stage()
+
+
+## 困难模式只存在 meta.settings["hard_mode"] 一处真相；读缓存副本会读到旧值。
+func _meta_hard_mode() -> bool:
+	if GameBootstrap == null or GameBootstrap.meta == null:
+		return false
+	return bool(GameBootstrap.meta.settings.get("hard_mode", false))
 
 
 ## 非零随机种子。0 在 DuelSim/DuelAi/RunState 里是「请自行 randomize」的哨兵值，

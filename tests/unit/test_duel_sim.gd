@@ -128,6 +128,8 @@ func test_whiffed_guard_loses_flow() -> void:
 
 	assert_eq(sim.p2.flow, 32)
 	assert_eq(sim.p2.state, DuelTypes.State.GUARD_REC)
+	assert_eq(sim.p2.state_duration, sim.p2.data.whiff_guard_recovery,
+			"空架只付短收势，不再罚站 guard_recovery")
 	assert_signal_emitted(sim, "guard_whiffed")
 
 
@@ -489,3 +491,16 @@ func test_holding_guard_reenters_after_expiry() -> void:
 		last_state = sim.p1.state
 	assert_gt(entries, 1, "按住不放，架满收势后应自动再起架")
 	assert_lt(sim.p1.flow, flow_before, "空架仍要扣心流，不能变成无限架")
+
+
+## 回归（2026-10-21 决策）：空架收势按角色区分——快剑 1f、均衡 2f、重剑 4f，
+## 且都明显短于「被架住」的收势，让预判起架失败后能无感转回。
+func test_whiff_guard_recovery_differs_by_character() -> void:
+	var fast := FighterData.for_character(&"char_b")
+	var balanced := FighterData.for_character(&"char_a")
+	var heavy := FighterData.for_character(&"char_c")
+	assert_eq(fast.whiff_guard_recovery, 1)
+	assert_eq(balanced.whiff_guard_recovery, 2)
+	assert_eq(heavy.whiff_guard_recovery, 4)
+	assert_lt(heavy.whiff_guard_recovery, heavy.guard_recovery,
+			"重剑空架收势也要短于被架收势")

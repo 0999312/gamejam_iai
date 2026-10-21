@@ -65,20 +65,28 @@ func test_ai_guards_player_commit_when_reaction_is_fast() -> void:
 	assert_eq(sim.p1.flow, 28)
 
 
-func test_ai_counters_whiffed_guard() -> void:
-	# 确定反（路径 A）：对手空架进入 GUARD_REC 时立刻出反斩刀，不等决策节拍。
-	# 反斩有「认招迟滞」（counter_delay_frames，性格决定快慢），故留足帧数。
+## 确定反（路径 A）：对手被架住进入长收招时立刻出反斩刀，不等决策节拍。
+## 反斩有「认招迟滞」（counter_delay_frames，性格决定快慢），故留足帧数。
+##
+## 2026-10-21 决策：空架收势从 8/7/9f 缩到 1/2/4f，已短于认招迟滞（≥4f），
+## AI 不再保证反抓「空架」；空架的代价改为纯心流损失（-8）。
+## 本用例改用「被架住」的长收招（blocked_recovery 24–36f）覆盖确定反。
+func test_ai_counters_blocked_player() -> void:
 	var profile := AiProfile.teaching()
 	profile.aggression = 0.0
 	profile.counter_chance = 1.0
 	ai = DuelAi.new(DuelTypes.Side.P2, profile, 7)
 
-	sim.press(DuelTypes.Side.P1, DuelTypes.Action.GUARD)
-	for i in 40:
+	# 让 AI 先架住玩家这一刀：玩家进被架收招，给反斩留出迟滞窗口。
+	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	for i in 90:
 		ai.tick(sim)
 		sim.tick()
+		if sim.p2.state == DuelTypes.State.COMMIT:
+			break
 
-	assert_eq(sim.p2.state, DuelTypes.State.COMMIT, "空架窗口应被确定反抓住")
+	assert_eq(sim.p2.state, DuelTypes.State.COMMIT, "被架收招应被确定反抓住")
 
 
 func test_ai_feints_when_configured() -> void:

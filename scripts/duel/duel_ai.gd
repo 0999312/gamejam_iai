@@ -160,6 +160,10 @@ func _try_counter(sim: DuelSim, foe: FighterState) -> void:
 	_counter_will = false
 	# 直接按攻击：反斩是「接在硬直上的刀」，不排虚招。
 	sim.press(side, DuelTypes.Action.ATTACK)
+	# 只有真的起构了才消费这次机会：自己还在硬直里时 press 会被丢弃，
+	# 保留骰子等下一帧（否则被架/收势窗口里的反斩会永远错过）。
+	if sim.get_fighter(side).state != DuelTypes.State.COMMIT:
+		_counter_will = true
 
 
 ## 起构安全判断：前摇现在长达 28–30f（467–500ms），落构就是明牌。
