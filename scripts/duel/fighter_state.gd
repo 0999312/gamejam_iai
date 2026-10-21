@@ -24,10 +24,6 @@ var guard_blocked: bool = false
 var invuln: int = 0
 var whiff_lock: int = 0
 
-var buffer_action: int = DuelTypes.Action.NONE
-## 输入缓冲的有效截止帧（含）；-1 表示没有缓存。
-var buffer_expire_frame: int = -1
-
 var last_input_frame: int = 0
 
 var perfect_streak: int = 0
@@ -68,8 +64,6 @@ var spell_unblockable: bool = false
 var spell_stagger_bonus: int = 0
 ## 蓄力结束时自动出刀（斩类符卡）。
 var spell_pending_slash: bool = false
-## 符卡输入的缓冲截止帧；-1 表示没有缓存。
-var spell_buffer_expire_frame: int = -1
 
 
 func reset_for_duel() -> void:
@@ -84,8 +78,6 @@ func reset_for_duel() -> void:
 	guard_blocked = false
 	invuln = 0
 	whiff_lock = 0
-	buffer_action = DuelTypes.Action.NONE
-	buffer_expire_frame = -1
 	last_input_frame = 0
 	perfect_streak = 0
 	clash_count = 0
@@ -104,7 +96,6 @@ func reset_for_duel() -> void:
 	spell_unblockable = false
 	spell_stagger_bonus = 0
 	spell_pending_slash = false
-	spell_buffer_expire_frame = -1
 	if data != null:
 		spell_card = SpellCardData.for_character_id(data.spell_id)
 		spell_uses_left = 0 if spell_card == null else spell_card.uses_per_duel

@@ -292,59 +292,34 @@ func test_repeat_penalty_caps_at_two_stacks() -> void:
 	assert_eq(sim.p1.repeat_streak, 2, "间合惩罚只叠 2 层")
 
 
-func test_input_buffer_executes_on_first_actionable_frame() -> void:
-	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
-	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
-	_tick_n(14)
-	assert_eq(sim.p1.state, DuelTypes.State.RECOVERY)
-
-	# 被架硬直 25f：第 14 帧进入，第 39 帧恢复；第 37 帧按下斩（缓冲 4f）。
-	_tick_n(23)
-	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
-	_tick_n(2)
-
-	assert_eq(sim.p1.state, DuelTypes.State.COMMIT)
-
-
-func test_buffered_attack_survives_recovery() -> void:
+## 没有输入缓冲：硬直里按下的斩就是作废，不会排队到能动的那一帧。
+## 缓冲会让「几秒前按的一刀自己冒出来」，玩家感觉角色在延迟执行指令。
+func test_input_during_recovery_is_dropped() -> void:
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
 	_tick_n(26)
 	assert_eq(sim.p1.state, DuelTypes.State.RECOVERY, "刀被架住，正在收招")
 
-	# 收招中段预输入：必须活到收招结束、立刻出刀。
-	# 旧实现 4f 缓冲 < 32f 收招，玩家在硬直里按的斩 100% 被丢掉。
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
 	_tick_n(30)
-	assert_eq(sim.p1.state, DuelTypes.State.COMMIT, "预输入跨过硬直，收招结束立刻出刀")
+	assert_eq(sim.p1.state, DuelTypes.State.IDLE, "收招结束就回待机，不会自动接上那一刀")
 
 
-## 预读连斩：在「构」里按的第二刀不能丢，要一路活过斩与收招。
-## 旧实现在 COMMIT 状态直接把 ATTACK 丢进 `_: pass`，玩家连按第二下毫无反应。
-func test_attack_pressed_during_commit_is_buffered() -> void:
+## 构中连按的第二刀同样作废：要么当场生效，要么丢掉，不延后执行。
+func test_input_during_commit_is_dropped() -> void:
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
 	_tick_n(2)
 	assert_eq(sim.p1.state, DuelTypes.State.COMMIT)
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
-	_tick_n(3)
-	assert_eq(sim.p1.buffer_action, DuelTypes.Action.ATTACK, "构中第二刀进缓冲而不是被吞")
-
-	# 构 13f → 斩 5f → 收招 14f（before_each 的 whiff_recovery），第 33 帧回 IDLE。
 	_tick_n(40)
-	assert_eq(sim.p1.state, DuelTypes.State.COMMIT, "收招结束立刻接上缓冲的第二刀")
-	assert_eq(sim.p1.repeat_streak, 1, "预读连斩同样吃连斩惩罚")
+	assert_eq(sim.p1.state, DuelTypes.State.IDLE, "构中连按的第二刀不会在收招后自己冒出来")
 
 
-## 缓冲不能无限长：过了整条「构→斩→收招」链就该作废，否则会出现
-## 「几秒前按的一刀自己冒出来」的鬼畜操作。
-func test_buffered_attack_expires_after_combo_chain() -> void:
+## 待机时按下立刻生效（这是「无缓冲」下唯一该出刀的时刻）。
+func test_input_while_idle_acts_on_next_frame() -> void:
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
-	_tick_n(2)
-	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
-	var expire := sim.p1.buffer_expire_frame
-	_tick_n(80)
-	assert_eq(sim.p1.buffer_action, DuelTypes.Action.NONE)
-	assert_lt(expire, sim.frame, "缓冲窗口应只覆盖这一条连段")
+	_tick_n(1)
+	assert_eq(sim.p1.state, DuelTypes.State.COMMIT)
 
 
 ## 架住后 15f（250ms 反应）按斩：仍在 30f 反击窗内，前摇 -6f（顺势斩）。

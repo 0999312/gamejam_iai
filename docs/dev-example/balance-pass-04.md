@@ -28,17 +28,17 @@
 |---|---|---|
 | 玩家出刀前摇 | 18/15/21f → **14/11/17f（233/183/283ms）** | `fighter_data.gd` `player_a/b/c` |
 | 快剑取消窗 | 10f → **8f**（前摇缩到 11f 后，10f 几乎覆盖整个前摇） | `fighter_data.gd` `player_b` |
-| 构/斩中按斩 | 进入缓冲，过期时间活到「本次刀落完 + 收招结束」 | `duel_sim.gd` `_buffer_next_attack`、`_apply_action` 的 `COMMIT`/`SLASH` 分支 |
 | 刀光 | 收招的前 `slash_frames` 帧也算挥砍期，画刀与挥砍弧 | `duel_view.gd` `_is_swinging` |
+
+> 同一版里曾把「构/斩中按斩」加进缓冲（`_buffer_next_attack`），但试玩反馈这种「排队执行」
+> 反而更像操作延迟，当天即整体撤回，见 §6。
 
 设计约束：
 
 - **对手前摇不动**（28–30f）。对手的 28–30f 是「给玩家读招的窗口」，玩家的 14f 是「自己的手感」，
   两者是两个不同的需求，不该绑在一起。对手的 `base_commit` 在 `for_character` 里是显式覆盖的，
   改玩家的值不会漏到对手身上。
-- **不改判定、只改输入与表现**：前摇缩短是纯数值；缓冲只是把原本被丢弃的按键留到能动的帧；
-  刀光是纯视图，不读判定结果。
-- **预读连斩仍吃连斩惩罚**：`repeat_commit_penalty` 照常结算（8/4/10f），连按不会变成免费加速。
+- **不改判定、只改输入与表现**：前摇缩短是纯数值；刀光是纯视图，不读判定结果。
 
 ## 3. 实测（机器人矩阵，3 seed × stage 0/2/4，NORMAL 档）
 
@@ -62,7 +62,35 @@
 
 ## 5. 验证
 
-GUT `167/167`、`579` asserts，headless 全绿。新增用例：
+GUT `166/166`、`575` asserts，headless 全绿。新增用例：
 
-- `test_attack_pressed_during_commit_is_buffered`：构中第二刀进缓冲、收招结束立刻接上、且吃连斩惩罚；
-- `test_buffered_attack_expires_after_combo_chain`：缓冲只覆盖一条连段，不会几秒后自己冒出来。
+- `test_input_during_recovery_is_dropped`：收招里按的斩不会排队到能动那一帧；
+- `test_input_during_commit_is_dropped`：构中连按的第二刀不会在收招后自己冒出来；
+- `test_input_while_idle_acts_on_next_frame`：待机时按下立刻生效；
+- `test_spell_input_fails_immediately_while_busy`：硬直里按符卡当场判失败，不排队。
+
+## 6. 撤回：输入缓冲整体取消（同日晚）
+
+试玩反馈：**「缓冲反而导致了操作迟缓且手感不适应」**。原因很直接——缓冲的本质是
+「你现在按的指令，过一会儿自动执行」，玩家看到的是角色慢半拍地补动作，而不是自己控制。
+
+于是把三层缓冲整体删掉，改成**输入要么当场生效、要么当场作废**：
+
+| 删除项 | 原行为 | 现行为 |
+|---|---|---|
+| `FighterState.buffer_action` / `buffer_expire_frame` | 硬直里的按键存起来，回 IDLE 第一帧执行 | 字段删除；硬直里的按键直接丢弃 |
+| `DuelSim._buffer` / `_buffer_next_attack` / `_consume_buffered_input` | 同上，含「构/斩中第二刀活到收招结束」 | 函数删除 |
+| `FighterData.input_buffer` | 缓冲帧数（4f） | 字段删除 |
+| `FighterState.spell_buffer_expire_frame` | 符卡按键排队，过期才报失败 | 删除；不在 IDLE 时按符卡**当场** `spell_failed`（HUD 立刻闪红） |
+
+仍然保留的「立刻生效」路径（这些是状态内处理，不是缓冲）：
+
+- 待机按斩 / 按架 → 下一帧生效；
+- 构的前 `cancel_window`（快剑 8f / 其余 10f）内按架 → 立即取消出刀转架；
+- 架中按斩 → 立即收架出刀；
+- 架住后 30f 反击窗内按斩 → 立即顺势斩（`GUARD_REC` 里按也立刻判定）；
+- 松手收架 2f、预输入没有了，但「架 → 斩」不再需要预输入，因为它本身就是即时分支。
+
+代价：硬直末尾「提前一点点按」不再有补偿，玩家必须等回 IDLE 再按。这是用**确定感**换掉
+**容错**，也是这次反馈明确要的方向。
+

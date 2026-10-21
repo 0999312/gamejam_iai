@@ -147,8 +147,8 @@ func test_spell_is_once_per_duel() -> void:
 	assert_eq(sim.p1.spell_uses_left, 0, "每场只有 1 次")
 
 
-## 收刀硬直里按下不算「没按」：先缓冲，不要立刻报失败。
-func test_spell_input_is_buffered_while_busy() -> void:
+## 没有输入缓冲：硬直里按符卡当场判失败（HUD 闪红），不会排队稍后自动放。
+func test_spell_input_fails_immediately_while_busy() -> void:
 	_make(FighterData.for_character(&"char_a"), FighterData.for_character(&"char_a"))
 	watch_signals(sim)
 	sim.p1.flow = 90
@@ -158,11 +158,12 @@ func test_spell_input_is_buffered_while_busy() -> void:
 
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
 	sim.tick()
-	assert_signal_not_emitted(sim, "spell_failed", "缓冲期内不报失败，玩家不会以为按键坏了")
-
-	_tick_n(5)
-	assert_signal_emitted(sim, "spell_failed", "缓冲过期才报失败")
+	assert_signal_emitted(sim, "spell_failed", "不在待机就当场失败，不给「稍后自动放」的错觉")
 	assert_eq(sim.p1.spell_uses_left, 1, "失败不消耗次数")
+
+	_tick_n(20)
+	assert_eq(sim.p1.state, DuelTypes.State.IDLE)
+	assert_eq(sim.p1.spell_uses_left, 1, "失败之后不会自己补放一次")
 
 
 func test_fighter_without_spell_cannot_cast() -> void:

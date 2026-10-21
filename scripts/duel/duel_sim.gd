@@ -152,13 +152,11 @@ func press(side: int, action: int) -> void:
 
 
 ## 按下符卡键；真正的判定在下一帧 tick 内消费（与斩/架同帧排序一致）。
-## 若此刻不在 IDLE（收刀/架后/受击），进入输入缓冲，过期才报失败。
+## 没有输入缓冲：按下时若不在 IDLE，下一帧直接判失败（HUD 闪红），不会排队稍后自动放。
 func set_spell(side: int) -> void:
 	if finished or frame < opening_lock_frames:
 		return
-	var fighter := get_fighter(side)
 	_pending_spell[side] = true
-	fighter.spell_buffer_expire_frame = frame + fighter.data.input_buffer
 
 
 func tick() -> void:
@@ -176,10 +174,6 @@ func tick() -> void:
 
 	_advance(p1)
 	_advance(p2)
-
-	# 缓冲在状态推进之后消费：恢复结束的第一帧就能接上输入。
-	_consume_buffered_input(p1)
-	_consume_buffered_input(p2)
 
 	if p1.entered_slash:
 		_resolve_slash(p1)
@@ -227,31 +221,12 @@ func _snapshot(fighter: FighterState) -> Dictionary:
 		"hp": fighter.hp,
 		"flow": fighter.flow,
 		"tier": DuelTypes.tier_for_flow(fighter.flow),
-		"buffer": fighter.buffer_action,
-		"buffer_expire_frame": fighter.buffer_expire_frame,
 		"spell_uses": fighter.spell_uses_left,
 		"spell_ready": fighter.spell_card != null and fighter.spell_uses_left > 0 \
 				and fighter.flow >= fighter.spell_card.flow_cost,
 		"spell_charging": _has_spell_charge(fighter),
 		"spell_perfect": fighter.spell_perfect_until_frame > frame,
 	}
-
-
-func _consume_buffered_input(fighter: FighterState) -> void:
-	if frame < opening_lock_frames:
-		return
-	if fighter.state != DuelTypes.State.IDLE:
-		return
-	if fighter.buffer_action == DuelTypes.Action.NONE:
-		return
-	if frame > fighter.buffer_expire_frame:
-		fighter.buffer_action = DuelTypes.Action.NONE
-		fighter.buffer_expire_frame = -1
-		return
-	var action := fighter.buffer_action
-	fighter.buffer_action = DuelTypes.Action.NONE
-	fighter.buffer_expire_frame = -1
-	_apply_action(fighter, action)
 
 
 func _apply_pending_input(fighter: FighterState) -> void:
@@ -269,10 +244,9 @@ func _apply_pending_spell(fighter: FighterState) -> void:
 	if frame < opening_lock_frames:
 		return
 	if fighter.state != DuelTypes.State.IDLE:
-		# 收刀/受击硬直里按下不算「没按」：缓冲几帧，过期才报失败。
-		if frame > fighter.spell_buffer_expire_frame:
-			_pending_spell[fighter.side] = false
-			spell_failed.emit(fighter.side)
+		# 没有输入缓冲：不在 IDLE 就当场判失败，不排队。
+		_pending_spell[fighter.side] = false
+		spell_failed.emit(fighter.side)
 		return
 	_pending_spell[fighter.side] = false
 	if not _cast_spell(fighter):
@@ -317,16 +291,10 @@ func _apply_action(fighter: FighterState, action: int) -> void:
 					_enter_commit(fighter)
 		DuelTypes.State.COMMIT:
 			# 虚招：构的前 cancel_window 帧内按架，取消出刀并进入架（耗心流）。
+			# 构中按斩不缓存——没有输入缓冲，错过时机就是错过。
 			if action == DuelTypes.Action.GUARD and fighter.state_frame < fighter.data.cancel_window:
 				_sub_flow(fighter, fighter.data.cancel_cost)
 				_enter_guard(fighter)
-			elif action == DuelTypes.Action.ATTACK:
-				# 预读连斩：构中按的第二刀不再被吞，而是排到「斩→收招」之后。
-				_buffer_next_attack(fighter)
-		DuelTypes.State.SLASH:
-			# 刀已经挥出去时按的第二刀同理，必须活过接下来的收招。
-			if action == DuelTypes.Action.ATTACK:
-				_buffer_next_attack(fighter)
 		DuelTypes.State.GUARD:
 			# 架中转攻：架窗还没结束就按斩，等于放弃剩下的格挡机会强行出刀。
 			# 2026-10-21：原先 GUARD 状态直接丢弃输入，导致「防御转攻」根本打不出来。
@@ -334,14 +302,9 @@ func _apply_action(fighter: FighterState, action: int) -> void:
 				if not _try_counter_strike(fighter):
 					_guard_to_attack(fighter, true)
 		DuelTypes.State.GUARD_REC:
-			# 架住之后：反击预备窗口内按斩 = 顺势斩；超窗的输入照常缓冲。
+			# 架住之后：反击预备窗口内按斩 = 顺势斩；窗口外按下即作废。
 			if action == DuelTypes.Action.ATTACK:
-				if not _try_counter_strike(fighter):
-					_buffer(fighter, action)
-			else:
-				_buffer(fighter, action)
-		DuelTypes.State.RECOVERY, DuelTypes.State.HITSTUN, DuelTypes.State.CLASH:
-			_buffer(fighter, action)
+				_try_counter_strike(fighter)
 		_:
 			pass
 
@@ -364,26 +327,6 @@ func _guard_to_attack(fighter: FighterState, allow_riposte: bool,
 	if counter_strike:
 		fighter.pending_commit_bonus = GUARD_COUNTER_COMMIT_BONUS
 	_enter_commit(fighter, allow_riposte)
-
-
-func _buffer(fighter: FighterState, action: int) -> void:
-	fighter.buffer_action = action
-	# 缓冲必须活过整段硬直：4f 的输入缓冲套在 7~9f 的坐架收势上，
-	# 玩家在 GUARD_REC 第一帧按下去，等能动时缓冲早已过期——等于「按了没反应」。
-	fighter.buffer_expire_frame = maxi(frame + fighter.data.input_buffer,
-			fighter.state_start_frame + fighter.state_duration + 1)
-
-
-## 预读连斩：在「构」或「斩」期间按下的斩，要活到「本次刀落完 + 收招结束」。
-## 只按当前状态长度算（_buffer 的做法）不够——构之后还有斩和收招，
-## 玩家在动作中途按的第二刀会在半路过期，手感就是「连按没反应」。
-func _buffer_next_attack(fighter: FighterState) -> void:
-	_buffer(fighter, DuelTypes.Action.ATTACK)
-	var tail: int = fighter.data.slash_frames + maxi(fighter.data.whiff_recovery,
-			fighter.data.blocked_recovery)
-	fighter.buffer_expire_frame = maxi(fighter.buffer_expire_frame,
-			fighter.state_start_frame + fighter.state_duration + tail
-			+ fighter.data.input_buffer)
 
 
 func _advance(fighter: FighterState) -> void:
@@ -594,8 +537,6 @@ func _do_hit(attacker: FighterState, defender: FighterState) -> void:
 			and not _see_through_used and defender.flow >= 50:
 		_see_through_used = true
 		_sub_flow(defender, 30)
-		defender.buffer_action = DuelTypes.Action.NONE
-		defender.buffer_expire_frame = -1
 		defender.perfect_streak = 0
 		defender.guard_blocked = false
 		_enter(defender, DuelTypes.State.GUARD_REC, defender.data.guard_recovery)
@@ -604,8 +545,6 @@ func _do_hit(attacker: FighterState, defender: FighterState) -> void:
 		return
 
 	defender.hp -= damage
-	defender.buffer_action = DuelTypes.Action.NONE
-	defender.buffer_expire_frame = -1
 	defender.perfect_streak = 0
 	defender.guard_blocked = false
 	defender.whiff_lock = WHIFF_LOCK_FRAMES

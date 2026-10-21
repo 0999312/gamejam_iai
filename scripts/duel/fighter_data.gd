@@ -69,7 +69,6 @@ extends Resource
 @export var start_flow: int = 40
 @export var max_flow: int = 100
 @export var flow_floor: int = 15
-@export var input_buffer: int = 4
 ## 主动出刀（进入「构」）消耗的心流：攻击本身是资源与风险的双重支出。
 @export var slash_cost: int = 4
 ## 心流自然恢复：IDLE 时每 N 帧 +M；新一场由 reset_for_duel 重置。
@@ -115,7 +114,6 @@ static func player_a() -> FighterData:
 	data.start_flow = 40
 	data.max_flow = 100
 	data.flow_floor = 15
-	data.input_buffer = 4
 	data.slash_cost = 4
 	data.flow_regen_interval = 24
 	data.flow_regen_amount = 1
