@@ -348,6 +348,32 @@ func test_counter_strike_expires_after_window() -> void:
 	assert_eq(sim.p2.commit_total, sim.p2.data.base_commit, "窗口外没有顺势斩加成")
 
 
+## 点按架：松手后 2f 收势、不扣心流、不算空架。
+func test_tap_guard_releases_without_penalty() -> void:
+	var flow_before: int = sim.p1.flow
+	sim.set_input(DuelTypes.Side.P1, false, true, 1)
+	sim.tick()
+	assert_eq(sim.p1.state, DuelTypes.State.GUARD)
+
+	sim.set_input(DuelTypes.Side.P1, false, false, 0)
+	sim.tick()
+	sim.tick()
+	sim.tick()
+	assert_eq(sim.p1.state, DuelTypes.State.IDLE, "松手后 2f 收势")
+	assert_eq(sim.p1.flow, flow_before, "主动收架不扣心流")
+
+
+## 按住架：架子保持到「单次架上限」，不会因为没再按边沿就掉。
+func test_held_guard_keeps_stance() -> void:
+	sim.set_input(DuelTypes.Side.P1, false, true, 1)
+	sim.tick()
+	for _i in range(10):
+		sim.set_input(DuelTypes.Side.P1, false, false, 1)
+		sim.tick()
+	assert_eq(sim.p1.state, DuelTypes.State.GUARD, "按住时架子保持")
+	assert_eq(sim.p1.guard_blocked, false)
+
+
 func test_same_frame_guard_has_priority() -> void:
 	sim.set_input(DuelTypes.Side.P1, true, true)
 	sim.tick()

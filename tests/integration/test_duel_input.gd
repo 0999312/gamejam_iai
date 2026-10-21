@@ -49,12 +49,27 @@ func test_attack_key_enters_commit_or_slash() -> void:
 
 
 func test_guard_key_enters_guard() -> void:
-	await _tap_key(KEY_K)
+	# 架子现在按「按住」保持：点按会立刻收势，所以这里只按下不松开。
+	var down := InputEventKey.new()
+	down.keycode = KEY_K
+	down.physical_keycode = KEY_K
+	down.pressed = true
+	GUIDE.inject_input(down)
+	await wait_process_frames(2)
+	await wait_physics_frames(2)
 	assert_eq(
 		_sim.p1.state,
 		DuelTypes.State.GUARD,
-		"按 K 后玩家应进入 GUARD"
+		"按住 K 后玩家应进入 GUARD"
 	)
+
+	var up := InputEventKey.new()
+	up.keycode = KEY_K
+	up.physical_keycode = KEY_K
+	up.pressed = false
+	GUIDE.inject_input(up)
+	await wait_process_frames(1)
+	await wait_physics_frames(1)
 
 
 func test_teaching_ai_waits_during_opening_grace() -> void:

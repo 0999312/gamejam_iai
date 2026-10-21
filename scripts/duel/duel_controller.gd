@@ -37,9 +37,11 @@ var _offer_actions: Array[GUIDEAction] = []
 
 var _attack_queued := false
 var _guard_queued := false
+var _guard_held := false
 var _spell_queued := false
 var _p2_attack_queued := false
 var _p2_guard_queued := false
+var _p2_guard_held := false
 var _p2_spell_queued := false
 var _restart_queued := false
 var _settled := false
@@ -104,6 +106,12 @@ func _input(event: InputEvent) -> void:
 		return
 	var joy := event as InputEventJoypadButton
 	if not joy.pressed:
+		# 松手也要跟踪：架子按「按住」保持，松开立刻收势。
+		var held_meta := GameBootstrap.meta if GameBootstrap != null else null
+		if joy.button_index == KeyBindings.get_joy_button(held_meta, &"guard_p1"):
+			_guard_held = false
+		if joy.button_index == KeyBindings.get_joy_button(held_meta, &"guard_p2"):
+			_p2_guard_held = false
 		return
 
 	var device := joy.device
@@ -157,12 +165,13 @@ func _physics_process(_delta: float) -> void:
 		return
 
 	if mode == &"versus":
-		sim.set_input(DuelTypes.Side.P1, _attack_queued, _guard_queued)
-		sim.set_input(DuelTypes.Side.P2, _p2_attack_queued, _p2_guard_queued)
+		sim.set_input(DuelTypes.Side.P1, _attack_queued, _guard_queued, 1 if _guard_held else 0)
+		sim.set_input(DuelTypes.Side.P2, _p2_attack_queued, _p2_guard_queued,
+				1 if _p2_guard_held else 0)
 		if _p2_spell_queued:
 			sim.set_spell(DuelTypes.Side.P2)
 	else:
-		sim.set_input(DuelTypes.Side.P1, _attack_queued, _guard_queued)
+		sim.set_input(DuelTypes.Side.P1, _attack_queued, _guard_queued, 1 if _guard_held else 0)
 	if _spell_queued:
 		sim.set_spell(DuelTypes.Side.P1)
 	_clear_input_flags()
@@ -329,9 +338,11 @@ func _setup_input() -> void:
 
 	_attack_action.just_triggered.connect(_on_attack_pressed)
 	_guard_action.just_triggered.connect(_on_guard_pressed)
+	_guard_action.completed.connect(_on_guard_released)
 	_spell_action.just_triggered.connect(_on_spell_pressed)
 	_p2_attack_action.just_triggered.connect(_on_p2_attack_pressed)
 	_p2_guard_action.just_triggered.connect(_on_p2_guard_pressed)
+	_p2_guard_action.completed.connect(_on_p2_guard_released)
 	_p2_spell_action.just_triggered.connect(_on_p2_spell_pressed)
 	_restart_action.just_triggered.connect(_on_restart_pressed)
 	_pause_action.just_triggered.connect(_on_pause_pressed)
@@ -403,6 +414,11 @@ func _on_attack_pressed() -> void:
 
 func _on_guard_pressed() -> void:
 	_guard_queued = true
+	_guard_held = true
+
+
+func _on_guard_released() -> void:
+	_guard_held = false
 
 
 func _on_spell_pressed() -> void:
@@ -415,6 +431,11 @@ func _on_p2_attack_pressed() -> void:
 
 func _on_p2_guard_pressed() -> void:
 	_p2_guard_queued = true
+	_p2_guard_held = true
+
+
+func _on_p2_guard_released() -> void:
+	_p2_guard_held = false
 
 
 func _on_p2_spell_pressed() -> void:

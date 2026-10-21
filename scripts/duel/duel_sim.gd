@@ -36,6 +36,8 @@ const GUARD_COUNTER_WINDOW := 30
 ## 顺势斩：架住之后的下一刀前摇修正（负数 = 更快）。
 ## 刀刚挡住对方的刀，不需要重新起手；这是「防御转攻」能成立的关键。
 const GUARD_COUNTER_COMMIT_BONUS := -6
+## 主动收架（松手）的收势帧数：2f = 33ms。架子跑满上限的收势仍走 guard_recovery。
+const RELEASE_GUARD_RECOVERY := 2
 const FEINT_SEEN_GAIN := 10
 const CLASH_FLOW_GAINS := [6, 4, 2, 0]
 const COMMIT_WAIT_INTERVAL := 20
@@ -72,6 +74,9 @@ var _guts_until: int = 0
 
 var _pending: Array = [DuelTypes.Action.NONE, DuelTypes.Action.NONE]
 var _pending_spell: Array = [false, false]
+## 架是否仍被按住：-1 = 未提供（AI/脚本单次 press，架子跑满上限），
+## 0 = 已松手（主动收架），1 = 按住（架子保持到上限）。
+var _guard_held: Array[int] = [-1, -1]
 
 
 func _init(p1_data: FighterData = null, p2_data: FighterData = null, seed_value: int = 0) -> void:
@@ -100,6 +105,7 @@ func reset(seed_value: int = 0) -> void:
 	p2.reset_for_duel()
 	_pending = [DuelTypes.Action.NONE, DuelTypes.Action.NONE]
 	_pending_spell = [false, false]
+	_guard_held = [-1, -1]
 	_see_through_used = false
 	_pursuit_used = false
 	_pursuit_armed_until = 0
@@ -117,8 +123,13 @@ func opponent_of(fighter: FighterState) -> FighterState:
 
 
 ## 每帧调用一次；guard 优先于 attack（同帧斩+架时架生效）。
-func set_input(side: int, attack_pressed: bool, guard_pressed: bool) -> void:
+## guard_held：-1 = 未提供（AI/脚本），0 = 已松手，1 = 按住。
+## 松手会立刻收架（短硬直、不扣心流），按住则架子保持到「单次架上限」。
+func set_input(side: int, attack_pressed: bool, guard_pressed: bool,
+		guard_held: int = -1) -> void:
 	var fighter := get_fighter(side)
+	if guard_held >= 0:
+		_guard_held[side] = guard_held
 	if finished or frame < opening_lock_frames or fighter.state == DuelTypes.State.DOWN:
 		return
 	var action := DuelTypes.Action.NONE
@@ -374,7 +385,11 @@ func _advance(fighter: FighterState) -> void:
 			if fighter.state_frame >= fighter.data.slash_frames:
 				_enter_recovery(fighter, fighter.data.whiff_recovery)
 		DuelTypes.State.GUARD:
-			if fighter.state_frame >= fighter.data.guard_startup + fighter.guard_duration:
+			# 松手立刻收架（2f、无惩罚）；按住则架子保持到「单次架上限」。
+			if _guard_held[fighter.side] == 0 \
+					and fighter.state_frame >= fighter.data.guard_startup:
+				_release_guard(fighter)
+			elif fighter.state_frame >= fighter.data.guard_startup + fighter.guard_duration:
 				_finish_guard(fighter)
 		DuelTypes.State.RECOVERY, DuelTypes.State.GUARD_REC, DuelTypes.State.HITSTUN, DuelTypes.State.CLASH:
 			if fighter.state_frame >= fighter.state_duration:
@@ -493,6 +508,12 @@ func _finish_guard(fighter: FighterState) -> void:
 		fighter.perfect_streak = 0
 		guard_whiffed.emit(fighter.side)
 	_enter_guard_rec(fighter)
+
+
+## 主动收架（松手）：2f 收势、不扣心流、不打断完美连击。
+## 这样「点按架」是低成本的试探，只有按满上限才会吃空架惩罚。
+func _release_guard(fighter: FighterState) -> void:
+	_enter(fighter, DuelTypes.State.GUARD_REC, RELEASE_GUARD_RECOVERY)
 
 
 func _resolve_slash(attacker: FighterState) -> void:
