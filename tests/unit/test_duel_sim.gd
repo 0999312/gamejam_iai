@@ -445,3 +445,47 @@ func test_reset_restores_duel_state() -> void:
 	assert_eq(sim.p1.state, DuelTypes.State.IDLE)
 	assert_eq(sim.p1.repeat_streak, 0)
 	assert_false(sim.p1.riposte)
+
+
+## 回归：按住防御键是「持续意图」，礼让期就按着也要能在礼让结束后架起来。
+## 原实现只认「按下」那一帧，礼让期内输入被丢，之后一直按着就永远架不上。
+func test_holding_guard_through_opening_lock_enters_guard() -> void:
+	sim.opening_lock_frames = 30
+	var entered := -1
+	for _i in range(40):
+		sim.set_input(DuelTypes.Side.P1, false, false, 1)
+		sim.tick()
+		if entered < 0 and sim.p1.state == DuelTypes.State.GUARD:
+			entered = sim.frame
+	assert_eq(entered, 30, "礼让期一结束就应自动起架")
+
+
+## 回归：出刀后全程按住防，收招进 IDLE 的那一帧应自动起架。
+func test_holding_guard_after_attack_enters_guard() -> void:
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	sim.tick()
+	assert_eq(sim.p1.state, DuelTypes.State.COMMIT, "先确认出刀已进入构")
+	var entered := -1
+	for _i in range(80):
+		sim.set_input(DuelTypes.Side.P1, false, false, 1)
+		sim.tick()
+		if entered < 0 and sim.p1.state == DuelTypes.State.GUARD:
+			entered = sim.frame
+	assert_gt(entered, 0, "收招结束后按住防应自动起架")
+
+
+## 回归：架满上限收势后仍按着，应自动再起架（空架照常扣心流，不是无限白嫖）。
+func test_holding_guard_reenters_after_expiry() -> void:
+	var flow_before: int = sim.p1.flow
+	sim.set_input(DuelTypes.Side.P1, false, true, 1)
+	sim.tick()
+	var entries := 0
+	var last_state := -1
+	for _i in range(120):
+		sim.set_input(DuelTypes.Side.P1, false, false, 1)
+		sim.tick()
+		if sim.p1.state == DuelTypes.State.GUARD and last_state != DuelTypes.State.GUARD:
+			entries += 1
+		last_state = sim.p1.state
+	assert_gt(entries, 1, "按住不放，架满收势后应自动再起架")
+	assert_lt(sim.p1.flow, flow_before, "空架仍要扣心流，不能变成无限架")

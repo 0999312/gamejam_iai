@@ -13,6 +13,7 @@ const SHOP_PANEL := preload("res://scenes/ui/shop.tscn")
 const SETTINGS_PANEL := preload("res://scenes/ui/settings.tscn")
 const PAUSE_PANEL := preload("res://scenes/ui/pause_menu.tscn")
 const ABOUT_PANEL := preload("res://scenes/ui/about.tscn")
+const MODE_SELECT_PANEL := preload("res://scenes/ui/mode_select.tscn")
 const I18N_FILES: Dictionary = {
 	"zh_CN": "res://localization/zh_CN.json",
 	"en": "res://localization/en.json",
@@ -208,6 +209,7 @@ func _register_panels() -> void:
 	registry.register_panel(PanelIds.settings(), SETTINGS_PANEL, UILayer.NORMAL, UIPanel.CacheMode.NONE)
 	registry.register_panel(PanelIds.pause(), PAUSE_PANEL, UILayer.POPUP, UIPanel.CacheMode.NONE)
 	registry.register_panel(PanelIds.about(), ABOUT_PANEL, UILayer.NORMAL, UIPanel.CacheMode.NONE)
+	registry.register_panel(PanelIds.mode_select(), MODE_SELECT_PANEL, UILayer.NORMAL, UIPanel.CacheMode.NONE)
 
 
 func _register_upgrades() -> void:

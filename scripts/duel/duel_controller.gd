@@ -125,18 +125,20 @@ func _input(event: InputEvent) -> void:
 		return
 	var joy := event as InputEventJoypadButton
 	var meta := GameBootstrap.meta if GameBootstrap != null else null
-	if _paused:
-		# 暂停期间只允许用暂停键恢复；攻击/架/符卡/重开一律丢弃。
-		# 否则暂停时按下的键会留在队列里，恢复的第一帧立刻出刀（审计 P1-1）。
-		if joy.pressed and joy.button_index == KeyBindings.get_joy_button(meta, &"pause"):
-			_on_pause_pressed()
-		return
 	if not joy.pressed:
 		# 松手也要跟踪：架子按「按住」保持，松开立刻收势。
+		# 暂停期间同样要跟（放在 _paused 守卫之前），否则暂停时松手被丢，
+		# 恢复后仍以为玩家按着架。
 		if joy.button_index == KeyBindings.get_joy_button(meta, &"guard_p1"):
 			_guard_held = false
 		if joy.button_index == KeyBindings.get_joy_button(meta, &"guard_p2"):
 			_p2_guard_held = false
+		return
+	if _paused:
+		# 暂停期间只允许用暂停键恢复；攻击/架/符卡/重开一律丢弃。
+		# 否则暂停时按下的键会留在队列里，恢复的第一帧立刻出刀（审计 P1-1）。
+		if joy.button_index == KeyBindings.get_joy_button(meta, &"pause"):
+			_on_pause_pressed()
 		return
 
 	var device := joy.device

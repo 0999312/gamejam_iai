@@ -26,8 +26,12 @@
     "title": "[占位] 刀剑 · 心流",
     "subtitle": "[占位] 一瞬决胜负",
     "gold": "金币",
-    "start": "单人阶梯",
-    "versus": "本地双人",
+    "start": "开始游戏",
+    "mode_title": "选择游戏模式",
+    "mode_solo": "单人阶梯",
+    "mode_versus": "本地双人",
+    "mode_back": "返回",
+    "mode_hint": "单人阶梯：连续挑战 5 位对手；本地双人：同一台电脑双人对战",
     "shop": "商店 / 解锁",
     "settings": "设置",
     "character": "角色",
@@ -36,8 +40,7 @@
     "char_b": "B · 快剑",
     "char_c": "C · 重剑",
     "quit": "退出",
-    "hint": "点击或回车选择",
-    "about": "关于"
+    "hint": "点击或回车选择"
   },
   "shop": {
     "title": "商店 / 解锁",
@@ -93,7 +96,8 @@
     "gamepad_hint": "键鼠与手柄可同时操作；同一动作可同时绑定两者；接入手柄 2 后 P2 自动可用手柄",
     "wipe_save": "清除存档",
     "wipe_confirm": "再按一次确认清除",
-    "wipe_done": "存档已清除"
+    "wipe_done": "存档已清除",
+    "about": "关于本作"
   },
   "pause": {
     "title": "暂停",

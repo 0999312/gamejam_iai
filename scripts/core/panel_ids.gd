@@ -8,6 +8,7 @@ const SHOP := "iai:shop"
 const SETTINGS := "iai:settings"
 const PAUSE := "iai:pause"
 const ABOUT := "iai:about"
+const MODE_SELECT := "iai:mode_select"
 
 
 static func shop() -> ResourceLocation:
@@ -24,3 +25,7 @@ static func pause() -> ResourceLocation:
 
 static func about() -> ResourceLocation:
 	return ResourceLocation.from_string(ABOUT)
+
+
+static func mode_select() -> ResourceLocation:
+	return ResourceLocation.from_string(MODE_SELECT)

@@ -320,26 +320,31 @@ func _build_ui() -> void:
 	_pads.tooltip_text = _tr("settings.gamepad_hint")
 	right.add_child(_pads)
 
-	# 人工清档入口（用户 2026-10-21 决策）：先上膛再确认，避免误触。
-	_wipe_button = Button.new()
-	_wipe_button.text = _tr("settings.wipe_save")
-	_wipe_button.custom_minimum_size = Vector2(240, 44)
-	_wipe_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_wipe_button.add_theme_font_override("font", FONT)
-	_wipe_button.add_theme_font_size_override("font_size", 18)
-	_wipe_button.pressed.connect(_on_wipe_pressed)
-	UiFocus.prepare(_wipe_button)
-	outer.add_child(_wipe_button)
+	# 底部动作行：清档 / 关于 / 返回。
+	# 「关于」原先挂在主菜单，与「开始 / 双人」等入口堆在一起导致竖排重叠，
+	# 移到这里作为二级入口（用户 2026-10-21 反馈）。
+	var actions := HBoxContainer.new()
+	actions.custom_minimum_size = Vector2(920, 0)
+	actions.alignment = BoxContainer.ALIGNMENT_CENTER
+	actions.add_theme_constant_override("separation", 20)
+	outer.add_child(actions)
 
-	var back := Button.new()
-	back.text = _tr("settings.back")
-	back.custom_minimum_size = Vector2(240, 48)
-	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	back.add_theme_font_override("font", FONT)
-	back.add_theme_font_size_override("font_size", 20)
-	back.pressed.connect(_on_back_pressed)
-	UiFocus.prepare(back)
-	outer.add_child(back)
+	# 人工清档入口（用户 2026-10-21 决策）：先上膛再确认，避免误触。
+	_wipe_button = _make_action_button(actions, _tr("settings.wipe_save"), _on_wipe_pressed)
+	_make_action_button(actions, _tr("settings.about"), _on_about_pressed)
+	_make_action_button(actions, _tr("settings.back"), _on_back_pressed)
+
+
+func _make_action_button(parent: Control, text: String, handler: Callable) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.custom_minimum_size = Vector2(220, 48)
+	button.add_theme_font_override("font", FONT)
+	button.add_theme_font_size_override("font_size", 18)
+	button.pressed.connect(handler)
+	UiFocus.prepare(button)
+	parent.add_child(button)
+	return button
 
 
 func _add_slider_row(parent: VBoxContainer, label_key: String, setting_key: String, default_value: float) -> HSlider:
@@ -566,6 +571,11 @@ func _on_reset_keys() -> void:
 	GameBootstrap.save_meta()
 	_hint.text = ""
 	_refresh_keys()
+
+
+func _on_about_pressed() -> void:
+	SoundManager.play_ui_sound(CLICK)
+	UIManager.open_panel(PanelIds.about())
 
 
 func _on_back_pressed() -> void:

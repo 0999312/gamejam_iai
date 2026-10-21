@@ -234,6 +234,16 @@ func _apply_pending_input(fighter: FighterState) -> void:
 	_pending[fighter.side] = DuelTypes.Action.NONE
 	if frame < opening_lock_frames:
 		return
+	if action == DuelTypes.Action.NONE:
+		# 按住防御键是「持续意图」，不能只在按下那一帧（上升沿）生效。
+		# 原先起架唯一入口是 guard_pressed，于是三种常见操作都架不上：
+		# ① 礼让期就按着防（礼让期内输入被丢，之后没有新边沿）；
+		# ② 硬直 / 构 / 架中按下并按住（边沿被丢弃，之后一直按着也不会再起架）；
+		# ③ 架满上限后仍按着（收架回 IDLE 后无边沿）。
+		# 玩家感知就是「敌人出刀时按防没反应」。这里只补 IDLE：
+		# 构中取消出刀仍需一次明确的按下，避免「按住防御键就永远出不了刀」。
+		if _guard_held[fighter.side] == 1 and fighter.state == DuelTypes.State.IDLE:
+			action = DuelTypes.Action.GUARD
 	if action != DuelTypes.Action.NONE:
 		_apply_action(fighter, action)
 

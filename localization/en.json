@@ -26,8 +26,12 @@
     "title": "[PLACEHOLDER] Sword · Flow",
     "subtitle": "[PLACEHOLDER] One instant decides",
     "gold": "Gold",
-    "start": "Single Run",
-    "versus": "Local Versus",
+    "start": "Start Game",
+    "mode_title": "Choose Mode",
+    "mode_solo": "Solo Ladder",
+    "mode_versus": "Local Versus",
+    "mode_back": "Back",
+    "mode_hint": "Solo: challenge five opponents in a row. Versus: two players on one keyboard.",
     "shop": "Shop / Unlocks",
     "settings": "Settings",
     "character": "Character",
@@ -36,8 +40,7 @@
     "char_b": "B · Swift",
     "char_c": "C · Heavy",
     "quit": "Quit",
-    "hint": "Click or press Enter",
-    "about": "About"
+    "hint": "Click or press Enter"
   },
   "shop": {
     "title": "Shop / Unlocks",
@@ -93,7 +96,8 @@
     "gamepad_hint": "Keyboard/mouse and gamepad work at the same time; an action can bind both; P2 can use gamepad 2 when connected",
     "wipe_save": "Erase Save Data",
     "wipe_confirm": "Press again to confirm",
-    "wipe_done": "Save data erased"
+    "wipe_done": "Save data erased",
+    "about": "About This Game"
   },
   "pause": {
     "title": "Paused",

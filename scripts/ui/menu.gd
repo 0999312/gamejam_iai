@@ -83,10 +83,14 @@ func _build_ui(restore_focus: bool = true) -> void:
 
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# 副标题底边约在 144px：把内容区起点压到 150，避免竖排按钮把
+	# CenterContainer 撑高后与标题/副标题重叠（用户 2026-10-21 反馈）。
+	center.offset_top = 150.0
 	add_child(center)
 
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(420, 430)
+	# 只给宽度下限，高度交给内容：写死 430 时按钮一多就会顶到标题带。
+	box.custom_minimum_size = Vector2(420, 0)
 	box.add_theme_constant_override("separation", 10)
 	center.add_child(box)
 
@@ -122,20 +126,16 @@ func _build_ui(restore_focus: bool = true) -> void:
 	char_hint.add_theme_color_override("font_color", Color("#7f8b9c"))
 	box.add_child(char_hint)
 
+	# 模式选择收进二级菜单：主菜单只留一个「开始游戏」，
+	# 避免六个按钮竖排后与标题/副标题重叠（用户 2026-10-21 反馈）。
 	var start_button := _make_button(box, _tr("menu.start"))
 	start_button.pressed.connect(_on_start_pressed)
-
-	var versus_button := _make_button(box, _tr("menu.versus"))
-	versus_button.pressed.connect(_on_versus_pressed)
 
 	var shop_button := _make_button(box, _tr("menu.shop"))
 	shop_button.pressed.connect(_on_shop_pressed)
 
 	var settings_button := _make_button(box, _tr("menu.settings"))
 	settings_button.pressed.connect(_on_settings_pressed)
-
-	var about_button := _make_button(box, _tr("menu.about"))
-	about_button.pressed.connect(_on_about_pressed)
 
 	var quit_button := _make_button(box, _tr("menu.quit"))
 	quit_button.pressed.connect(_on_quit_pressed)
@@ -198,13 +198,16 @@ func _refresh_gold() -> void:
 
 func _on_start_pressed() -> void:
 	SoundManager.play_ui_sound(CLICK)
-	GameBootstrap.pending_mode = &"run"
-	_go_duel()
+	var panel := UIManager.open_panel(PanelIds.mode_select()) as ModeSelectPanel
+	if panel == null:
+		return
+	panel.mode_chosen.connect(_on_mode_chosen)
 
 
-func _on_versus_pressed() -> void:
-	SoundManager.play_ui_sound(CLICK)
-	GameBootstrap.pending_mode = &"versus"
+func _on_mode_chosen(mode: StringName) -> void:
+	GameBootstrap.pending_mode = mode
+	if UIManager.is_panel_open(PanelIds.mode_select()):
+		UIManager.close_panel(PanelIds.mode_select())
 	_go_duel()
 
 
@@ -216,11 +219,6 @@ func _on_shop_pressed() -> void:
 func _on_settings_pressed() -> void:
 	SoundManager.play_ui_sound(CLICK)
 	UIManager.open_panel(PanelIds.settings())
-
-
-func _on_about_pressed() -> void:
-	SoundManager.play_ui_sound(CLICK)
-	UIManager.open_panel(PanelIds.about())
 
 
 func _on_quit_pressed() -> void:
