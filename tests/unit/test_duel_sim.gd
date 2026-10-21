@@ -159,19 +159,44 @@ func test_feint_cancel_fails_outside_commit() -> void:
 
 
 func test_guard_cancel_only_in_early_commit_window() -> void:
+	# 窗口 = cancel_window（10f = 167ms）；第 10 帧之后再按架就变不了了。
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
-	_tick_n(6)
+	_tick_n(11)
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.GUARD)
 	_tick_n(1)
 	assert_eq(sim.p1.state, DuelTypes.State.COMMIT)
 
 	sim.reset(12345)
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
-	_tick_n(4)
+	_tick_n(9)
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.GUARD)
 	_tick_n(1)
 	assert_eq(sim.p1.state, DuelTypes.State.GUARD)
 	assert_eq(sim.p1.flow, 31)
+
+
+## 防御转攻：架窗内按斩 = 放弃剩余格挡、立刻出刀。
+func test_guard_can_cancel_into_attack() -> void:
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.GUARD)
+	_tick_n(3)
+	assert_eq(sim.p1.state, DuelTypes.State.GUARD)
+
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	_tick_n(1)
+	assert_eq(sim.p1.state, DuelTypes.State.COMMIT, "架中按斩应立刻收架出刀")
+	assert_eq(sim.p1.flow, 31, "取消税 5 + 出刀 4")
+
+
+## 架住之后：GUARD_REC 的前 GUARD_COUNTER_WINDOW 帧内按斩，取消收架反打。
+func test_blocked_guard_can_counter_attack() -> void:
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
+	_tick_n(19)
+	assert_eq(sim.p2.state, DuelTypes.State.GUARD_REC)
+
+	sim.press(DuelTypes.Side.P2, DuelTypes.Action.ATTACK)
+	_tick_n(1)
+	assert_eq(sim.p2.state, DuelTypes.State.COMMIT, "架住后 8f 内可以取消收架反打")
 
 
 func test_slash_interrupts_commit() -> void:
@@ -281,17 +306,46 @@ func test_input_buffer_executes_on_first_actionable_frame() -> void:
 	assert_eq(sim.p1.state, DuelTypes.State.COMMIT)
 
 
-func test_input_buffer_expires_before_recovery_ends() -> void:
+func test_buffered_attack_survives_recovery() -> void:
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
 	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
-	_tick_n(14)
+	_tick_n(26)
+	assert_eq(sim.p1.state, DuelTypes.State.RECOVERY, "刀被架住，正在收招")
 
-	# 第 30 帧按下（缓冲到 34），恢复第 39 帧才结束，应已过期。
-	_tick_n(16)
+	# 收招中段预输入：必须活到收招结束、立刻出刀。
+	# 旧实现 4f 缓冲 < 32f 收招，玩家在硬直里按的斩 100% 被丢掉。
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
-	_tick_n(9)
+	_tick_n(30)
+	assert_eq(sim.p1.state, DuelTypes.State.COMMIT, "预输入跨过硬直，收招结束立刻出刀")
 
-	assert_eq(sim.p1.state, DuelTypes.State.IDLE)
+
+## 架住后 15f（250ms 反应）按斩：仍在 30f 反击窗内，前摇 -6f（顺势斩）。
+func test_counter_strike_shortens_commit() -> void:
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
+	_tick_n(19)
+	assert_eq(sim.p2.state, DuelTypes.State.GUARD_REC)
+
+	_tick_n(14)
+	assert_eq(sim.p2.state, DuelTypes.State.IDLE, "收架已结束，但反击预备还没过期")
+	sim.press(DuelTypes.Side.P2, DuelTypes.Action.ATTACK)
+	_tick_n(1)
+	assert_eq(sim.p2.state, DuelTypes.State.COMMIT)
+	assert_eq(sim.p2.commit_total,
+			maxi(DuelSim.COMMIT_MIN_FRAMES, sim.p2.data.base_commit - 6), "顺势斩前摇 -6f")
+
+
+## 超过 500ms 才按：回到普通出刀（没有 -6f），否则等于无限反击窗。
+func test_counter_strike_expires_after_window() -> void:
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	sim.press(DuelTypes.Side.P2, DuelTypes.Action.GUARD)
+	_tick_n(19)
+	_tick_n(32)
+
+	sim.press(DuelTypes.Side.P2, DuelTypes.Action.ATTACK)
+	_tick_n(1)
+	assert_eq(sim.p2.state, DuelTypes.State.COMMIT)
+	assert_eq(sim.p2.commit_total, sim.p2.data.base_commit, "窗口外没有顺势斩加成")
 
 
 func test_same_frame_guard_has_priority() -> void:

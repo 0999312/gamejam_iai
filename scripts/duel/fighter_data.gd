@@ -24,8 +24,9 @@ extends Resource
 @export var flow_speeds_commit: bool = true
 ## 斩判定窗帧数；双方同时进入判定窗用于判刃鸣。
 @export var slash_frames: int = 5
-## 取消出刀进「架」的窗口（构的前 N 帧）。
-@export var cancel_window: int = 5
+## 取消出刀进「架」的窗口（构的前 N 帧）。10f = 167ms，让「看到对手起手再变架」
+## 至少有一次按得出来的机会；5f（83ms）低于人类反应下限，等于不存在。
+@export var cancel_window: int = 10
 ## 取消出架消耗的心流。
 @export var cancel_cost: int = 5
 ## 单刀基础伤害（均衡/对手 10，快剑 7，重剑 15）。
@@ -97,7 +98,7 @@ static func player_a() -> FighterData:
 	data.max_hp = 30
 	data.base_commit = 18
 	data.slash_frames = 5
-	data.cancel_window = 5
+	data.cancel_window = 10
 	data.cancel_cost = 5
 	data.whiff_recovery = 20
 	data.blocked_recovery = 32

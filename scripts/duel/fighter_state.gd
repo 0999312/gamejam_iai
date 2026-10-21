@@ -43,6 +43,11 @@ var repeat_streak: int = 0
 var riposte: bool = false
 ## 本次「构」被连斩惩罚加了多少帧（HUD/调试用）。
 var repeat_penalty_frames: int = 0
+## 架住之后的反击预备：此帧之前按斩可以「顺势斩」（前摇更短）。
+## 从格挡成功那一帧起算，覆盖人类的反应时间；-1/0 表示没有预备。
+var counter_until_frame: int = -1
+## 下一刀的一次性前摇修正（顺势斩用，进「构」时消费）。
+var pending_commit_bonus: int = 0
 
 ## 心流自然恢复的计时（仅 IDLE 累计）。
 var flow_regen_frames: int = 0
@@ -90,6 +95,8 @@ func reset_for_duel() -> void:
 	repeat_streak = 0
 	riposte = false
 	repeat_penalty_frames = 0
+	counter_until_frame = -1
+	pending_commit_bonus = 0
 	flow_regen_frames = 0
 	entered_slash = false
 	spell_perfect_until_frame = 0

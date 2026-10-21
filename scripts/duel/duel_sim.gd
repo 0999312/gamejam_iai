@@ -30,6 +30,12 @@ const PERFECT_STREAK_BONUS_CAP := 9
 const BLOCKED_FLOW_LOSS := 8
 const WHIFF_GUARD_FLOW_LOSS := 8
 const GUARD_COST := 5
+## 架住之后的「反击预备」窗口：从格挡成功那一帧起算，30f = 500ms。
+## 覆盖人类的反应时间（约 250ms）+ 输入，同时不会让整个收架过程都能反打。
+const GUARD_COUNTER_WINDOW := 30
+## 顺势斩：架住之后的下一刀前摇修正（负数 = 更快）。
+## 刀刚挡住对方的刀，不需要重新起手；这是「防御转攻」能成立的关键。
+const GUARD_COUNTER_COMMIT_BONUS := -6
 const FEINT_SEEN_GAIN := 10
 const CLASH_FLOW_GAINS := [6, 4, 2, 0]
 const COMMIT_WAIT_INTERVAL := 20
@@ -296,21 +302,58 @@ func _apply_action(fighter: FighterState, action: int) -> void:
 			if action == DuelTypes.Action.GUARD:
 				_enter_guard(fighter)
 			elif action == DuelTypes.Action.ATTACK:
-				_enter_commit(fighter)
+				if not _try_counter_strike(fighter):
+					_enter_commit(fighter)
 		DuelTypes.State.COMMIT:
 			# 虚招：构的前 cancel_window 帧内按架，取消出刀并进入架（耗心流）。
 			if action == DuelTypes.Action.GUARD and fighter.state_frame < fighter.data.cancel_window:
 				_sub_flow(fighter, fighter.data.cancel_cost)
 				_enter_guard(fighter)
-		DuelTypes.State.RECOVERY, DuelTypes.State.GUARD_REC, DuelTypes.State.HITSTUN, DuelTypes.State.CLASH:
+		DuelTypes.State.GUARD:
+			# 架中转攻：架窗还没结束就按斩，等于放弃剩下的格挡机会强行出刀。
+			# 2026-10-21：原先 GUARD 状态直接丢弃输入，导致「防御转攻」根本打不出来。
+			if action == DuelTypes.Action.ATTACK:
+				if not _try_counter_strike(fighter):
+					_guard_to_attack(fighter, true)
+		DuelTypes.State.GUARD_REC:
+			# 架住之后：反击预备窗口内按斩 = 顺势斩；超窗的输入照常缓冲。
+			if action == DuelTypes.Action.ATTACK:
+				if not _try_counter_strike(fighter):
+					_buffer(fighter, action)
+			else:
+				_buffer(fighter, action)
+		DuelTypes.State.RECOVERY, DuelTypes.State.HITSTUN, DuelTypes.State.CLASH:
 			_buffer(fighter, action)
 		_:
 			pass
 
 
+## 架住之后的顺势斩：窗口内把按下的斩变成一刀更快的前摇。
+func _try_counter_strike(fighter: FighterState) -> bool:
+	if fighter.counter_until_frame < 0 or frame > fighter.counter_until_frame:
+		return false
+	fighter.counter_until_frame = -1
+	_guard_to_attack(fighter, false, true)
+	return true
+
+
+## 架 → 斩：取消架子（或架住后的收架），直接进入出刀前摇。
+## 代价 = 取消税 + 正常出刀心流。主动收架抢刀仍可吃反斩；架住后的反击不吃，
+## 因为「挡住一刀」本身已经换来对手的硬直，再叠反斩会把架变成白送一刀。
+func _guard_to_attack(fighter: FighterState, allow_riposte: bool,
+		counter_strike: bool = false) -> void:
+	_sub_flow(fighter, fighter.data.cancel_cost)
+	if counter_strike:
+		fighter.pending_commit_bonus = GUARD_COUNTER_COMMIT_BONUS
+	_enter_commit(fighter, allow_riposte)
+
+
 func _buffer(fighter: FighterState, action: int) -> void:
 	fighter.buffer_action = action
-	fighter.buffer_expire_frame = frame + fighter.data.input_buffer
+	# 缓冲必须活过整段硬直：4f 的输入缓冲套在 7~9f 的坐架收势上，
+	# 玩家在 GUARD_REC 第一帧按下去，等能动时缓冲早已过期——等于「按了没反应」。
+	fighter.buffer_expire_frame = maxi(frame + fighter.data.input_buffer,
+			fighter.state_start_frame + fighter.state_duration + 1)
 
 
 func _advance(fighter: FighterState) -> void:
@@ -369,7 +412,7 @@ func _enter_idle(fighter: FighterState) -> void:
 const OPENING_COMMIT_WINDOW: int = 300
 
 
-func _enter_commit(fighter: FighterState) -> void:
+func _enter_commit(fighter: FighterState, allow_riposte: bool = true) -> void:
 	var tier := DuelTypes.tier_for_flow(fighter.flow)
 	var tier_offset: int = DuelTypes.COMMIT_TIER_OFFSET[tier]
 	if not fighter.data.flow_speeds_commit:
@@ -382,7 +425,8 @@ func _enter_commit(fighter: FighterState) -> void:
 		opening_offset = int(mods.get("opening_commit", 0))
 	# 反斩：对手正处在「空挥 / 被架」硬直时可确定惩罚，且不受间合惩罚。
 	# 见 docs/dev-example/balance-pass-02-plan.md §1.5 代价 1。
-	var ripe := _is_riposte_window(fighter)
+	# 架住之后的「取消收架」不算反斩：刀刚被挡住，得重新起手（否则架住=白送一刀）。
+	var ripe := allow_riposte and _is_riposte_window(fighter)
 	var riposte_offset: int = 0
 	if ripe and fighter.data.riposte_commit_bonus != 0:
 		riposte_offset = mini(-1, fighter.data.riposte_commit_bonus)
@@ -399,9 +443,13 @@ func _enter_commit(fighter: FighterState) -> void:
 		fighter.repeat_streak = 0
 	fighter.riposte = ripe
 	fighter.repeat_penalty_frames = repeat_offset
+	# 顺势斩：架住后的一次性加速，进「构」时消费。
+	var counter_offset: int = fighter.pending_commit_bonus
+	fighter.pending_commit_bonus = 0
 	fighter.last_commit_frame = frame
 	fighter.commit_total = maxi(COMMIT_MIN_FRAMES,
-			fighter.data.base_commit + tier_offset + opening_offset + riposte_offset + repeat_offset)
+			fighter.data.base_commit + tier_offset + opening_offset + riposte_offset
+					+ repeat_offset + counter_offset)
 	# 出刀本身消耗心流；档位按付出前计算，避免同一刀因扣费反而变快。
 	_sub_flow(fighter, fighter.data.slash_cost)
 	_enter(fighter, DuelTypes.State.COMMIT, fighter.commit_total)
@@ -577,6 +625,8 @@ func _do_block(attacker: FighterState, defender: FighterState) -> void:
 	_sub_flow(attacker, BLOCKED_FLOW_LOSS)
 
 	defender.guard_blocked = true
+	# 反击预备：格挡成功起算 500ms 内按斩 = 顺势斩（前摇 -6f）。
+	defender.counter_until_frame = frame + GUARD_COUNTER_WINDOW
 	_enter_guard_rec(defender)
 	_enter_recovery(attacker, attacker.data.blocked_recovery)
 
