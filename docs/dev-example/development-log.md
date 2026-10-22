@@ -236,7 +236,7 @@ Start-Process -FilePath "E:/godot_learning/Godot_v4.6.2-stable_mono_win64/godot.
 
 ## 6. 当前状态与遗留
 
-**当前**：版本 **`0.1.0`**；GUT **195/195（746 asserts，27 个测试脚本）**；headless 冒烟 240 帧无错误；
+**当前**：版本 **`0.1.0`**；GUT **212/212（811 asserts，29 个测试脚本）**；headless 冒烟 240 帧无错误；
 NORMAL 为默认难度，HARD 在商店解锁后可切换；8 个角色 id（3 可操作 + 5 对手）已具备数据与 AI 性格，
 但「收服敌人作为可操作角色」尚未接线。逐批变更见根目录 `CHANGELOG.md`。
 
@@ -282,4 +282,180 @@ AI 读招、帧数据分析也没有先查 `godot-state-machine-advanced` 的决
 处置：`AGENTS.md` 新增 **§0 会话启动契约**（开工先读 `docs/dev-contract.md`、声明并加载技能、插件优先、
 未接线插件不得扩大偏差），并新增守卫测试 `tests/unit/test_project_contract.gd`
 （扫描 `res://scripts/` 的禁止 API + 校验 5 个 autoload 存在），把这套约束变成会失败的红灯。
+
+---
+
+## 8. 补记：粒子素材入库与临时素材区隔离（2026-10-23）
+
+第一天做美术素材时踩到的工程问题，记下来避免以后重复。
+
+**任务**：把 `temp_assets/kenney_particle-pack`（Kenney Particle Pack 1.1，CC0）里适合本作的贴图挑进
+`assets/`，同时别让这个 195 文件的临时包污染工程。全流程只加载了 `godot-project-foundations`
+（`.gitignore` + `.gdignore` + 资源目录规范）；粒子系统实现未做，所以没载 `godot-particles`。
+
+**坑一：`.gitignore` 不等于 Godot 看不见。** 只加 `/temp_assets/` 时，git 不再跟踪，但 Godot 依然会把
+160 张 512×512 PNG 逐个导入成 `.ctex`，FileSystem 面板里也照样列出来。正解是在该目录放一个
+**`.gdignore`**（空文件即可，内容不参与解析），Godot 见到就整目录跳过——不导入、不列出、不进导出。
+
+**坑二：`.gdignore` 不入库，所以要写进文档。** `temp_assets/` 整个被 gitignore，里面的 `.gdignore` 自然
+也不会被跟踪；别人克隆仓库后不会有这个文件。因此 `AGENTS.md` §4 与 `docs/particle-assets-plan.md`
+都写清了「临时素材目录需要手动补 `.gdignore`」，而不是假设它会跟着仓库走。
+
+**坑三：验证要查「没被导入」，不能只数「导入了多少」。** `temp_assets/` 里 `*.import` 计数为 0 只能证明
+那里没有生成文件；真正的证据是拿**包里没被选中的 25 个代表文件**（`flame_01`、`muzzle_01`、`window_01`、
+`symbol_01`、`scratch_01`、`smoke_01`、`dirt_02`、`circle_01`、`star_01`、`spark_03`、`scorch_02`、
+`trace_01`、`magic_04` …）反查 `.godot/imported/`，确认**查无对应 `.ctex`**。
+
+**选型口径**：80 张里取 36 张，按**用途**分目录（`slash` 7 / `impact` 10 / `guard` 3 / `spell` 6 /
+`dust` 7 / `glow` 3），不按形状分；文件名保留 Kenney 原名，换图时删旧添新即可回查。
+明确不取的 44 张（枪口焰 `muzzle_*`、烛火 `flame_*`、UI 网格 `window_*`、心形 `symbol_01`、
+爪痕 `scratch_01` 等）理由写在 `docs/particle-assets-plan.md` §7——「多收一点备用」反而会让后面挑图更难判断。
+
+**规格决定用法**：这批图是 **512×512、纯白图案 + alpha**，不是成品彩色特效。颜色必须运行时给，
+而且现有调色板已经够用（`COLOR_P1/P2`、`COLOR_FLOW_LOW/MID/HIGH`、`COLOR_SPELL_P1/P2`），
+所以没有为粒子新增任何颜色，双方也不用各存一套贴图。
+
+**工具使用坑**：用 `godot ... | Select-Object -Last 30` 取日志尾巴时，`$LASTEXITCODE` 会变成 1，
+看起来像导入/测试失败；直接 `& godot ... | Out-Null` 取值才是 0。判断成败要看 Godot 自己的
+`All tests passed!` / `reimport | DONE`，不要只看管道退出码。
+
+**验证**：`--headless --import` 重导 36 步无报错，36 个 `*.png.import` + 对应 `.ctex` 齐全；
+GUT **195/195（746 asserts，退出码 0）**，与改动前一致（本次未改 `.gd` 代码）。
+
+**遗留**：贴图**未接入**任何场景，`DuelView` 仍是纯 `draw_*` 灰盒；接入方案（`duel_fx.tscn` + `one_shot`
+复用、按事件传色、暂停/重开清理）见 `docs/particle-assets-plan.md` §6，待人类拍板。→ 已于同日接线，见 §9。
+
+---
+
+## 9. 补记：粒子接线（命中 / 对刀 / 架防，2026-10-23）
+
+**任务**：人类拍板先接核心三类事件（`hit_landed` / `clash_happened` / `attack_blocked`），并特别点出
+「注意分辨率和游戏内大小的问题」与「不要忘记粒子上色」。本轮加载 `godot-particles` 技能，按其硬规则落地。
+
+**分辨率与尺寸是同一个问题**：设计画布 1280×720（`stretch/mode="canvas_items"`），角色只有 46×150，
+而贴图 512×512。1:1 会占 72% 屏高，所以尺寸必须按「设计像素最长边 / 512」换算成 `scale`：
+命中 110 / 对刀 140 / 架住 170 / 完美 220。**更关键的是 mipmaps**：`trace_*`/`spark_*` 这类细线在 512 里
+只有约 10px，缩到 0.2 倍只剩 2px，不开 mip 就是满屏闪烁噪点。36 张 `.import` 全部改 `mipmaps/generate=true`，
+节点配 `TEXTURE_FILTER_LINEAR_WITH_MIPMAPS`——两者少一个都不起作用。
+
+**上色**：贴图是纯白图案 + alpha，颜色只能运行时给。人类选定「攻击方制」：命中=出刀方色、架住=防守方色、
+对刀=暖白 `#fff3c4`、完美格挡=心流青 `#9ff0d0`，全部取自 `duel_view.gd` 既有调色板，没有为粒子新增颜色。
+读法也顺手：火花是「谁的刀」，护罩是「谁在架」。
+
+**one-shot 的坑（技能里写死的那条）**：`finished` 之后再置 `emitting = true` 会吃到 GPU 侧异步状态，
+整发可能不显示。正确做法是**只调 `restart()`**，`finished` 回调仅把 `emitting` 归零；池化复用，
+12 个节点（4 类 × 3）一次性建好，战斗帧内零分配。
+另外 `local_coords = false` 必须开——节点每次爆发都会被挪到新位置，局部坐标会让上一发的火星跟着跑。
+
+**暂停要手动冻结**：本作的「暂停」是控制器里的 `_paused` 标志，没有 `get_tree().paused`，
+GPU 粒子完全不受影响。所以 `_open_pause_panel()` / `_close_pause_panel()` 里显式
+`view.set_paused()` → 每个节点 `speed_scale = 0/1`；暂停期间的新爆发直接丢弃，避免解冻瞬间补放一串。
+
+**尺寸是看截图改出来的，不是算出来的**：写了 `tools/capture_fx_preview.gd`（`--windowed -s`）把四类特效
+并排拍成一帧，三轮迭代：
+1. 对刀 26 颗 / 190px → 加色混合叠成一团纯白，轮廓全丢；架住 `circle_02` 的环线在 170px 下太细，被角色身体吃掉一半；
+2. 对刀砍到 10 颗 / 150px、架住换厚双环 `circle_03` 并放大到 170；
+3. 对刀再降到 7 颗 / 140px、初速提到 320–700，八角星轮廓才可辨。
+结论：**加法混合下，「数量 × 单颗尺寸」的平方效应远大于线性直觉**；环类贴图要看环线宽度，不能只看整体边长。
+
+**测试坑**：`assert_no_new_orphans()` 不能放 `after_all`——GUT 的 orphan 计数器只在「当前测试」期间有效，
+放外面报 `Nonexistent function 'size' in base 'Nil'`（`addons/gut/test.gd:2085`）。改为单测内部调用，
+覆盖「爆发后无孤儿」。
+
+**工具坑（同一个兔子洞踩第二次）**：`& godot ... | Select-String` 会让 `$LASTEXITCODE` 变 1，
+`$out = & godot ...` 在本机拿到空数组；可靠写法是
+`Start-Process -FilePath $godot -ArgumentList @(...) -Wait -PassThru -NoNewWindow -RedirectStandardOutput ... -RedirectStandardError ...`
+再读 `$p.ExitCode`。§8 记过一遍，这次又踩，已写进 §5 的复现命令。
+
+**验证**：GUT **212/212（811 asserts，退出码 0）**，新增单测 10 例 + 集成 7 例（信号→贴图、`bind()` 清空、暂停透传）；
+`docs/dev-example/duel-fx-preview.png` 四类并排截图；headless 240 帧冒烟无 `ERROR`。
+
+**遗留**：挥砍弧（`draw_arc`，半径 122）与符卡爆环**保持原样**——「替换弧与爆环」是人类的原话，
+但本批范围只有三类，留到「刀光 + 符卡」批次一起换，避免一次改动同时动渲染层与判定提示；**已在 §10 完成**。
+扬尘、空架、收刀、心流氛围仍未接线，贴图已备。
+
+## 10. 补记：刀光与符卡爆环（2026-10-23，第三批）
+
+**任务**（人类原话）：「挥砍弧使用 twirl_03 替换，但是如何替换本身就需要考量一下。符卡爆环使用
+circle_02 且使用紫色。」——难点不在调用，而在「固定形状的贴图怎么摆到一段参数化的弧上」。
+
+**先量再摆**：`twirl_03` 看着像一团白雾，肉眼看不出朝向。写了段 System.Drawing 统计
+「alpha > 96 的像素」的极坐标分布，得到：亮带半径 **175–231 / 512**（中位 203）、张角 **-80°…+28°**
+（中心 -26°、跨度 108°）。旧弧是 ±51.5°（跨度 103°）、半径 122、线宽 6 的白线——两者跨度几乎一致，
+于是「替换」变成纯几何对位：
+
+| 要对的量 | 做法 |
+|---|---|
+| 半径 | 缩放 `122 / 203 ≈ 0.60`，亮带落到半径 105–139，正好压住旧弧 |
+| 朝向 | 贴图带中心 -26°，旋转 **+26°** 对齐到 0°（P1 朝右）；P2 再加 180° |
+| 弧心 | 沿用 `(cx, top + 70)`；`cx`/`top` 用 `_swing_center()` 复用 `_draw_fighter()` 的 lean/crouch，刀光才不会飘离刀身 |
+
+**为什么不是粒子**：挥砍不是一瞬事件，而是持续 4–6 帧的连续态（`slash_frames` = 5/4/6，
+`_is_swinging()` 连收招头几帧也算）。用 `GPUParticles2D` one-shot 每帧重发，既贵又会在慢帧上断档；
+改成一枚 `Sprite2D`，每帧由 `DuelView._process()` 调 `pose_slash()` 摆位——零分配、帧率无关。
+时间轴上，旋转从 -0.17 扫到 +0.12 rad（约 17°）读作「刀在走」，alpha `0.85 × (1 - p² × 0.85)`
+让收刀前淡出，最后一帧仍留 0.13 残光，不会啪地消失。
+
+**颜色**：刀光保持白色，不吃攻击方色。理由是要和第一批的染色读法分工——「命中火花按出刀方」表示是谁
+打中的，刀光则是「同一把刀的轨迹」，染成方色会让两种语义打架。符卡环按人类指定统一用紫色
+`#b79bff`（既有 `COLOR_SPELL_P1`），双方共用；被打断时强度乘 0.6，读作「没放出来」。
+
+**符卡环的尺寸同样是量出来的**：`circle_02` 的环外缘在 172 / 512，所以缩放系数 = 目标半径 / 172
+（不是 / 256）。内外两枚按 0.72 倍套，半径 36 → 366 用 ease-out 推开，时长 0.62s（对齐旧
+`_spell_flash` 的 1.6/s 衰减），alpha `(1-t)^1.4 × 0.75`。
+
+**截图坑（新）**：第一版截图里**刀光根本没出现**。原因是截图用的 sim 还在待机，而
+`DuelView._process()` 每帧都会调 `_update_slash_fx()`，待机即 `hide_slash()`——手动摆上的月牙在下一帧
+就被收走了。修法：截图工具先 `view.set_process(false)` 再摆位。这类「表现层由状态机驱动」的效果，
+截图脚本必须先把驱动停掉，否则拍到的永远是空帧。
+
+**验证**：GUT **224/224（847 asserts，退出码 0）**（`test_duel_fx.gd` 10 → 18 例、
+`test_duel_view_fx.gd` 7 → 11 例）；新截图 `docs/dev-example/duel-fx-slash.png`；headless 240 帧冒烟
+无 `ERROR`；`duel_sim.gd` / `fighter_data.gd` 零改动。
+
+**遗留**：连斩第 2 段起换 `twirl_01/02`、符卡蓄力法阵、被打断的火星+烟、扬尘/空架/收刀/心流氛围都未接；
+`set_strength()` 仍未进设置页。
+
+## 11. 补记：扇形消失与蓄力环（2026-10-23，第三批反馈）
+
+**人类的三点反馈**：① 「符卡粒子应该是 circle_02，为什么看着像 circle_03？」② 「斩击特效能否有一阵
+扇形消失的感觉，随挥刀方向逐渐消失。」③ 「攻击前摇也应该有一个圆形特效件。」并在下一轮补充：
+「star_03 是代替原来的攻击蓄力环，不是叠在角色身上」「素材确实偏暗，可以换成 light_03」。
+
+**第①点先证伪再修**：`Get-FileHash` 比对 `assets/particles/guard/circle_02.png` 与源包
+`PNG (Transparent)/circle_02.png`，MD5 都是 `8634C6D0…`、43,380 B —— 用的确实是 `circle_02`。
+看起来像 `circle_03` 的真因是**同一张贴图叠了两枚**（外环 + 0.72 倍内环）再走加法混合，视觉上被读成
+「一道厚环」。改法是把内环删掉，只留单枚，并把半径改成 30 → 250、时长 0.55s 补偿视觉密度。教训：
+**贴图身份正确 ≠ 观感正确**，叠加层数本身会改变「这是哪张图」的判断。
+
+**第②点：静态贴图做不出「扫过的部分消失」**。`twirl_03` 是一整条月牙，Sprite2D 只能整体旋转/缩放，
+想只抹掉刀锋后的角度，就必须在片元里按角度裁剪。于是新建 `resources/shaders/slash_sweep.gdshader`：
+UV 换极坐标得角度 `ang`，`head = mix(head_from, head_to, progress)` 是刀锋角，
+`fade = 1 - smoothstep(-0.06, tail_span, head - ang)` 让「刀锋后方」直接归零，`COLOR.a *= fade`。
+
+首版 `tail_span = 1.35`（77°）**比月牙总张角 108° 还宽**，等于永不塌陷——肉眼只看到整体在淡，
+完全不是「扇形消失」。靠三格裁切 + 逐格亮像素统计（1079 / 3093 / 2663 / 318）才发现，收到
+`tail_span = 0.16`（9°）后，连拍才出现「0% 全弧 → 35% 上端消失 → 70% 半截 → 100% 收尾」。
+教训：**shader 的「看起来没变化」要先怀疑参数与几何的量级关系**，不是混合模式。
+
+**第③点：是替换，不是叠加**。第一次理解错了，把蓄力环当成「角色身上多一件光效」，结果和自绘的
+收束弧同时在场上。人类指正后，把 `_draw_fighter()` 里两道 `draw_arc`（主弧 + 临刀白弧）整段删除，
+只留头顶进度圆点，环交给 `DuelFx.pose_charge()`。
+
+选贴图试了五个：`magic_02`（八圆点在 120px 上散成气泡）、`magic_03`（四菱形芒压扁后变穿腿长刺）、
+`circle_02` + `circle_05` 双层（发虚）、`star_03`（等比缩放确实是正圆，但最大 alpha 只有 73/255，
+太暗），最后定 `light_03`（亮带外缘 208 / 512、maxAlpha 235）。这也说明**「圆形」不等于「环」**：
+`light_03` 是实心径向光，压到 0.82 alpha 才不把角色洗掉。
+
+数值口径经两轮人类修正：初版「越接近出刀越紧」（96 → 52）被指「应该是从小逐渐变大」，改为 20 → 132
+线性生长；颜色由「金黄 + 临刀换白」改为「`#fffdf7` → `#ffc94a` 由白转亮金，临刀只让 alpha 呼吸」，
+因为掺白会把金洗成米色。圆心也从 `(x + 14, 466)` 改成 `_draw_aura()` 的 `(x, GROUND_Y - 90)`——
+前一版既吃了 COMMIT 的前倾（±14）又比心流环低 16px，两个圆不同心。
+
+**共同坑**：截图工具里凡是由状态机驱动的效果，都要先 `view.set_process(false)` 再手动摆位，否则下一帧
+就被 `_update_*_fx()` 收走（刀光那轮已经踩过一次，这轮换蓄力环又验证了一遍）。
+
+**验证**：GUT **229/229（871 asserts，退出码 0）**；新截图 `docs/dev-example/duel-fx-sweep.png`（四格连拍）与
+`duel-fx-charge.png`；headless 240 帧冒烟无 `ERROR`。
+
 

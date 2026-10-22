@@ -63,6 +63,8 @@
 - `assets/fonts/` — MiSans-Semibold（中文友好字体，otf/ttf）
 - `assets/theme/` — `minimal_vector.tres`（已接线到 project.godot）/ `modern_flat.tres`
 - `assets/icons/` — 220 个单色 SVG 图标（按功能分类）
+- `assets/particles/` — 粒子贴图：Kenney Particle Pack 筛选后的 36 张 CC0，按用途分 `slash`/`impact`/`guard`/`spell`/`dust`/`glow`；纯白图案 + alpha（36 张均已开 mipmaps），颜色由运行时 `modulate` / 粒子 `color` 给；命中/对刀/架防三类已由 `scripts/duel/duel_fx.gd` 接线（池化 `restart()`、暂停冻结、换局清空），挥砍刀光（`twirl_03`）与符卡爆环（`circle_02` 紫）也已改由同一文件的 `pose_slash()` / `burst_spell()` 承担；其余事件仍待接线。来源与许可见 `assets/particles/CREDITS.md`，选型与「事件 → 贴图」对照见 `docs/particle-assets-plan.md`
+- `temp_assets/` — **本地临时素材暂存区**（第三方素材包解压/挑选）：已 `.gitignore` + `.gdignore`，Godot 不扫描、不入库、不进导出；成品一律复制到 `assets/` 对应分类后才入库
 - `input/actions/*.tres` / `input/contexts/*.tres` — GUIDE 动作与上下文的**资源定义**（代码里不得现搭上下文，见 `docs/dev-contract.md` §3）
 - `tools/generate_guide_context.gd` — 生成上面两类资源的 headless 脚本：默认绑定取自 `KeyBindings.DEFAULT_KEYS` / `DEFAULT_JOY_BUTTONS`，改完默认值重跑即可
 - 新功能按模块放入 `scenes/`、`scripts/`、`resources/`、`input/` 等目录（按需创建），保持模块化

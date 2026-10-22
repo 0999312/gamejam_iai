@@ -20,6 +20,7 @@
 - [ ] **美术 0% AI**：立绘/场景/UI/图标/封面均为人类创作或授权素材（逐项核对 `ai-disclosure.md` §6）。
 - [ ] **音乐/音效 0% AI**：均为人类创作或 CC0/授权素材。
 - [ ] 音频素材许可已逐条登记（CC0/CC-BY/可商用），原始文件未入库，credits 完整（见 `docs/audio-assets-plan.md`）。
+- [ ] 粒子贴图许可已登记：Kenney Particle Pack 1.1（**CC0 1.0**，可商用、署名非必需），36 张已入库 `assets/particles/**`，来源清单见 `assets/particles/CREDITS.md`；原始素材包留在本地 `temp_assets/`（已 `.gitignore` + `.gdignore`，不入库、不被 Godot 扫描）。**已接入**命中 / 对刀 / 架防三类（`scripts/duel/duel_fx.gd` + `scenes/duel/duel_fx.tscn`），并由 `slash/twirl_03` 替换挥砍弧、`guard/circle_02`（紫）替换符卡爆环（2026-10-23，验收截图 `docs/dev-example/duel-fx-preview.png` 与 `duel-fx-slash.png`）；符卡法阵/光柱、扬尘、空架、收刀、心流氛围仍待后续批次（映射见 `docs/particle-assets-plan.md` §5）。
 - [ ] **文案 0% AI**：剧情、对白、旁白、道具/技能描述、README、宣发文案均人类撰写（AI 只可辅助内部工程文档）。通用 UI 功能性标签已按人类指示（2026-10-20）去占位，仍需人类最终确认/改写后再勾选。
 - [ ] 无东方 Project **原作游戏素材**；无来源不明的同人素材。
 - [x] （仅当采用东方 IP 时）游戏内「关于」页已含二次创作声明（「本作是东方 Project 二次创作，版权归上海爱丽丝幻乐团及 ZUN 所有」）与「未使用原作游戏素材、与官方无关联」声明（v0.24，`scenes/ui/about.tscn` / `scripts/ui/about_panel.gd`）；**README 的对应声明仍需人类确认后勾选**。

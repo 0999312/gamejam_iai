@@ -447,12 +447,17 @@ func _open_pause_panel() -> void:
 	panel.restart_requested.connect(_on_pause_restart_requested)
 	panel.menu_requested.connect(_on_pause_menu_requested)
 	_paused = true
+	# 粒子是自己积分的，不吃 SceneTree.paused：暂停时手动冻结，恢复时解冻。
+	if _view != null:
+		_view.set_paused(true)
 
 
 func _close_pause_panel() -> void:
 	if UIManager.is_panel_open(PanelIds.pause()):
 		UIManager.close_panel(PanelIds.pause())
 	_paused = false
+	if _view != null:
+		_view.set_paused(false)
 
 
 func _on_resume_requested() -> void:

@@ -19,13 +19,25 @@ const COLOR_FLOW_MID := Color("#d8b45a")
 const COLOR_FLOW_HIGH := Color("#9ff0d0")
 const COLOR_SPELL_P1 := Color("#b79bff")
 const COLOR_SPELL_P2 := Color("#ff9bd0")
+## 起构蓄力环的两端颜色：起手近白，蓄满亮金（贴图是白的，全靠 modulate 上色）。
+const CHARGE_WHITE := Color("#fffdf7")
+const CHARGE_GOLD := Color("#ffc94a")
+
+const FX_SCENE := preload("res://scenes/duel/duel_fx.tscn")
 
 var sim: DuelSim
 
+## 粒子特效层（命中/对刀/架防），挂在自身之下，绘制顺序在自绘角色之上。
+var _fx: DuelFx
+
 var _flash: float = 0.0
-var _hit_side: int = -1
+## 符卡全屏淡紫闪的剩余量；内外爆环本身已交给 `DuelFx.burst_spell()`。
 var _spell_flash: float = 0.0
-var _spell_side: int = -1
+
+
+func _ready() -> void:
+	_fx = FX_SCENE.instantiate() as DuelFx
+	add_child(_fx)
 
 
 func bind(p_sim: DuelSim) -> void:
@@ -41,6 +53,9 @@ func bind(p_sim: DuelSim) -> void:
 	sim.attack_blocked.connect(_on_blocked)
 	sim.spell_cast.connect(_on_spell_cast)
 	sim.spell_interrupted.connect(_on_spell_interrupted)
+	# 换局时上一局的残余粒子不能飘进新一局。
+	if _fx != null:
+		_fx.clear_all()
 	queue_redraw()
 
 
@@ -49,7 +64,96 @@ func _process(delta: float) -> void:
 		_flash = maxf(0.0, _flash - delta * 3.5)
 	if _spell_flash > 0.0:
 		_spell_flash = maxf(0.0, _spell_flash - delta * 1.6)
+	_update_slash_fx()
+	_update_charge_fx()
 	queue_redraw()
+
+
+## 刀光从 `_draw()` 的 `draw_arc` 搬到了 FX 层的 Sprite2D：
+## 贴图是「一段月牙」，要靠位置/旋转/缩放摆到弧上，所以每帧按挥砍进度喂一次；
+## 只读 `_is_swinging()`，不参与任何判定。
+func _update_slash_fx() -> void:
+	if _fx == null:
+		return
+	for side in [DuelTypes.Side.P1, DuelTypes.Side.P2]:
+		var fighter: FighterState = null
+		if sim != null:
+			fighter = sim.p1 if side == DuelTypes.Side.P1 else sim.p2
+		if fighter != null and _is_swinging(fighter):
+			var span := maxf(1.0, float(fighter.data.slash_frames))
+			var progress := clampf((float(fighter.state_frame) + 1.0) / span, 0.0, 1.0)
+			_fx.pose_slash(side, _swing_center(fighter, _side_x(side)), progress)
+		else:
+			_fx.hide_slash(side)
+
+
+## 与 `_draw_fighter()` 里的 cx/top 同一套前倾与下蹲量：弧心必须贴着刀身，
+## 否则刀光会飘在角色旁边。
+func _swing_center(fighter: FighterState, x: float) -> Vector2:
+	var lean := 10.0
+	var crouch := 0.0
+	if fighter.state == DuelTypes.State.SLASH:
+		lean = 28.0
+		crouch = 2.0
+	if fighter.side != DuelTypes.Side.P1:
+		lean = -lean
+	return Vector2(x + lean, GROUND_Y - BODY_H + crouch + 70.0)
+
+
+## 「构」（攻击前摇）的蓄力环：**替代**原先在 `_draw_fighter()` 里自绘的那道
+## 收束弧（2026-10-23 人类指正：是替换，不是叠第二层）。
+## 2026-10-23 二次指正：要**从小长到大**、由白转亮金，且与角色背后的心流圆环同心。
+## 所以圆心直接用 `_draw_aura()` 的 `(x, GROUND_Y - 90)`，不吃 COMMIT 的前倾/下蹲，
+## 否则两个环会偏心。
+func _update_charge_fx() -> void:
+	if _fx == null:
+		return
+	for side in [DuelTypes.Side.P1, DuelTypes.Side.P2]:
+		var fighter: FighterState = null
+		if sim != null:
+			fighter = sim.p1 if side == DuelTypes.Side.P1 else sim.p2
+		if fighter != null and fighter.state == DuelTypes.State.COMMIT:
+			var commit := _commit_state(fighter)
+			var progress: float = commit["progress"]
+			# 20 → 132：起手时只比角色腰宽一圈，蓄满时罩住整个身位。
+			var radius := lerpf(20.0, 132.0, progress)
+			# 白 → 亮金：贴图本身是白的，靠 modulate 上色，所以末段的金要够亮；
+			# 但 alpha 收在 0.82 以下，否则实心光晕会把角色洗成一团金色。
+			var color := CHARGE_WHITE.lerp(CHARGE_GOLD, progress)
+			color.a = 0.32 + 0.50 * progress
+			if commit["imminent"]:
+				var pulse: float = commit["pulse"]
+				# 临刀不再掺白（掺白会把金洗成米色），只让金色的 alpha 呼吸。
+				radius += 5.0 + 3.0 * pulse
+				color = CHARGE_GOLD
+				color.a = 0.82 + 0.10 * pulse
+			_fx.pose_charge(side, _commit_center(fighter, _side_x(side)), radius, color,
+					float(fighter.state_frame) * 0.06)
+		else:
+			_fx.hide_charge(side)
+
+
+## 「构」的进度/预警：自绘的头顶圆点与 FX 层的蓄力环共用同一份，
+## 免得两边对「还剩几帧」的判断出现分叉。
+func _commit_state(fighter: FighterState) -> Dictionary:
+	# 2026-10-21：「看破」心得（hint_lead）的语义是「提前看到对手的刀」，
+	# 所以提前量只加在对手（P2）的环上。
+	var lead := 0.0
+	if sim != null and fighter.side == DuelTypes.Side.P2:
+		lead = float(int(sim.mods.get("hint_lead", 0)))
+	var total := maxf(1.0, float(fighter.commit_total))
+	var remaining := total - float(fighter.state_frame) - lead
+	return {
+		"progress": clampf((float(fighter.state_frame) + lead) / total, 0.0, 1.0),
+		"imminent": remaining <= float(DuelTypes.SLASH_WARN_FRAMES),
+		"pulse": 0.5 + 0.5 * sin(float(fighter.state_frame) * 1.7),
+	}
+
+
+## 蓄力环的圆心＝心流圆环的圆心（`_draw_aura()` 的 `(x, GROUND_Y - 90)`），
+## 这样两个环是同心圆；不吃 COMMIT 的前倾/下蹲，免得环跟着角色漂。
+func _commit_center(_fighter: FighterState, x: float) -> Vector2:
+	return Vector2(x, GROUND_Y - 90.0)
 
 
 func _draw() -> void:
@@ -163,43 +267,24 @@ func _draw_fighter(fighter: FighterState, x: float, base_color: Color) -> void:
 		tip = hand + Vector2(cos(angle), sin(angle)) * blade_len
 	draw_line(hand, tip, Color("#dfe7f2"), 4.0, true)
 
-	if swing:
-		var arc_center := Vector2(cx, top + 70.0)
-		var start := -0.9 if fighter.side == DuelTypes.Side.P1 else PI - 0.9
-		var end := 0.9 if fighter.side == DuelTypes.Side.P1 else PI + 0.9
-		draw_arc(arc_center, 122.0, start, end, 24, Color(1, 1, 1, 0.85), 6.0, true)
+	# 2026-10-23：原来这里画一段 `draw_arc(122, ±51°)` 的白色线；现在改由
+	# `duel_fx.gd` 的 `pose_slash()` 用 `twirl_03` 贴图承担（加法混合的月牙），
+	# 弧心/半径/进度口径与旧线一致，不再在自绘层出现。
 
-	# 无音效时的可读性：「构」的收束环整段可见，越接近出刀越亮越紧。
+	# 无音效时的可读性：「构」的蓄力环整段可见，越接近出刀越紧越亮。
 	# 2026-10-20：原来提示点只在 progress > 0.7 才亮，20f 前摇只剩 6f（100ms），
 	# 低于人类视觉反应（150–250ms），玩家「看见亮圈再按」必然来不及。
-	# 2026-10-20 二次调参：收束环之外再加「落刀预警」——剩余 SLASH_WARN_FRAMES
+	# 2026-10-20 二次调参：环之外再加「落刀预警」——剩余 SLASH_WARN_FRAMES
 	# 帧时整环转白并起脉冲，给玩家一个不需要读进度的确认点。
+	# 2026-10-23：那道 `draw_arc` 收束弧已交给 `duel_fx.gd` 的 `pose_charge()`
+	# （`light_03` 贴图）承担，此处只保留头顶的进度圆点；进度与预警共用
+	# `_commit_state()`，保证点与环不会说两套话。
 	if fighter.state == DuelTypes.State.COMMIT:
-		# 2026-10-21：「看破」心得（hint_lead）的语义是「提前看到对手的刀」，
-		# 所以提前量只加在对手（P2）的环上。此前加在 P1 自己的环上，
-		# 效果是「自己的刀光提前」，与心得名和描述都不符。
-		var lead := 0.0
-		if sim != null and fighter.side == DuelTypes.Side.P2:
-			lead = float(int(sim.mods.get("hint_lead", 0)))
-		var total := maxf(1.0, float(fighter.commit_total))
-		var progress := clampf((float(fighter.state_frame) + lead) / total, 0.0, 1.0)
-		var remaining := total - float(fighter.state_frame) - lead
-		var imminent := remaining <= float(DuelTypes.SLASH_WARN_FRAMES)
-		var ring_center := Vector2(cx, top + 70.0)
-		var radius := 96.0 - 44.0 * progress
-		var ring_color := Color(1.0, 0.82, 0.35, 0.55 + 0.4 * progress)
-		var ring_width := 3.0 + 3.0 * progress
-		if imminent:
-			# 白环 + 呼吸式加粗：玩家不需要判断「还剩几帧」，只看颜色突变。
-			var pulse := 0.5 + 0.5 * sin(float(fighter.state_frame) * 1.7)
-			ring_color = Color(1.0, 0.97, 0.88, 0.85 + 0.15 * pulse)
-			ring_width = 6.0 + 3.0 * pulse
-			draw_arc(ring_center, radius + 7.0 + 3.0 * pulse, 0.0, TAU, 40,
-					Color(1, 1, 1, 0.20 + 0.25 * pulse), 2.0, true)
-		draw_arc(ring_center, radius, -PI * 0.9, PI * 0.1, 32, ring_color, ring_width, true)
+		var commit := _commit_state(fighter)
+		var progress: float = commit["progress"]
 		var dot := 5.0 + 7.0 * progress
 		var dot_color := Color(1.0, 0.9, 0.45, 0.55 + 0.45 * progress)
-		if imminent:
+		if commit["imminent"]:
 			dot_color = Color(1, 1, 1, 0.9)
 		draw_circle(Vector2(cx, top - 24.0), dot, dot_color)
 
@@ -294,23 +379,18 @@ func _draw_effect() -> void:
 	_draw_spell_burst()
 	if _flash <= 0.0:
 		return
-	var alpha := _flash * 0.55
+	# 2026-10-23：命中/对刀/架防改由粒子（`duel_fx.gd`）承担主表现，
+	# 全屏暖闪降为辅助（0.55 → 0.28），避免「白一片」把粒子洗掉。
+	var alpha := _flash * 0.28
 	draw_rect(Rect2(0, 0, 1280, 720), Color(1.0, 0.85, 0.65, alpha), true)
 
 
-## 符卡发动的扩散环：从发动者身上炸开一圈，颜色区分双方。
+## 符卡发动：扩散环已改由 `duel_fx.gd` 的 `burst_spell()`（紫色 `circle_02`）承担，
+## 自绘层只留一层很淡的全屏紫光，作为「符卡」与「命中」在节奏上的区分。
 func _draw_spell_burst() -> void:
 	if _spell_flash <= 0.0:
 		return
-	var t := 1.0 - _spell_flash
-	var origin := Vector2(P1_X if _spell_side == DuelTypes.Side.P1 else P2_X, GROUND_Y - 90.0)
-	var color := _spell_color(_spell_side)
-	var radius := 36.0 + t * 330.0
-	var ring_alpha := _spell_flash * 0.75
-	draw_arc(origin, radius, 0.0, TAU, 64,
-			Color(color.r, color.g, color.b, ring_alpha), 2.0 + 7.0 * _spell_flash, true)
-	draw_arc(origin, radius * 0.72, 0.0, TAU, 48,
-			Color(color.r, color.g, color.b, ring_alpha * 0.55), 2.0 + 3.0 * _spell_flash, true)
+	var color := DuelFx.SPELL_RING_COLOR
 	draw_rect(Rect2(0, 0, 1280, 720),
 			Color(color.r, color.g, color.b, _spell_flash * _spell_flash * 0.10), true)
 
@@ -319,29 +399,63 @@ func _spell_color(side: int) -> Color:
 	return COLOR_SPELL_P1 if side == DuelTypes.Side.P1 else COLOR_SPELL_P2
 
 
+func _spell_origin(side: int) -> Vector2:
+	return Vector2(_side_x(side), GROUND_Y - 90.0)
+
+
 func _on_spell_cast(side: int, _effect: int) -> void:
 	_spell_flash = 1.0
-	_spell_side = side
+	if _fx != null:
+		_fx.burst_spell(_spell_origin(side))
 	queue_redraw()
 
 
 func _on_spell_interrupted(side: int) -> void:
 	_spell_flash = maxf(_spell_flash, 0.5)
-	_spell_side = side
+	if _fx != null:
+		# 被打断时环还没张开，和成功发动用一个强度会读成「符卡放出来了」。
+		_fx.burst_spell(_spell_origin(side), 0.6)
 	queue_redraw()
 
 
-func _on_hit_landed(_attacker_side: int, defender_side: int, _damage: int) -> void:
+func _on_hit_landed(attacker_side: int, defender_side: int, _damage: int) -> void:
 	_flash = 1.0
-	_hit_side = defender_side
+	if _fx != null:
+		_fx.burst_hit(_strike_point(defender_side), _side_color(attacker_side))
 	queue_redraw()
 
 
 func _on_clash(_a: int, _b: int) -> void:
 	_flash = 0.8
+	if _fx != null:
+		_fx.burst_clash(Vector2((P1_X + P2_X) * 0.5, GROUND_Y - BODY_H * 0.66))
 	queue_redraw()
 
 
-func _on_blocked(_attacker: int, _defender: int, perfect: bool) -> void:
+func _on_blocked(_attacker: int, defender_side: int, perfect: bool) -> void:
 	_flash = 0.45 if perfect else 0.25
+	if _fx != null:
+		# 护罩环放在防守方的护手一侧（与 GUARD 状态的护手线同一位置），
+		# 比放在身体正中更贴「刀被架住」的那个点。
+		var guard_x := _side_x(defender_side) + (36.0 if defender_side == DuelTypes.Side.P1 else -36.0)
+		_fx.burst_block(Vector2(guard_x, GROUND_Y - BODY_H * 0.63), _side_color(defender_side), perfect)
 	queue_redraw()
+
+
+## 舞台暂停时冻结粒子（含爆炸中的火星），恢复后原地继续。
+func set_paused(value: bool) -> void:
+	if _fx != null:
+		_fx.set_paused(value)
+
+
+func _side_color(side: int) -> Color:
+	return COLOR_P1 if side == DuelTypes.Side.P1 else COLOR_P2
+
+
+func _side_x(side: int) -> float:
+	return P1_X if side == DuelTypes.Side.P1 else P2_X
+
+
+## 命中点取被打方的躯干高度：白芯就压在角色身上，而不是脚下地面。
+func _strike_point(side: int) -> Vector2:
+	return Vector2(_side_x(side), GROUND_Y - BODY_H * 0.62)

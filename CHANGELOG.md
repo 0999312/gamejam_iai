@@ -6,6 +6,46 @@
 
 ---
 
+## 未发布 — 2026-10-23
+
+素材入库、粒子接线与刀光/符卡爆环批次：把第三方粒子素材包筛成可用的 36 张贴图，接入命中 / 对刀 / 架防三类战斗事件，再用 `twirl_03` 与 `circle_02` 替换自绘的挥砍弧与符卡爆环，同时把临时素材暂存区从 Godot 的扫描范围与版本控制里摘出去。
+
+### 修复
+
+- **问题** 临时素材包放在工程内会被 Godot 全量扫描导入：`temp_assets/` 有 195 个文件 / 15.2 MB，其中 160 张 512×512 PNG 会被逐个生成 `.ctex`，拖慢首次导入、污染 `.godot/imported`，还会让该目录出现在 FileSystem 面板与导出候选里。
+  → **修法** 新增 `temp_assets/.gdignore`（Godot 见到该文件即整目录跳过，不导入、列不出、不导出）；`.gitignore` 追加 `/temp_assets/` 并写明用途。
+  → **验证** 重新导入后 `temp_assets/` 内 `*.import` / `*.uid` 均为 0；80 张里**未被选中的 25 个代表文件**（`flame_01`、`muzzle_01`、`window_01`、`symbol_01`、`scratch_01`、`smoke_01`、`dirt_02`、`circle_01`、`star_01`、`spark_03`、`scorch_02`、`trace_01`、`magic_04` 等）在 `.godot/imported/` 中查无对应 `.ctex`，即该目录确实从未被扫描。
+
+### 机制
+
+- **素材入库** 从 Kenney Particle Pack 1.1（CC0 1.0）的 `PNG (Transparent)` 80 张里挑 36 张，按用途放 `assets/particles/{slash,impact,guard,spell,dust,glow}/`（7/10/3/6/7/3）。文件名保留 Kenney 原名、像素未改（纯白 + alpha），运行时用现有调色板上色：`COLOR_P1/P2`、`COLOR_FLOW_LOW/MID/HIGH`、`COLOR_SPELL_P1/P2`——**不为粒子新增颜色**。
+  → **验证** 36 张 `.png.import` 与对应 `.ctex` 全部生成；`assets/particles/CREDITS.md` 记录来源包、许可原文要点、未取用子集（黑底版 / Rotated / Unity samples）。
+- **粒子接线（第一批）** 新增 `scripts/duel/duel_fx.gd` + `scenes/duel/duel_fx.tscn`：`GPUParticles2D` one-shot 固定池（4 类 × 3 个，只 `restart()` 复用，不在战斗帧新建节点），`DuelView` 在 `_ready()` 装配、在 `hit_landed` / `clash_happened` / `attack_blocked` 三处点火。染色走人类拍板的「攻击方制」：命中=出刀方色、架住=防守方色、对刀=暖白 `#fff3c4`、完美格挡=心流青 `#9ff0d0`（全部取自 `duel_view.gd` 既有调色板）。尺寸按设计像素：命中 110 / 对刀 140 / 架住 170 / 完美 220（对刀与架住按首轮截图从 190/150 收回，避免叠加成一团白）。36 张 `.png.import` 全部开 mipmaps，节点配 `Linear Mipmap` 过滤以消除缩小闪烁；暂停时 `speed_scale = 0` 冻结、`bind()` 换局 `clear_all()`、预留 0–1 强度接口；全屏暖闪 alpha 0.55 → 0.28 降为辅助。
+  → **验证** GUT **212/212（811 asserts，退出码 0）**，新增 `tests/unit/test_duel_fx.gd`（10 例）与 `tests/integration/test_duel_view_fx.gd`（7 例：信号→贴图、换局清空、暂停透传）；`tools/capture_fx_preview.gd` 出图 `docs/dev-example/duel-fx-preview.png`（1280×720，四类特效并排）；headless 240 帧冒烟无错误。
+- **刀光与符卡爆环（第二批）** `duel_view.gd` 里 `draw_arc(122, ±51.5°)` 的白色挥砍弧换成 `slash/twirl_03` 贴图，`_draw_spell_burst()` 的两道自绘扩散环换成 `guard/circle_02` 紫色 `#b79bff`。
+  → **问题** 贴图不是可缩放的整环：`twirl_03` 的亮带在半径 175–231 / 512、张角 -80°…+28°（中心 -26°），直接 `Sprite2D` 摆上去既对不上 122 半径，也朝错方向。
+  → **修法** 用实测量化对位——缩放 `122/203 ≈ 0.60` 让亮带压在旧弧上，旋转 `+26°`（P2 再 +180°）把带中心转到出刀方向，弧心复用 `_draw_fighter()` 的 lean/crouch；挥砍是持续 4–6 帧的连续态，因此每帧调 `pose_slash()` 摆位而不是发一次性粒子，旋转随进度前扫 17°、alpha 按 `0.85×(1-p²×0.85)` 淡出。符卡环按 `circle_02` 外缘 172 / 512 缩放，内外两枚由 36 推到 366、0.62s、ease-out，被打断乘 0.6。
+  → **验证** GUT **224/224（847 asserts，退出码 0）**（`test_duel_fx.gd` 18 例、`test_duel_view_fx.gd` 11 例，含刀光朝向/缩放/淡出与紫环扩张/寿命）；新截图 `docs/dev-example/duel-fx-slash.png`；`duel_sim.gd` / `fighter_data.gd` 零改动，判定层不受影响；headless 240 帧冒烟无错误。
+- **第三批（人类三点反馈）** ① 符卡爆环看起来像 `circle_03`——核实贴图确实是 `circle_02`（MD5 与源包一致），真因是**内外两枚 0.72 倍叠加**被读成厚环，改为**单枚**；② 刀光要「扇形随挥刀方向消失」——新增 `resources/shaders/slash_sweep.gdshader`，刀锋角 `head` 由 -83° 扫到 +29°，扫过的角度在片元里抹掉，`modulate.a = 0.9×(1-0.35p²)` 只管整体衰减；③ 攻击前摇要有圆形特效件，且是**替换**自绘收束弧而不是叠加——`_draw_fighter()` 里两道 `draw_arc` 整段删除，改由 `DuelFx.pose_charge()` 摆一枚 `spell/light_03`（`CHARGE_TEX_RADIUS = 208`），半径 20 → 132 由小长大、`#fffdf7` → `#ffc94a` 由白转亮金、alpha 0.32 → 0.82，圆心取 `_draw_aura()` 的 `(x, GROUND_Y - 90)` 与心流圆环同心（不吃 COMMIT 前倾/下蹲）；临刀只让金色 alpha 呼吸，不掺白（掺白会洗成米色）。
+  → **问题** 初版 shader 的 `tail_span` 取 1.35 rad（77°），比月牙总张角 108° 还宽 ⇒ 永不塌陷，肉眼只见整体变淡；蓄力环初版用「收紧」与去饱和的金，观感偏暗且与心流环不同心（圆心偏 14px、低 16px）。
+  → **验证** GUT **229/229（871 asserts，退出码 0）**（新增刀光 shader 进度/前扫断言、单枚爆环 ≠ null、蓄力环同心且随进度变大变亮）；四格连拍 `docs/dev-example/duel-fx-sweep.png` 证明 0% 全弧 → 35% 上端消失 → 70% 半截 → 100% 收尾；新增 `docs/dev-example/duel-fx-charge.png`；headless 240 帧冒烟无错误。
+
+### 文档
+
+- 新增 `docs/particle-assets-plan.md`：边界（AI 不生成美术）、目录约定、贴图规格、**游戏事件 → 贴图对照表**（出刀/连斩/命中/对刀/被架/完美格挡/空架/符卡蓄力/发动/打断/落地/收刀/心流氛围）、导入设置建议、接入方案、44 张未选贴图的理由。
+- `docs/particle-assets-plan.md` §6 改写为「已接入（第一、二批）」+ §6.5「刀光与符卡爆环」记录对位数学（半径/朝向/弧心三列）与取舍，§5 尺寸表标注定稿值，§8 补 8.1/8.2 两轮验证；`docs/dev-example/development-log.md` 新增 §9（粒子接线）与 §10（刀光/爆环）记录口径与踩坑；新增 `docs/dev-example/duel-fx-preview.png` 与 `duel-fx-slash.png` 两张验收截图（非游戏资源）。
+- `AGENTS.md` §4 补 `assets/particles/` 与 `temp_assets/` 两条约定；`assets/particles/CREDITS.md` 新增；`docs/gamejam/ai-disclosure.md` §4 追加一行、§6 补素材来源行；`docs/gamejam/submission-checklist.md` 补粒子贴图许可勾选项。
+- 本次 **美术仍为 0% AI**：贴图是第三方 CC0 素材，AI 只做筛选、复制归档与写文档，未绘制、未改像素。
+
+### 已知未修
+
+- 战斗事件已接：命中 / 对刀 / 架防三类粒子，外加挥砍刀光（`twirl_03` + `slash_sweep.gdshader`）、符卡爆环（单枚 `circle_02` 紫）、起构蓄力环（`light_03`，已替掉自绘收束弧）；**未接**：符卡蓄力法阵与光柱、落地扬尘、空架、收刀、心流氛围，贴图已备在 `assets/particles/` 对应子目录，映射见 `docs/particle-assets-plan.md` §5。
+- 判定类提示中，**预警收束弧已由蓄力环接管**；架窗环、血条仍走 `draw_*`，**不交给粒子**：人手要读的是几何形状，不是光效。连斩第 2 段起换 `twirl_01/02` 也未做。
+- `DuelFx.set_strength()` 只有接口，尚未进设置页（0 = 完全关闭）。
+- 贴图的 mipmaps 已开启并配对 `Linear Mipmap` 过滤；若后续在低分辨率窗口下仍见闪烁，优先怀疑 `ParticleProcessMaterial` 的 scale 曲线而不是导入设置。
+
+---
+
 ## 0.1.0 — 2026-10-21
 
 首个语义化版本。判定依据：基本操作可确定（键鼠 + 手柄、暂停/恢复、改键、存档/清档全链路）且难度经人工简测通过。此前全部代码在这一天经历了**一次全量审计 + 六批修复**，下面按批次记录。

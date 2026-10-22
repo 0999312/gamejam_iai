@@ -9,7 +9,7 @@
 - 引擎：Godot **4.7.2 stable mono**（GDScript 为主，未使用 C# 脚本）。
 - 版本：**`0.1.0`**（首个「操作与难度经人工简测通过」的里程碑；`project.godot` 的 `config/version` 与此一致，游戏内「关于」页显示同一版本号）。此前文档里的 `v0.20`–`v0.29` 是开发期迭代号，不再使用。
 - 内容：局内 5 场阶梯、3 位角色、10 个心得、4 张符卡、商店/解锁、设置、暂停、本地双人、键鼠 + 手柄、中英双语；主菜单为二级结构（单人阶梯 / 本地双人收在「开始游戏」下），设置页含「关于本作」与「清除存档」。
-- 测试：**195/195 GUT**（27 个脚本、746 asserts，退出码 0）。
+- 测试：**229/229 GUT**（29 个脚本、869 asserts，退出码 0）。
 - 构建：Windows 单文件 EXE 已导出；GitHub Actions `build-windows` 已跑通。
 - 设计文档：`docs/dev-example/design.md`；阶段状态：`docs/dev-example/m1-status.md` … `m5-status.md`；变更总览：`CHANGELOG.md`。
 - 合规：AI 只写代码；美术、音乐、音效、文案由人类提供或使用 CC0 素材，详见 `docs/gamejam/ai-disclosure.md`。
@@ -76,7 +76,7 @@ localization/      zh_CN.json、en.json
 tests/             unit / integration（GUT）
 tools/             一次性脚本（GUIDE 上下文生成、平衡模拟器、逐帧追踪）
 docs/              设计、阶段状态、审计报告、GameJam 合规与占位清单
-assets/            字体、主题、图标、CC0 音效
+assets/            字体、主题、图标、CC0 音效、CC0 粒子贴图
 build/             本地导出产物与临时日志（gitignore，不入库）
 CHANGELOG.md       已交付变更的逐批记录（问题 → 修法 → 验证）
 ```
@@ -102,6 +102,8 @@ CHANGELOG.md       已交付变更的逐批记录（问题 → 修法 → 验证
 | 新商店条目 | 在 `resources/unlocks/` 放一个 `UnlockItem` `.tres`，补 `shop.item.<id>.name/desc` |
 | 新语言 | `GameBootstrap.I18N_FILES` + `localization/<lang>.json`（键与 zh_CN 对齐） |
 | 新音效 | 放进 `assets/audio/sfx|amb/`，在 `DuelAudio` 预加载/映射；来源登记到 `assets/audio/CREDITS.md` |
+| 新粒子贴图 | 放进 `assets/particles/<用途>/`（`slash`/`impact`/`guard`/`spell`/`dust`/`glow`），同步 `assets/particles/CREDITS.md` 与 `docs/particle-assets-plan.md` 的「事件 → 贴图」表 |
+| 改战斗特效 | 命中/对刀/架防的贴图、尺寸、颜色、粒子数在 `scripts/duel/duel_fx.gd` 的 `_spec()` 与 `burst_*()`；挥砍刀光（`pose_slash`，`twirl_03`）与符卡爆环（`burst_spell`，`circle_02` 紫）同文件；触发点在 `scripts/duel/duel_view.gd` 的信号回调与 `_update_slash_fx()`；改完跑 `tools/capture_fx_preview.gd` 出两张图对照 |
 | 新按键/手柄键 | `KeyBindings.DEFAULT_KEYS` / `DEFAULT_JOY_BUTTONS`，并补设置页行 |
 
 ## 测试约定
@@ -141,6 +143,7 @@ CHANGELOG.md       已交付变更的逐批记录（问题 → 修法 → 验证
 - AI 使用边界、披露记录：`docs/gamejam/ai-disclosure.md`（只写代码；不生成美术/音乐/音效/文案）。
 - 占位登记：`docs/gamejam/submission-checklist.md` §7（`PH-01` … `PH-18`）。
 - 音频来源与许可：`assets/audio/CREDITS.md`、`docs/audio-assets-plan.md`。
+- 粒子贴图来源与许可：`assets/particles/CREDITS.md`、`docs/particle-assets-plan.md`（Kenney Particle Pack 1.1，CC0 1.0）。
 - 东方 Project 二创声明：游戏内「关于」页已写明「本作是东方 Project 二次创作，版权归上海爱丽丝幻乐团及 ZUN 所有」与「与官方无任何关联、未使用原作游戏素材」；提交用 README 仍须由人类按 `docs/gamejam/submission-checklist.md` §4 撰写并同样注明。详见 `docs/gamejam/README.md` 与 `docs/gamejam/constraints.md`。
 - 提交清单：`docs/gamejam/submission-checklist.md`；活动硬约束：`docs/gamejam/constraints.md`。
 
