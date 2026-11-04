@@ -191,3 +191,15 @@ func test_rebind_clears_slash_and_spell_rings() -> void:
 	view.bind(_sim_pair())
 	assert_false(_slash_of(_fx_of(view), DuelTypes.Side.P1).visible)
 	assert_false(_burst_ring_of(_fx_of(view)).visible)
+
+
+## 看破（u05）的可读性前提：预警环必须真的「白→金」渐进，不能临刀硬切成纯金。
+func test_charge_color_keeps_a_white_phase_before_gold() -> void:
+	var start := DuelView.charge_color(0.0, false, 0.0)
+	var mid := DuelView.charge_color(0.35, false, 0.0)
+	var end := DuelView.charge_color(1.0, false, 0.0)
+	var hot := DuelView.charge_color(1.0, true, 0.5)
+	assert_almost_eq(start.b, start.r, 0.05, "起手必须是近白，不能一出现就金")
+	assert_gt(mid.b, 0.7, "中段仍要保留白段，看破的提前量才有东西可读")
+	assert_lt(end.b, end.r - 0.25, "末段转亮金")
+	assert_gt(hot.a, end.a, "临刀只加亮度与呼吸，不再整段换色")

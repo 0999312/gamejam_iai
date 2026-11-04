@@ -21,6 +21,23 @@ func test_english_has_all_generic_keys() -> void:
 		assert_ne(I18NManager.get_text(key), key)
 
 
+func test_visible_keys_added_2026_11_05_are_localized() -> void:
+	# 设置页「使用符卡」、状态兜底、角色选择面板都必须在两份 JSON 里有真实值，
+	# 不能靠 _tr() 回退成原始 key。
+	var keys: Array[String] = [
+		"settings.key_spell_p1", "settings.key_spell_p2", "state.unknown",
+		"menu.char_select_title", "menu.char_select_hint_solo", "menu.char_select_hint_versus",
+		"menu.p1_character", "menu.p2_character", "menu.p1_input", "menu.p2_input",
+		"menu.input_keyboard", "menu.input_gamepad", "menu.start_duel",
+	]
+	I18NManager.set_language("zh_CN")
+	for key in keys:
+		assert_ne(I18NManager.get_text(key), key, "中文缺失: %s" % key)
+	I18NManager.set_language("en")
+	for key in keys:
+		assert_ne(I18NManager.get_text(key), key, "英文缺失: %s" % key)
+
+
 func test_spell_and_spell_state_have_explicit_placeholders() -> void:
 	# 符卡键与 SPELL 状态名都必须在 JSON 里有显式占位，不能靠 _tr() 回退。
 	var keys: Array[String] = [

@@ -1,14 +1,19 @@
 extends Control
 
-## 灰盒主菜单：角色选择 / 单人阶梯 / 本地双人 / 商店 / 设置 / 退出。
+## 灰盒主菜单：开始游戏 / 商店 / 设置 / 退出。
+## 角色与输入方式已抽到二级「角色选择」面板（选完模式后再选）。
 ## 文本全部走 I18N 占位键，正式文案由人类替换。
 
 const FONT := preload("res://assets/fonts/MiSans-Semibold.otf")
 const DUEL_SCENE := "res://scenes/duel/duel.tscn"
 const CLICK := preload("res://assets/audio/sfx/sfx_ui_click.ogg")
+const BG_SCENE := preload("res://scenes/duel/rainy_night.tscn")
+## 菜单没有角色，地平线压到按钮下方；脚下湿反光关闭。
+const MENU_GROUND_Y := 0.96
+const MENU_POOL_STRENGTH := 0.0
 
 var _gold_label: Label
-var _char_option: OptionButton
+var _background: ColorRect
 
 
 func _ready() -> void:
@@ -35,7 +40,6 @@ func _on_language_changed(_event: Event) -> void:
 
 func _on_unlock_purchased(_event: Event) -> void:
 	_refresh_gold()
-	_populate_characters()
 
 
 func _build_ui(restore_focus: bool = true) -> void:
@@ -43,13 +47,9 @@ func _build_ui(restore_focus: bool = true) -> void:
 		remove_child(child)
 		child.queue_free()
 	_gold_label = null
-	_char_option = null
+	_background = null
 
-	var bg := ColorRect.new()
-	bg.color = Color("#0b0e13")
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bg)
+	_build_background()
 
 	var title := Label.new()
 	title.text = _tr("menu.title")
@@ -94,38 +94,6 @@ func _build_ui(restore_focus: bool = true) -> void:
 	box.add_theme_constant_override("separation", 10)
 	center.add_child(box)
 
-	var char_row := HBoxContainer.new()
-	char_row.custom_minimum_size = Vector2(420, 44)
-	char_row.add_theme_constant_override("separation", 10)
-	box.add_child(char_row)
-
-	var char_label := Label.new()
-	char_label.text = _tr("menu.character")
-	char_label.custom_minimum_size = Vector2(100, 44)
-	char_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	char_label.add_theme_font_override("font", FONT)
-	char_label.add_theme_font_size_override("font_size", 20)
-	char_label.add_theme_color_override("font_color", Color("#c7d2df"))
-	char_row.add_child(char_label)
-
-	_char_option = OptionButton.new()
-	_char_option.custom_minimum_size = Vector2(300, 44)
-	_char_option.add_theme_font_override("font", FONT)
-	_char_option.add_theme_font_size_override("font_size", 18)
-	_char_option.item_selected.connect(_on_character_selected)
-	UiFocus.prepare(_char_option)
-	char_row.add_child(_char_option)
-	_populate_characters()
-
-	var char_hint := Label.new()
-	char_hint.text = _tr("menu.character_hint")
-	char_hint.custom_minimum_size = Vector2(420, 22)
-	char_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	char_hint.add_theme_font_override("font", FONT)
-	char_hint.add_theme_font_size_override("font_size", 14)
-	char_hint.add_theme_color_override("font_color", Color("#7f8b9c"))
-	box.add_child(char_hint)
-
 	# 模式选择收进二级菜单：主菜单只留一个「开始游戏」，
 	# 避免六个按钮竖排后与标题/副标题重叠（用户 2026-10-21 反馈）。
 	var start_button := _make_button(box, _tr("menu.start"))
@@ -154,6 +122,34 @@ func _build_ui(restore_focus: bool = true) -> void:
 		start_button.grab_focus()
 
 
+func _build_background() -> void:
+	var bg := BG_SCENE.instantiate() as ColorRect
+	if bg == null:
+		# 极端情况下场景损坏：保留纯色底，菜单仍可用。
+		var fallback := ColorRect.new()
+		fallback.color = Color("#0b0e13")
+		fallback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		fallback.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(fallback)
+		_background = fallback
+		return
+	bg.name = "RainyNight"
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.show_behind_parent = true
+	bg.z_index = -1
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# rainy_night.tscn 的材质是场景子资源，可能和 DuelView 共享；
+	# 菜单要改 ground_y/pool_strength，必须先复制，避免反过来污染对局。
+	if bg.material != null:
+		bg.material = bg.material.duplicate()
+	add_child(bg)
+	_background = bg
+	var mat := bg.material as ShaderMaterial
+	if mat != null:
+		mat.set_shader_parameter("ground_y", MENU_GROUND_Y)
+		mat.set_shader_parameter("pool_strength", MENU_POOL_STRENGTH)
+
+
 func _make_button(parent: Control, text: String) -> Button:
 	var button := Button.new()
 	button.text = text
@@ -163,30 +159,6 @@ func _make_button(parent: Control, text: String) -> Button:
 	UiFocus.prepare(button)
 	parent.add_child(button)
 	return button
-
-
-func _populate_characters() -> void:
-	var meta := GameBootstrap.meta if GameBootstrap != null else null
-	var ids := Unlocks.character_ids(meta)
-	_char_option.clear()
-	if ids.is_empty():
-		# 正常路径不会发生（char_a 恒可用）；防御未初始化注册表时越界。
-		return
-	var selected := 0
-	for i in ids.size():
-		var id := ids[i]
-		_char_option.add_item(_tr("menu.%s" % String(id)))
-		_char_option.set_item_metadata(i, String(id))
-		if id == GameBootstrap.pending_character:
-			selected = i
-	_char_option.select(selected)
-	GameBootstrap.pending_character = ids[selected]
-
-
-func _on_character_selected(index: int) -> void:
-	var id := String(_char_option.get_item_metadata(index))
-	GameBootstrap.pending_character = StringName(id)
-	SoundManager.play_ui_sound(CLICK)
 
 
 func _refresh_gold() -> void:
@@ -208,6 +180,15 @@ func _on_mode_chosen(mode: StringName) -> void:
 	GameBootstrap.pending_mode = mode
 	if UIManager.is_panel_open(PanelIds.mode_select()):
 		UIManager.close_panel(PanelIds.mode_select())
+	var panel := UIManager.open_panel(PanelIds.character_select(), {"mode": mode}) as CharacterSelectPanel
+	if panel == null:
+		return
+	panel.character_confirmed.connect(_on_character_confirmed)
+
+
+func _on_character_confirmed() -> void:
+	if UIManager.is_panel_open(PanelIds.character_select()):
+		UIManager.close_panel(PanelIds.character_select())
 	_go_duel()
 
 

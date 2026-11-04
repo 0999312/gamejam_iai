@@ -6,7 +6,7 @@ extends Resource
 ## （缺失时 HUD 会显示 [占位] 前缀，见 DuelHud._tr）。
 
 enum Effect {
-	## 架势展开：一段时间内所有架都判定为完美格挡。
+	## 瞬发架刀·反斩：按 L 立刻完成防御姿态，窗口内被刀自动完美弹开并反击。
 	GUARD_STANCE,
 	## 疾风连斩：蓄力后自动出刀，这一刀无视对手的架。
 	BLADE_RUSH,
@@ -32,6 +32,12 @@ enum Effect {
 @export var amount: int = 0
 ## 这一刀是否无视对手的架（只在 BLADE_RUSH / CRUSH 上有意义）。
 @export var unblockable: bool = false
+## GUARD_STANCE：自动架刀窗口（帧）。窗口内受刀自动完美弹开，超时未受击返还部分心流。
+@export var auto_guard_frames: int = 45
+## GUARD_STANCE：自动弹开成功后的反斩伤害。
+@export var counter_damage: int = 10
+## GUARD_STANCE：窗口超时、一刀未接时返还的心流。
+@export var empty_refund_flow: int = 10
 
 
 ## 角色登场时绑定的符卡；未知 id 返回 null（即没有符卡）。
@@ -49,8 +55,9 @@ static func for_character_id(spell_id: StringName) -> SpellCardData:
 			return null
 
 
-## A「均衡」：架势展开——接下来 1 秒内（60f）任意时刻的架都判定为完美格挡，
-## 把全场最难的 3–5f 技术动作变成一次可规划的安全区。
+## A「均衡」：瞬发架刀·反斩——按 L 立刻完成防御姿态，45f 内被刀自动完美弹开
+## 并立刻反斩（10 伤，穿防）。窗口内自己先出刀则窗口取消、不返还；
+## 45f 内一刀未接则返还 10 心流。是一次「读对手出刀」的保险，而不是开无敌。
 static func _guard_stance() -> SpellCardData:
 	var card := SpellCardData.new()
 	card.id = &"spell_a"
@@ -58,10 +65,13 @@ static func _guard_stance() -> SpellCardData:
 	card.name_key = "spell.spell_a.name"
 	card.desc_key = "spell.spell_a.desc"
 	card.flow_cost = 30
-	card.cast_frames = 10
+	card.cast_frames = 0
 	card.uses_per_duel = 1
 	card.effect = Effect.GUARD_STANCE
-	card.amount = 60
+	card.amount = 0
+	card.auto_guard_frames = 45
+	card.counter_damage = 10
+	card.empty_refund_flow = 10
 	return card
 
 

@@ -1,7 +1,7 @@
 # 音频素材计划（Audio Assets Plan）
 
 > 版本 v0.1（文档修订号，不是发布版本；发布版本见根目录 CHANGELOG.md） ｜ 2026-10-19 ｜ 性质：**内部工程/采购文档**，不是玩家可见文案。
-> 目标：在 M1（10-21）前把「斩 / 被架 / 刃鸣 / 受击」四个核心音与风声底噪准备到**可试听、可入库**的状态，避免后期缺稿。
+> 目标：在 M1（10-21）前把「斩 / 被架 / 刃鸣 / 受击」四个核心音与环境底噪准备到**可试听、可入库**的状态，避免后期缺稿。环境底噪自 2026-11-04 起为 CC0 雨声（见 §11）。
 > 设计约束见 `docs/dev-example/design.md` §11.3 / §11.5；披露见 `docs/gamejam/ai-disclosure.md` §6。
 
 ---
@@ -76,6 +76,8 @@
 
 ## 4. 候选映射（初版，待人类试听）
 
+> 2026-11-04 更新：环境音已改为人类提供的 CC0 雨声，见 §11；下表「环境风声 loop」行保留为历史候选。
+
 | 游戏事件 | 首选（CC0） | 备选（CC0/参考） | 说明 |
 |---|---|---|---|
 | 斩（出刀 whoosh） | `knifeSlice.ogg` / `knifeSlice2.ogg` | OGA 无；Mixkit 2792/1476/1506 参考 | 单条 < 1s |
@@ -93,7 +95,7 @@
 
 - 命名：`assets/audio/sfx/sfx_<category>_<variant>.ogg`；环境：`assets/audio/amb/amb_<name>_loop.ogg`；UI 保持 Kenney 原名或复制到 `assets/audio/ui/`。
 - 类别：`slash`、`clash`、`block`、`hit`、`draw`、`sheath`、`cloth`、`step`、`breath`、`heart`。
-- 格式：OGG Vorbis 优先（Godot 原生循环支持好）；MP3 仅过渡用，注意编码器延迟导致的循环缝隙。
+- 格式：OGG Vorbis 优先（Godot 原生循环支持好）；MP3 仅过渡用，注意编码器延迟导致的循环缝隙。例外：2026-11-04 的雨声直接使用人类提供的 24-bit WAV（30 s，约 8.2 MB），避免二次转码引入循环点偏移。
 - 响度：SFX 约 -16 LUFS，峰值 ≤ -1 dBTP；环境约 -20 ~ -18 LUFS，默认音量再低 6 dB。
 - 循环：环境音必须无缝；Godot 导入开启 `loop`，必要时用 `loop_offset` 微调；循环点不能有爆音。
 - 总线：`Master` + 四条子总线 `Music / SFX / UI / Ambient`（`GameBootstrap._ensure_audio_buses()` 运行时创建）；设置页可分别调音量，可一键静音。
@@ -143,6 +145,8 @@
 
 ## 10. 实际接入（2026-10-20，音频第一版）
 
+> 2026-11-04 起环境音已由 §11 的雨声替换；本节保留第一版记录，其中「环境风声」与 `-14 dB` 为历史值。
+
 **状态**：已接入灰盒；`SoundManager` 为 autoload；全部入库素材为 **CC0 1.0**，来源与作者见 `assets/audio/CREDITS.md`。人类试听/替换仍待做。
 
 ### 10.1 选定文件
@@ -159,7 +163,7 @@
 | 衣料 | `sfx_cloth_01.ogg` / `sfx_cloth_02.ogg` | Kenney RPG `cloth1` / `cloth2` | 受击/空架 |
 | 踏地 | `sfx_step_01..03.ogg` | Kenney Impact `footstep_wood_001..003` | 已入库，当前未接 |
 | UI 点击 | `sfx_ui_click.ogg` | Kenney RPG `metalClick` | 菜单/按钮 |
-| 环境风声 | `amb_wind_loop.ogg` | OGA `wind whoosh loop`（SketchMan3, CC0） | 循环，淡入 0.6s，稳定 -14 dB |
+| 环境风声（已退役） | `amb_wind_loop.ogg` | OGA `wind whoosh loop`（SketchMan3, CC0） | 2026-11-04 起无代码引用，由 §11 雨声替代 |
 
 ### 10.2 运行时
 
@@ -180,5 +184,42 @@
 
 - GUT 81/81（15 脚本，269 asserts）；`menu.tscn` 与 `duel.tscn` headless exit 0；语言日志 95 条。
 - headless 下不启动环境循环（无音频设备），避免 OGG 播放器退出泄漏；窗口模式正常淡入。
-- 退出泄漏已修：`DuelAudio.stop_ambient(true)` 显式 `stop()` + `stream=null`，`_exit_tree` 调用。
+- 退出泄漏已修：`DuelAudio.stop_ambient(true)` 显式 `stop()`，`_exit_tree` 调用（当前实现不置空 stream，避免池回收对 null 取 `resource_path`）。
 
+## 11. 雨声替换（2026-11-04）
+
+**状态**：已接入 `DuelAudio`；素材为人类提供的 CC0 WAV，替换原风声 loop。人耳终混仍待做。
+
+### 11.1 素材
+
+| 项 | 值 |
+|---|---|
+| 原始文件 | `temp_assets/Ambiance_Rain_Calm_Loop_Stereo.wav`（人类提供，声明 CC0） |
+| 入库文件 | `assets/audio/amb/rain_calm_loop.wav`（同字节复制，未转码） |
+| 规格 | 2 声道 / 24-bit / 48 kHz / 1,440,000 帧 / 30.0 s / 8,640,784 B |
+| 原始下载页 | **待人类补**；当前 CC0 依据为人类声明 + 文件本身 |
+
+旧 `assets/audio/amb/amb_wind_loop.ogg` 仍保留在磁盘，但 `DuelAudio` 已不再引用；是否删除由人类决定。
+
+### 11.2 运行时
+
+- `scripts/audio/duel_audio.gd` 预加载 `RAIN_AMBIENT`，`_ready()` 中 `duplicate()` 后设
+  `loop_mode = AudioStreamWAV.LOOP_FORWARD`、`loop_begin = 0`、
+  `loop_end = int(round(get_length() * mix_rate))`。不能直接改 `load()` 缓存资源，否则污染其他引用。
+- `start_ambient()` 调 `SoundManager.play_ambient_sound(_rain, 2.0)`（2 秒淡入），播放器 `volume_db = -17.0`；
+  `stop_ambient(false)` 用 `SoundManager.stop_ambient_sound(_rain, 0.3)` 淡出。
+- `immediate` 分支只 `stop()`、不把 stream 置空，避免 SoundManager 池回收时对 null 取 `resource_path`。
+- headless（GUT/CI）不启动环境音，避免退出时残留 playback。
+
+### 11.3 为什么不转 OGG
+
+本机 Python/soundfile 把 30 秒整段转 OGG 时进程 exit 127 静默退出，只得到半成品；已删除半成品与临时脚本。
+继续用 WAV：约 8.2 MB 对桌面构建可接受、无二次有损、可直接设采样级循环点。若未来需要压体积，应由人类用正式编码器转码，
+并重新试听循环接缝。
+
+### 11.4 验证
+
+- `tests/integration/test_duel_audio.gd` 2 例 10 asserts：WAV 路径、`LOOP_FORWARD`、时长约 30 s、
+  `loop_end` 与采样率匹配；启动后播放器 stream 与音量正确，且播放的是 duplicate 而非共享资源。
+- 全量 GUT **277/277（1050 asserts，35 脚本，退出码 0）**（该数字含同轮主题/HUD 改动；后续刀光/主菜单改动后为 **279/279、1068 asserts**）。
+- 尚未完成：人类试听循环接缝与整体音量；设置页「环境音」滑条只控 Ambient 总线，无单独雨声强度开关。

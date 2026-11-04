@@ -39,7 +39,8 @@ func test_opening_lock_blocks_both_sides() -> void:
 
 
 func test_opening_lock_grants_no_flow() -> void:
-	# 反馈 5：开场待机的几秒不该白涨心流（之前礼让期没有 gate，白送约 +7）。
+	# 开局礼让的几秒不该白涨心流（之前礼让期没有 gate，白送约 +7）；
+	# 礼让结束后恢复从零累计，不继承开场待机时间。
 	sim.opening_lock_frames = 180
 	_tick_n(179)
 	assert_eq(sim.p1.flow, 40, "礼让期内不涨心流")
@@ -47,9 +48,9 @@ func test_opening_lock_grants_no_flow() -> void:
 	_tick_n(30)
 	assert_gt(sim.p1.flow, 40, "解锁后按自然恢复开始涨")
 	assert_lt(sim.p1.flow, 48, "只该是自然的恢复速度")
-	# 礼让结束 3 秒内不应触发「无输入惩罚」。
+	# 解锁后继续待机只会恢复，不会因「长时间不动」被扣回。
 	_tick_n(140)
-	assert_gte(sim.p1.flow, 41, "礼让刚结束就扣心流会让人莫名其妙")
+	assert_gte(sim.p1.flow, 41, "待机恢复不应在几秒后反转成惩罚")
 
 
 func _tick_n(count: int) -> void:
@@ -457,11 +458,11 @@ func test_passive_flow_while_opponent_commits() -> void:
 	assert_eq(teaching.p1.flow, 41)
 
 
-func test_no_input_penalty_after_grace() -> void:
-	# 3 秒内待机自然恢复；之后停止恢复并转为惩罚，长时间干等必须净损失。
+func test_idle_recovers_flow_without_penalty() -> void:
+	# 待机是恢复窗口：400f 内每 24f +1，不应在 3 秒后转为惩罚。
 	_tick_n(400)
-	assert_lt(sim.p1.flow, 40, "长时间无输入应净损失心流")
-	assert_eq(sim.p1.flow, 36)
+	assert_eq(sim.p1.flow, 56, "400f 应恢复 16 点，而不是跌到 floor")
+	assert_gt(sim.p1.flow, 40, "长时间待机不能净损失心流")
 
 
 func test_lethal_hit_finishes_duel() -> void:

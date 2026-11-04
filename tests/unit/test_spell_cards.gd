@@ -61,33 +61,20 @@ func test_character_can_cast_from_start_flow() -> void:
 				"%s 的起始心流 %d 必须够付符卡 %d" % [data.id, data.start_flow, card.flow_cost])
 
 
-## A：60f 内所有架都判完美格挡，且架窗抬到 30f。
-func test_spell_a_grants_perfect_block_window() -> void:
+## A：瞬发架刀——按下当帧进入 45f 自动架刀窗口，挨刀自动完美弹开 + 反斩。
+func test_spell_a_instantly_arms_auto_guard() -> void:
 	_make(FighterData.for_character(&"char_a"), FighterData.for_character(&"char_a"))
 	watch_signals(sim)
 	sim.p1.flow = 60
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
 	sim.tick()
-	assert_eq(sim.p1.state, DuelTypes.State.SPELL, "发动时有 10f 硬直")
+	assert_eq(sim.p1.state, DuelTypes.State.SPELL, "瞬发：按下当帧就进入自动架刀姿态")
+	assert_eq(sim.p1.state_duration, 45, "窗口 45f")
+	assert_eq(sim.p1.spell_auto_guard_until_frame, sim.frame + 45, "窗口从按下帧起算")
+	assert_eq(sim.p1.spell_refund_pending, 10, "空放会返还 10 心流")
 	assert_signal_emitted(sim, "spell_cast")
 	assert_eq(sim.p1.spell_uses_left, 0)
-	assert_true(sim.p1.spell_perfect_until_frame > 0, "安全区已开启")
-
-	_tick_n(11)
-	assert_eq(sim.p1.state, DuelTypes.State.IDLE)
-
-	sim.press(DuelTypes.Side.P1, DuelTypes.Action.GUARD)
-	sim.tick()
-	assert_eq(sim.p1.state, DuelTypes.State.GUARD)
-	assert_eq(sim.p1.guard_duration, DuelSim.SPELL_STANCE_GUARD_FRAMES,
-			"安全区内的架窗固定 30f，不再看档位")
-
-	# 对手从零开始出刀：落刀时仍在安全区内，必须判为完美格挡。
-	sim.press(DuelTypes.Side.P2, DuelTypes.Action.ATTACK)
-	_tick_n(20)
-	assert_signal_emitted_with_parameters(sim, "attack_blocked",
-			[DuelTypes.Side.P2, DuelTypes.Side.P1, true])
-	assert_eq(sim.p1.perfect_streak, 1, "完美格挡连击成立")
+	assert_eq(sim.p1.flow, 30, "发动即付 30 心流")
 
 
 ## B：8f 蓄力后自动出刀，穿防 20 伤。蓄力期可被抢刀打断。
@@ -132,13 +119,27 @@ func test_spell_requires_enough_flow() -> void:
 	assert_eq(sim.p1.spell_uses_left, 1, "心流不足时不消耗次数")
 
 
+func test_idle_recovery_makes_spell_available_again() -> void:
+	# 心流是符卡唯一资源：中局被打/出刀压到 20 后，待机应能把它补回 30 的费用，
+	# 否则符卡会变成「开局用不出、后面永远用不出」的死资源。
+	_make(FighterData.for_character(&"char_a"), FighterData.for_character(&"char_a"))
+	sim.p1.flow = 20
+	_tick_n(480)
+	assert_gte(sim.p1.flow, 40, "480f 待机应恢复 20 点心流")
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
+	sim.tick()
+	assert_eq(sim.p1.state, DuelTypes.State.SPELL, "恢复后应能主动发动符卡")
+	assert_eq(sim.p1.flow, 15, "付掉 30 心流，但受 flow_floor 下限保护")
+	assert_eq(sim.p1.spell_uses_left, 0)
+
+
 func test_spell_is_once_per_duel() -> void:
 	_make(FighterData.for_character(&"char_a"), FighterData.for_character(&"char_a"))
 	watch_signals(sim)
 	sim.p1.flow = 90
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
 	sim.tick()
-	_tick_n(11)
+	_tick_n(46)
 	assert_eq(sim.p1.state, DuelTypes.State.IDLE)
 	sim.p1.flow = 90
 	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
@@ -234,3 +235,79 @@ func test_hit_interrupts_spell_charge_with_penalty() -> void:
 	assert_eq(sim.p1.state_duration,
 			sim.p1.data.hitstun + DuelSim.SPELL_INTERRUPT_PENALTY,
 			"打断额外加 12f 惩罚硬直")
+
+
+## A：窗口内被砍 = 自动完美弹开 + 立刻反斩（10 伤），玩家不用按任何键。
+func test_spell_a_auto_guards_and_counters() -> void:
+	_make(FighterData.for_character(&"char_a"), FighterData.for_character(&"char_a"))
+	watch_signals(sim)
+	sim.p1.flow = 60
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
+	sim.tick()
+	sim.press(DuelTypes.Side.P2, DuelTypes.Action.ATTACK)
+	_tick_n(20)
+	assert_signal_emitted_with_parameters(sim, "attack_blocked",
+			[DuelTypes.Side.P2, DuelTypes.Side.P1, true])
+	assert_eq(sim.p1.hp, 30, "自动架刀不掉血")
+	assert_eq(sim.p1.spell_auto_guard_until_frame, -1, "弹开后窗口立刻关闭")
+	assert_eq(sim.p1.spell_refund_pending, 0, "不是空放，不返还心流")
+	_tick_n(10)
+	assert_eq(sim.p2.hp, 20, "反斩 10 伤")
+
+
+## A：45f 内没人出刀 = 窗口自然结束，返还 10 心流。
+func test_spell_a_window_expires_and_refunds() -> void:
+	_make(FighterData.for_character(&"char_a"), FighterData.for_character(&"char_a"))
+	sim.p1.flow = 60
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
+	sim.tick()
+	assert_eq(sim.p1.flow, 30)
+	_tick_n(45)
+	assert_eq(sim.p1.state, DuelTypes.State.IDLE, "窗口结束回待机")
+	assert_eq(sim.p1.spell_auto_guard_until_frame, -1)
+	assert_eq(sim.p1.spell_refund_pending, 0)
+	assert_eq(sim.p1.flow, 40, "空放返还 10 心流")
+
+
+## A：窗口内按斩 = 放弃自动保险，自己出刀（正常 10 伤），不返还。
+func test_spell_a_attack_cancels_window() -> void:
+	_make(FighterData.for_character(&"char_a"), FighterData.for_character(&"char_a"))
+	sim.p1.flow = 60
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
+	sim.tick()
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.ATTACK)
+	sim.tick()
+	assert_eq(sim.p1.state, DuelTypes.State.COMMIT, "窗口内按斩=自己出刀")
+	assert_eq(sim.p1.spell_auto_guard_until_frame, -1)
+	assert_eq(sim.p1.spell_refund_pending, 0)
+	assert_lt(sim.p1.flow, 40, "主动出刀不返还心流（还按普通出刀扣费）")
+	_tick_n(24)
+	assert_eq(sim.p2.hp, 20, "这一刀按普通斩击结算")
+
+
+## 关底穿防符卡：自动架刀仍然架得住，但只弹开、不反斩（防收割）。
+func test_boss_spell_cannot_pierce_auto_guard() -> void:
+	_make(FighterData.for_character(&"char_a"), FighterData.opponent_for_stage(4))
+	sim.p1.flow = 60
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
+	sim.tick()
+	sim.p2.flow = 100
+	sim.press(DuelTypes.Side.P2, DuelTypes.Action.SPELL)
+	sim.tick()
+	_tick_n(30)
+	assert_eq(sim.p1.hp, 30, "关底穿防符卡也架得住")
+	assert_eq(sim.p2.hp, sim.p2.data.max_hp, "被弹开不反斩")
+	assert_eq(sim.p1.spell_auto_guard_until_frame, -1)
+
+
+## 玩家的穿防符卡（疾风连斩）无视自动架刀：架不住，必须抢刀。
+func test_player_unblockable_spell_pierces_auto_guard() -> void:
+	_make(FighterData.for_character(&"char_b"), FighterData.for_character(&"char_a"))
+	sim.p2.flow = 60
+	sim.press(DuelTypes.Side.P2, DuelTypes.Action.SPELL)
+	sim.tick()
+	sim.p1.flow = 80
+	sim.press(DuelTypes.Side.P1, DuelTypes.Action.SPELL)
+	sim.tick()
+	_tick_n(12)
+	assert_eq(sim.p2.hp, 10, "疾风连斩 20 伤穿防，自动架刀架不住")

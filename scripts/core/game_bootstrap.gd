@@ -14,6 +14,7 @@ const SETTINGS_PANEL := preload("res://scenes/ui/settings.tscn")
 const PAUSE_PANEL := preload("res://scenes/ui/pause_menu.tscn")
 const ABOUT_PANEL := preload("res://scenes/ui/about.tscn")
 const MODE_SELECT_PANEL := preload("res://scenes/ui/mode_select.tscn")
+const CHARACTER_SELECT_PANEL := preload("res://scenes/ui/character_select.tscn")
 const I18N_FILES: Dictionary = {
 	"zh_CN": "res://localization/zh_CN.json",
 	"en": "res://localization/en.json",
@@ -45,6 +46,12 @@ var pending_mode: StringName = &"run"
 
 ## 菜单选择：char_a / char_b / char_c；由 RunState 读取。
 var pending_character: StringName = &"char_a"
+
+## 双人：2P 角色与双方输入方式（keyboard / gamepad），由选人面板写入。
+## 单人仍沿用旧行为（键鼠与手柄同时可用），不读这两个输入字段。
+var pending_character_p2: StringName = &"char_a"
+var pending_input_p1: StringName = &"keyboard"
+var pending_input_p2: StringName = &"keyboard"
 
 ## 注意：困难模式只存在 meta.settings["hard_mode"] 一处真相，这里不再缓存副本。
 ## 缓存副本会与 meta 脱钩（测试替换 meta、读档后重载都会读到旧值）。
@@ -211,6 +218,7 @@ func _register_panels() -> void:
 	registry.register_panel(PanelIds.pause(), PAUSE_PANEL, UILayer.POPUP, UIPanel.CacheMode.NONE)
 	registry.register_panel(PanelIds.about(), ABOUT_PANEL, UILayer.NORMAL, UIPanel.CacheMode.NONE)
 	registry.register_panel(PanelIds.mode_select(), MODE_SELECT_PANEL, UILayer.NORMAL, UIPanel.CacheMode.NONE)
+	registry.register_panel(PanelIds.character_select(), CHARACTER_SELECT_PANEL, UILayer.NORMAL, UIPanel.CacheMode.NONE)
 
 
 func _register_upgrades() -> void:

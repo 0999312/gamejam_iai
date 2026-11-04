@@ -24,11 +24,35 @@ const CHARGE_WHITE := Color("#fffdf7")
 const CHARGE_GOLD := Color("#ffc94a")
 
 const FX_SCENE := preload("res://scenes/duel/duel_fx.tscn")
+const BG_SCENE := preload("res://scenes/duel/rainy_night.tscn")
+## P2 的独立图集：同一副骨架换蓝色衣装贴图。按席位而非角色 id 绑定，
+## 这样同一角色站在 P2 时也变蓝，而站在 P1 时仍是原色。
+const P2_ATLAS_PATH := "res://resources/spine/skeleton_p2.atlas"
 
 var sim: DuelSim
 
+## 角色 id → SpineFighterProfile 的显式覆盖；留空时按
+## `res://resources/spine/<角色 id>.tres` 约定路径查。找不到就回退灰盒。
+@export var spine_profiles: Dictionary = {}
+## 可选的 P2 图集覆盖；为空时加载 P2_ATLAS_PATH。
+@export var p2_atlas_file: Resource
+
+## 雨夜背景层。它是子节点但 z_index=-1 / show_behind_parent，绘制在自绘层之后，
+## 因此不会挡住角色、心流环、血条或判定提示。
+var _background: ColorRect
+
 ## 粒子特效层（命中/对刀/架防），挂在自身之下，绘制顺序在自绘角色之上。
 var _fx: DuelFx
+
+## Spine 人物层：子节点比自绘层晚绘制，所以人站在心流环/血条之上；
+## 没有档案或没装扩展时两个节点保持不激活，DuelView 照旧画灰盒。
+var _spine_p1: SpineFighterView
+var _spine_p2: SpineFighterView
+
+## P2 图集与原档案克隆的缓存。键是原档案的 instance_id：
+## 同一角色反复 bind 时复用同一个副本，SpineFighterView 不会每次重建骨架。
+var _p2_atlas: Resource
+var _p2_profiles: Dictionary = {}
 
 var _flash: float = 0.0
 ## 符卡全屏淡紫闪的剩余量；内外爆环本身已交给 `DuelFx.burst_spell()`。
@@ -36,8 +60,15 @@ var _spell_flash: float = 0.0
 
 
 func _ready() -> void:
+	# 背景最先建，但靠 z_index/show_behind_parent 压在自绘层后面。
+	_build_background()
+	# 先建人物层、再建粒子层：同为主节点子节点时按顺序绘制，粒子才会在最上面。
+	_build_spine_views()
 	_fx = FX_SCENE.instantiate() as DuelFx
 	add_child(_fx)
+	# 允许「先 bind 再入树」（headless 截图/测试会这么用）：入树后补挂档案。
+	if sim != null:
+		_bind_spine()
 
 
 func bind(p_sim: DuelSim) -> void:
@@ -56,6 +87,7 @@ func bind(p_sim: DuelSim) -> void:
 	# 换局时上一局的残余粒子不能飘进新一局。
 	if _fx != null:
 		_fx.clear_all()
+	_bind_spine()
 	queue_redraw()
 
 
@@ -66,6 +98,7 @@ func _process(delta: float) -> void:
 		_spell_flash = maxf(0.0, _spell_flash - delta * 1.6)
 	_update_slash_fx()
 	_update_charge_fx()
+	_update_spine()
 	queue_redraw()
 
 
@@ -119,18 +152,28 @@ func _update_charge_fx() -> void:
 			var radius := lerpf(20.0, 132.0, progress)
 			# 白 → 亮金：贴图本身是白的，靠 modulate 上色，所以末段的金要够亮；
 			# 但 alpha 收在 0.82 以下，否则实心光晕会把角色洗成一团金色。
-			var color := CHARGE_WHITE.lerp(CHARGE_GOLD, progress)
-			color.a = 0.32 + 0.50 * progress
+			var color := charge_color(progress, bool(commit["imminent"]), float(commit["pulse"]))
 			if commit["imminent"]:
-				var pulse: float = commit["pulse"]
-				# 临刀不再掺白（掺白会把金洗成米色），只让金色的 alpha 呼吸。
-				radius += 5.0 + 3.0 * pulse
-				color = CHARGE_GOLD
-				color.a = 0.82 + 0.10 * pulse
+				radius += 5.0 + 3.0 * float(commit["pulse"])
 			_fx.pose_charge(side, _commit_center(fighter, _side_x(side)), radius, color,
 					float(fighter.state_frame) * 0.06)
 		else:
 			_fx.hide_charge(side)
+
+
+## 「构」的蓄力环颜色：全程白 → 亮金，临刀只在金上做呼吸，不再硬切纯金。
+## 旧写法在 `imminent` 时直接 `color = CHARGE_GOLD`，白段被整段吞掉；
+## 看破（u05）把对手的 progress 提前 6f 后，玩家只看到「更早黄」，
+## 分辨不出「白→金」推进了多少——这里把白段保留到中段。
+static func charge_color(progress: float, imminent: bool, pulse: float) -> Color:
+	var p := clampf(progress, 0.0, 1.0)
+	var warm := smoothstep(0.12, 1.0, p)
+	var color := CHARGE_WHITE.lerp(CHARGE_GOLD, warm)
+	color.a = 0.32 + 0.50 * p
+	if imminent:
+		color = color.lerp(CHARGE_GOLD.lightened(0.18), 0.7)
+		color.a = 0.82 + 0.10 * clampf(pulse, 0.0, 1.0)
+	return color
 
 
 ## 「构」的进度/预警：自绘的头顶圆点与 FX 层的蓄力环共用同一份，
@@ -147,6 +190,9 @@ func _commit_state(fighter: FighterState) -> Dictionary:
 		"progress": clampf((float(fighter.state_frame) + lead) / total, 0.0, 1.0),
 		"imminent": remaining <= float(DuelTypes.SLASH_WARN_FRAMES),
 		"pulse": 0.5 + 0.5 * sin(float(fighter.state_frame) * 1.7),
+		# 看破（u05）的提前帧数与本次前摇总长，供 `_draw_fighter()` 画预读弧。
+		"lead": lead,
+		"span": total,
 	}
 
 
@@ -157,8 +203,11 @@ func _commit_center(_fighter: FighterState, x: float) -> Vector2:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(0, 0, 1280, 720), COLOR_BG)
-	_draw_floor()
+	# 有雨夜背景时，底色/地平线/地面全部交给 shader；仅在背景场景加载失败时
+	# 回退到旧灰盒背景，保证对决仍然可读。
+	if _background == null:
+		draw_rect(Rect2(0, 0, 1280, 720), COLOR_BG)
+		_draw_floor()
 	if sim == null:
 		return
 	_draw_aura(sim.p1, P1_X)
@@ -235,37 +284,49 @@ func _draw_fighter(fighter: FighterState, x: float, base_color: Color) -> void:
 			crouch = 10.0
 			color = Color("#d9b3ff")
 		DuelTypes.State.DOWN:
-			_draw_down(x, base_color)
+			# 战败由 Spine 的 siwang 动画接管时，不再画灰盒「倒地小人」；
+			# 只有没装骨架/没映射 DOWN 的角色才回退到灰盒。
+			if _draws_graybox(fighter):
+				_draw_down(x, base_color)
 			return
+
+	# Spine 接管时人物由骨架自己画：灰盒的躯干/头/刀全部让位，只留叠加层。
+	# 骨架的姿态来自动画，不吃灰盒的 lean/crouch，所以这两项归零，让头顶进度点、
+	# 架窗线、血条都贴回骨架的实际站位。
+	var spine := _is_spine_active(fighter.side)
+	if spine:
+		lean = 0.0
+		crouch = 0.0
 
 	var cx := x + lean
 	var top := GROUND_Y - BODY_H + crouch
 
-	# 躯干与头
-	draw_rect(Rect2(cx - BODY_W * 0.5, top, BODY_W, BODY_H - crouch), color, true)
-	draw_circle(Vector2(cx, top - HEAD_R + 4.0), HEAD_R, color.lightened(0.15))
+	if not spine:
+		# 躯干与头
+		draw_rect(Rect2(cx - BODY_W * 0.5, top, BODY_W, BODY_H - crouch), color, true)
+		draw_circle(Vector2(cx, top - HEAD_R + 4.0), HEAD_R, color.lightened(0.15))
 
-	# 刀
-	var hand := Vector2(cx + (BODY_W * 0.35 if fighter.side == DuelTypes.Side.P1 else -BODY_W * 0.35), top + 52.0)
-	var blade_len := 110.0
-	var angle := -0.5 if fighter.side == DuelTypes.Side.P1 else PI + 0.5
-	match fighter.state:
-		DuelTypes.State.COMMIT:
-			angle = -1.4 if fighter.side == DuelTypes.Side.P1 else PI + 1.4
-		DuelTypes.State.SLASH:
+		# 刀
+		var hand := Vector2(cx + (BODY_W * 0.35 if fighter.side == DuelTypes.Side.P1 else -BODY_W * 0.35), top + 52.0)
+		var blade_len := 110.0
+		var angle := -0.5 if fighter.side == DuelTypes.Side.P1 else PI + 0.5
+		match fighter.state:
+			DuelTypes.State.COMMIT:
+				angle = -1.4 if fighter.side == DuelTypes.Side.P1 else PI + 1.4
+			DuelTypes.State.SLASH:
+				angle = 0.15 if fighter.side == DuelTypes.Side.P1 else PI - 0.15
+			DuelTypes.State.GUARD:
+				angle = -PI * 0.5
+			DuelTypes.State.HITSTUN:
+				angle = 0.9 if fighter.side == DuelTypes.Side.P1 else PI - 0.9
+		var tip := hand + Vector2(cos(angle), sin(angle)) * blade_len
+		# 出刀那一帧刀就该扫过去：SLASH 在命中当帧就转收招，只按状态画的话
+		# 刀光一次都不会出现，玩家看到的就是「按下去→人一歪→对面掉血」。
+		var swing := _is_swinging(fighter)
+		if swing and fighter.state != DuelTypes.State.SLASH:
 			angle = 0.15 if fighter.side == DuelTypes.Side.P1 else PI - 0.15
-		DuelTypes.State.GUARD:
-			angle = -PI * 0.5
-		DuelTypes.State.HITSTUN:
-			angle = 0.9 if fighter.side == DuelTypes.Side.P1 else PI - 0.9
-	var tip := hand + Vector2(cos(angle), sin(angle)) * blade_len
-	# 出刀那一帧刀就该扫过去：SLASH 在命中当帧就转收招，只按状态画的话
-	# 刀光一次都不会出现，玩家看到的就是「按下去→人一歪→对面掉血」。
-	var swing := _is_swinging(fighter)
-	if swing and fighter.state != DuelTypes.State.SLASH:
-		angle = 0.15 if fighter.side == DuelTypes.Side.P1 else PI - 0.15
-		tip = hand + Vector2(cos(angle), sin(angle)) * blade_len
-	draw_line(hand, tip, Color("#dfe7f2"), 4.0, true)
+			tip = hand + Vector2(cos(angle), sin(angle)) * blade_len
+		draw_line(hand, tip, Color("#dfe7f2"), 4.0, true)
 
 	# 2026-10-23：原来这里画一段 `draw_arc(122, ±51°)` 的白色线；现在改由
 	# `duel_fx.gd` 的 `pose_slash()` 用 `twirl_03` 贴图承担（加法混合的月牙），
@@ -283,9 +344,17 @@ func _draw_fighter(fighter: FighterState, x: float, base_color: Color) -> void:
 		var commit := _commit_state(fighter)
 		var progress: float = commit["progress"]
 		var dot := 5.0 + 7.0 * progress
-		var dot_color := Color(1.0, 0.9, 0.45, 0.55 + 0.45 * progress)
+		var dot_color := CHARGE_WHITE.lerp(CHARGE_GOLD, progress)
+		dot_color.a = 0.55 + 0.45 * progress
 		if commit["imminent"]:
 			dot_color = Color(1, 1, 1, 0.9)
+		# 看破（u05）的「预读弧」：环外一段冷白弧，长度＝提前帧数占前摇总长的比例。
+		# 没有它时，看破只让环早一点变金/变大，玩家很难把「提前量」和普通进度分开。
+		if float(commit["lead"]) > 0.0:
+			var lead_ratio := clampf(float(commit["lead"]) / maxf(1.0, float(commit["span"])), 0.0, 1.0)
+			var outer := lerpf(20.0, 132.0, progress) + 12.0 + 3.0 * float(commit["pulse"])
+			draw_arc(Vector2(cx, GROUND_Y - 90.0), outer, -PI * 0.5,
+					-PI * 0.5 + TAU * lead_ratio, 24, Color(0.86, 0.94, 1.0, 0.55), 2.0, true)
 		draw_circle(Vector2(cx, top - 24.0), dot, dot_color)
 
 	# 「架」的有效窗剩余量：亮了这么久还剩多少，玩家能直接读到。
@@ -342,6 +411,15 @@ func _draw_fighter(fighter: FighterState, x: float, base_color: Color) -> void:
 func _draw_down(x: float, color: Color) -> void:
 	draw_rect(Rect2(x - 70.0, GROUND_Y - 26.0, 140.0, 26.0), color.darkened(0.25), true)
 	draw_circle(Vector2(x + 78.0, GROUND_Y - 30.0), 16.0, color.darkened(0.15))
+
+
+## 战败时是否还要画灰盒占位小人：Spine 未接管，或接管了但没有 DOWN 动画时画。
+## 单独抽出来给测试断言「战败不再叠灰盒」，而不是靠截图猜。
+func _draws_graybox(fighter: FighterState) -> bool:
+	if not _is_spine_active(fighter.side):
+		return true
+	var view := _spine_p1 if fighter.side == DuelTypes.Side.P1 else _spine_p2
+	return view == null or not view.has_animation_for_state(DuelTypes.State.DOWN)
 
 
 ## 血条（2026-10-21：血量 ×10 后不再是一格一点的方块，改成连续血条 + 每 10 血一道刻度）。
@@ -442,10 +520,141 @@ func _on_blocked(_attacker: int, defender_side: int, perfect: bool) -> void:
 	queue_redraw()
 
 
+## 雨夜背景：固定铺满 1280×720，鼠标穿透，并把 shader 的地面/角色位置
+## 对齐到本脚本的 GROUND_Y / P1_X / P2_X；换分辨率或改站位时这里要同步。
+func _build_background() -> void:
+	if _background != null:
+		return
+	_background = BG_SCENE.instantiate() as ColorRect
+	if _background == null:
+		return
+	_background.name = "RainyNight"
+	_background.position = Vector2.ZERO
+	_background.size = Vector2(1280.0, 720.0)
+	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_background.show_behind_parent = true
+	_background.z_index = -1
+	add_child(_background)
+	_apply_background_focus()
+
+
+func _apply_background_focus() -> void:
+	if _background == null:
+		return
+	var material := _background.material as ShaderMaterial
+	if material == null:
+		return
+	material.set_shader_parameter("ground_y", GROUND_Y / 720.0)
+	material.set_shader_parameter("focus_left", P1_X / 1280.0)
+	material.set_shader_parameter("focus_right", P2_X / 1280.0)
+
+
+## Spine 人物层：有扩展、有档案时接管角色表现；任何一环缺失都保持灰盒。
+func _build_spine_views() -> void:
+	if _spine_p1 != null and _spine_p2 != null:
+		return
+	if not SpineFighterView.is_supported():
+		return
+	_spine_p1 = SpineFighterView.new()
+	_spine_p1.name = "SpineP1"
+	_spine_p1.position = Vector2(P1_X, GROUND_Y)
+	add_child(_spine_p1)
+	_spine_p2 = SpineFighterView.new()
+	_spine_p2.name = "SpineP2"
+	_spine_p2.position = Vector2(P2_X, GROUND_Y)
+	add_child(_spine_p2)
+
+
+func _bind_spine() -> void:
+	if sim == null:
+		return
+	_build_spine_views()
+	_attach_spine_profile(_spine_p1, sim.p1)
+	_attach_spine_profile(_spine_p2, sim.p2)
+
+
+## 给一个视图挂档案；返回 false 表示这个角色继续用灰盒。
+func _attach_spine_profile(view: SpineFighterView, fighter: FighterState) -> bool:
+	if view == null or fighter == null or fighter.data == null:
+		return false
+	var wanted := _profile_for_side(_resolve_profile(fighter.data.id), fighter.side)
+	if wanted == null or not SpineFighterView.is_supported():
+		view.clear()
+		return false
+	if view.is_active() and view.profile == wanted:
+		return true
+	if not view.setup(wanted):
+		view.clear()
+		return false
+	return true
+
+
+## P2 用独立图集，但沿用原档案的动作映射与缩放参数。
+## 返回克隆而不是改原档案：char_b.tres 等资源被 load 缓存共享，
+## 直接改 atlas 会让同一角色站在 P1 时也变成蓝色。
+func _profile_for_side(profile: SpineFighterProfile, side: int) -> SpineFighterProfile:
+	if profile == null or side != DuelTypes.Side.P2:
+		return profile
+	var atlas := _resolve_p2_atlas()
+	if atlas == null or profile.atlas_file == atlas:
+		return profile
+	var key := profile.get_instance_id()
+	var cached: Variant = _p2_profiles.get(key)
+	if cached is SpineFighterProfile:
+		return cached
+	var p2_profile := profile.duplicate() as SpineFighterProfile
+	if p2_profile == null:
+		return profile
+	p2_profile.atlas_file = atlas
+	_p2_profiles[key] = p2_profile
+	return p2_profile
+
+
+## P2 图集缺失或导入失败时回退原图集，保证对局仍能开。
+func _resolve_p2_atlas() -> Resource:
+	if p2_atlas_file != null:
+		return p2_atlas_file
+	if _p2_atlas == null and ResourceLoader.exists(P2_ATLAS_PATH):
+		_p2_atlas = load(P2_ATLAS_PATH)
+	return _p2_atlas
+
+
+## 档案查找：先看 DuelView 上显式绑定的字典（方便每局按角色换装），
+## 再退回 res://resources/spine/<角色 id>.tres 的约定路径。
+func _resolve_profile(id: StringName) -> SpineFighterProfile:
+	for key: Variant in spine_profiles.keys():
+		if String(key) == String(id):
+			var value: Variant = spine_profiles[key]
+			if value is SpineFighterProfile:
+				return value
+	if id.is_empty():
+		return null
+	return SpineProfiles.resolve(id)
+
+
+func _update_spine() -> void:
+	if sim == null:
+		return
+	# P1 在左、面向右；P2 在右、面向左（朝左站时由档案决定是否镜像）。
+	if _spine_p1 != null and _spine_p1.is_active():
+		_spine_p1.apply(sim.p1, false)
+	if _spine_p2 != null and _spine_p2.is_active():
+		_spine_p2.apply(sim.p2, true)
+
+
+func _is_spine_active(side: int) -> bool:
+	var view := _spine_p1 if side == DuelTypes.Side.P1 else _spine_p2
+	return view != null and view.is_active()
+
+
 ## 舞台暂停时冻结粒子（含爆炸中的火星），恢复后原地继续。
 func set_paused(value: bool) -> void:
 	if _fx != null:
 		_fx.set_paused(value)
+	if _spine_p1 != null:
+		_spine_p1.set_paused(value)
+	if _spine_p2 != null:
+		_spine_p2.set_paused(value)
 
 
 func _side_color(side: int) -> Color:

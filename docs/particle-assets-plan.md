@@ -58,7 +58,7 @@ assets/particles/
 
 | 游戏事件 | 现有灰盒表现 | 建议贴图 | 用法要点 |
 |---|---|---|---|
-| 出刀（`SLASH` / `RECOVERY` 前 `slash_frames` 帧，`_is_swinging()`） | 原 `draw_arc` 半径 122、宽 6 的白色弧 | `slash/twirl_03`（**已接入**） | 月牙贴图的亮带对到 122 半径上，进度的**前扫**由 `slash_sweep.gdshader` 负责（第三批）；细节见 §6.5 / §6.6 |
+| 出刀（`SLASH` / `RECOVERY` 前 `slash_frames` 帧，`_is_swinging()`） | 原 `draw_arc` 半径 122、宽 6 的白色弧 | `slash/twirl_03`（**已接入**） | 月牙亮带弧心落在 **136** 半径（2026-11-04 从 122 外移 14px，见 §6.7），进度的**前扫**由 `slash_sweep.gdshader` 负责（第三批）；细节见 §6.5 / §6.6 |
 | 连续斩/大回旋（连击第 2 段起） | 同上（单弧，第二批仍只用 `twirl_03`） | `slash/twirl_01` `twirl_02` | 比 `twirl_03` 更长/更短的扫尾，留给连斩或符卡斩；旋转方向随角色朝向翻 |
 | 剑气/刀身残光 | 无 | `slash/trace_05` `trace_07`（旋转 90°） | 细长光带，做「收刀后残心」或空中残影；低 alpha，寿命 6–10f |
 | 命中（`hit_landed`） | 全屏暖白闪 `_flash` | `impact/star_06` `star_07` `flare_01` | 命中点为原点、one_shot；`star_06/07` 做中心爆点，`flare_01` 做四角小尖；**按出刀方颜色上色**（人类拍板「攻击方制」，第一批用的是 `star_07`） |
@@ -132,9 +132,9 @@ assets/particles/
 
 | 问题 | 处理 |
 |---|---|
-| 半径对不上 | 缩放 `122 / 203 ≈ 0.60` → 亮带落在半径 105–139，压在旧 122 弧上 |
+| 半径对不上 | 当时缩放 `122 / 203 ≈ 0.60` → 亮带落在半径 105–139，压在旧 122 弧上；2026-11-04 改为 `136 / 203 ≈ 0.67`（§6.7） |
 | 朝向对不上 | 贴图带中心 -26°，旋转 **+26°** 对齐到 0°（P1 朝右）；P2 再 +180° |
-| 弧心对不上 | 沿用 `(cx, top + 70)`，并用 `_swing_center()` 复用 `_draw_fighter()` 的 lean/crouch（SLASH 前倾 28、RECOVERY 前倾 10、SLASH 下蹲 2），刀光贴着刀身而不是飘在旁边 |
+| 弧心对不上 | 沿用 `(cx, top + 70)`，并用 `_swing_center()` 复用 `_draw_fighter()` 的 lean/crouch（SLASH 前倾 28、RECOVERY 前倾 10、SLASH 下蹲 2）；当时刀光贴着刀身，2026-11-04 改为外移 14px 并做中段形变（§6.7） |
 
 - **为什么不用「一次性粒子」**：挥砍是持续 4–6 帧的连续态（`slash_frames` = 5/4/6，`_is_swinging()` 连收招头几帧也算），不是一瞬事件。每帧调 `pose_slash()` 摆一枚 Sprite2D，比每帧重发粒子便宜，也不会在慢帧上断掉。
 - **时间轴**：进度 `(state_frame + 1) / slash_frames`，交给 `slash_sweep.gdshader` 的 `progress`（见 §6.6）；`modulate.a = 0.9 × (1 - 0.35 p²)`，收刀时只剩淡残光。
@@ -162,10 +162,45 @@ assets/particles/
 |---|---|
 | 贴图换算 | `CHARGE_TEX_RADIUS = 208`（亮带外缘 208 / 512），等比缩放 `radius / 208`，**不压扁** |
 | 生长 | 半径 20 → 132 随 `progress` 线性长大 |
-| 颜色 | `#fffdf7`（近白）→ `#ffc94a`（亮金）插值；alpha 0.32 → 0.82 |
-| 临刀 | 半径 +5~8 呼吸，纯亮金、不掺白（掺白会洗成米色），alpha 0.82–0.92 呼吸 |
+| 颜色 | `#fffdf7`（近白）→ `#ffc94a`（亮金）插值，`smoothstep(0.12,1.0,p)` 让白段保留到中段；alpha 0.32 → 0.82 |
+| 临刀 | 半径 +5~8 呼吸；颜色只向亮金 `lerp` 70%，不再整环硬切纯金；alpha 0.82–0.92 呼吸（2026-11-04 修正，见 §6.8） |
 | 圆心 | 取 `_draw_aura()` 的 `(x, GROUND_Y - 90)`，与心流圆环**同心**，不吃 COMMIT 的前倾/下蹲 |
 | 进度来源 | `_commit_state(fighter)` → `progress` / `imminent` / `pulse`（含「看破」`hint_lead` 只给 P2 的规则），与头顶进度圆点共用同一份 |
+
+### 6.7 刀光外移与挥砍形变（2026-11-04 反馈）
+
+人类反馈「斩击特效稍微离刀身远一些，并根据出刀的效果进行一定形变」。旧月牙的亮带正好压在 122 半径的旧判定弧上，
+看起来像刀身长出一条白边；而 `Sprite2D` 只能整体旋转/缩放，挥砍中段没有「甩出去」的形态变化。
+
+| 项 | 值 | 说明 |
+|---|---|---|
+| 弧心半径 | **136** | 从 122 外移 14px；亮带仍在 117–155，视觉上离开刀身但不脱离刀路 |
+| 切向拉伸 | `SLASH_ARC_STRETCH = 0.13` | `scale.x *= 1 + 0.13 * whip`，中段月牙更长 |
+| 径向收薄 | `SLASH_RADIAL_SQUASH = 0.07` | `scale.y *= 1 - 0.07 * whip`，中段月牙更薄 |
+| 剪切 | `SLASH_SKEW = 0.10` | `sprite.skew = 0.10 * whip`，产生「刀锋带着走」的斜势 |
+| 形变包络 | `whip = sin(progress * PI)` | 起手/收刀为 0，中段最大；不会在收招时留下变形残影 |
+
+`pose_slash()` 仍负责位置、旋转、alpha 与 `slash_sweep.gdshader` 的 `progress`；形变只改 `scale` 与 `skew`，
+因此不影响判定、弧心与扇形消失的时间轴。
+
+验证：`tests/unit/test_duel_fx.gd` 新增 1 例，断言 `SLASH_RADIUS > 122`、p=0 正圆、p=0.5 切向更大/径向更薄/
+`skew > 0`、p=1 回正；定向 21/21、83 asserts。截图 `docs/dev-example/duel-fx-slash.png` 与
+`duel-fx-sweep.png`（均 1280×720）已目视：月牙离开刀身，四格扫掠形变正常。
+
+### 6.8 白→金渐变、看破预读弧与加法发光（2026-11-04 反馈）
+
+人类反馈「防御效果不是从白转黄而是直接黄色渲染，看破失去意义；希望光效不只是半透明，而是发亮」。两处修改都只放大线索，不改判定。
+
+| 项 | 旧 | 新 |
+|---|---|---|
+| 临刀整环 | `imminent` 直接 `CHARGE_GOLD` | `charge_color()` 统一插值，`imminent` 只 `lerp(GOLD.lightened(0.18), 0.7)` + alpha 呼吸 |
+| 头顶圆点 | `imminent` 纯白 | `CHARGE_WHITE.lerp(CHARGE_GOLD, progress)` |
+| 看破提示 | 只有提前量（收束环同一枚） | 环外多一段冷白预读弧：`lead/span` 比例、`lerpf(20,132,p)+12`、24 段、`Color(0.86,0.94,1.0,0.55)`、线宽 2，仅 `hint_lead>0` 绘制 |
+| 粒子混合 | `CanvasItemMaterial` `BLEND_MODE_ADD` | `glow_add.gdshader`：`blend_add` + 白芯 `mix(rgb, vec3(1), smoothstep(0.35,0.95,alpha)*0.5)` + `glow=1.35` |
+
+- 着色器参数：`glow`（整体亮度 1.35）、`core`（白芯强度 0.5）、`alpha_gain`（默认 1.0，留给设置页「特效强度」压暗）。材质由 `DuelFx._make_glow_material()` 统一创建，命中/对刀/架住/完美格挡/刀光/符卡爆环/蓄力环共用。
+- 截图：`docs/dev-example/duel-fx-charge.png`（左白右金）、`duel-fx-read.png`（P2 环外冷白弧，P1 无）、`duel-fx-preview.png`（粒子白芯）。
+- 测试：`test_charge_color_keeps_a_white_phase_before_gold`、`test_block_burst_and_charge_use_glow_shader`。
 
 ## 7. 未选清单与理由
 
@@ -216,3 +251,12 @@ assets/particles/
 - 蓄力环：`light_03` 亮带外缘 208 / 512、maxAlpha 235；等比缩放（`scale.x == scale.y`）保证正圆，圆心与 `_draw_aura()` 同为 `(x, GROUND_Y - 90)`。
 - GUT 全量：**229/229 tests、871 asserts，退出码 0**；headless 240 帧冒烟无 `ERROR`。
 - 出图：`docs/dev-example/duel-fx-sweep.png`（0/35/70/100% 四格）、`docs/dev-example/duel-fx-charge.png`（左起手白小、右临刀亮金胀满）。
+
+### 8.4 刀光外移/形变与主菜单雨夜（2026-11-04 反馈验证）
+
+- 刀光：`SLASH_RADIUS` 122→136，新增 0.13 切向拉伸 / 0.07 径向收薄 / 0.10 剪切；定向 `test_duel_fx.gd` 21/21、83 asserts。
+  重拍 `docs/dev-example/duel-fx-slash.png`（249,246 B）与 `duel-fx-sweep.png`（237,872 B），均 1280×720。
+- 主菜单：`menu.gd` 在同屏 1280×720 背景层上 duplicate 材质，`ground_y=0.96`、`pool_strength=0`；
+  定向 `test_menu.gd` 4/4、24 asserts；`theme-menu.png` 234,882 B 已目视，雨线/暗角不挡菜单文字。
+- 全量 GUT：**279/279 passed、1068 asserts、35 脚本、退出码 0**；`--import` 退出码 0。
+- 心流：`duel_sim.gd` 待机 180 帧后每 20 帧 -1 为既有设计，未改数值，仅修正「每 30f / -2 每秒」的过时注释。

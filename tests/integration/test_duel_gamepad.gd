@@ -91,8 +91,9 @@ func test_raw_joy_fallback_keeps_players_separate() -> void:
 	add_child_autofree(duel)
 	await wait_process_frames(2)
 	duel.mode = &"versus"
-	duel._raw_p1_device = 0
-	duel._raw_p2_device = 1
+	# 双人输入方式由选人面板决定：本用例只要 P2 用手柄、P1 用键鼠。
+	duel._p1_uses_gamepad = false
+	duel._p2_uses_gamepad = true
 
 	var p2_attack := InputEventJoypadButton.new()
 	p2_attack.device = 1
@@ -103,15 +104,81 @@ func test_raw_joy_fallback_keeps_players_separate() -> void:
 	assert_false(duel._attack_queued, "P2 手柄不应同时触发 P1")
 
 
+func test_raw_joy_fallback_splits_two_gamepads() -> void:
+	var duel := DUEL_SCENE.instantiate()
+	add_child_autofree(duel)
+	await wait_process_frames(2)
+	duel.mode = &"versus"
+	duel._p1_uses_gamepad = true
+	duel._p2_uses_gamepad = true
+	duel._raw_p1_device = 0
+	duel._raw_p2_device = 1
+
+	var p1_attack := InputEventJoypadButton.new()
+	p1_attack.device = 0
+	p1_attack.button_index = JOY_BUTTON_A
+	p1_attack.pressed = true
+	duel._input(p1_attack)
+	assert_true(duel._attack_queued, "设备 0 应归 P1")
+	assert_false(duel._p2_attack_queued, "设备 0 不应触发 P2")
+
+	var p2_attack := InputEventJoypadButton.new()
+	p2_attack.device = 1
+	p2_attack.button_index = JOY_BUTTON_A
+	p2_attack.pressed = true
+	duel._input(p2_attack)
+	assert_true(duel._p2_attack_queued, "设备 1 应归 P2")
+	assert_eq(duel._attack_queued, true, "P2 攻击不应清掉 P1 已置位的队列")
+
+
+func test_guard_release_only_clears_matching_gamepad() -> void:
+	var duel := DUEL_SCENE.instantiate()
+	add_child_autofree(duel)
+	await wait_process_frames(2)
+	duel.mode = &"versus"
+	duel._p1_uses_gamepad = true
+	duel._p2_uses_gamepad = true
+	duel._raw_p1_device = 0
+	duel._raw_p2_device = 1
+
+	for device in [0, 1]:
+		var guard := InputEventJoypadButton.new()
+		guard.device = device
+		guard.button_index = JOY_BUTTON_B
+		guard.pressed = true
+		duel._input(guard)
+	assert_true(duel._guard_held)
+	assert_true(duel._p2_guard_held)
+
+	var p1_release := InputEventJoypadButton.new()
+	p1_release.device = 0
+	p1_release.button_index = JOY_BUTTON_B
+	p1_release.pressed = false
+	duel._input(p1_release)
+	assert_false(duel._guard_held, "只松开 P1 的手柄")
+	assert_true(duel._p2_guard_held, "P2 仍按着架")
+
+	var p2_release := InputEventJoypadButton.new()
+	p2_release.device = 1
+	p2_release.button_index = JOY_BUTTON_B
+	p2_release.pressed = false
+	duel._input(p2_release)
+	assert_false(duel._p2_guard_held)
+
+
 func test_hotplug_rebuilds_input_context() -> void:
 	var duel := DUEL_SCENE.instantiate()
 	add_child_autofree(duel)
 	await wait_process_frames(2)
 
 	var old_context: GUIDEMappingContext = duel._context
+	duel._guard_held = true
+	duel._p2_guard_held = true
 	duel._on_joy_connection_changed(0, true)
 	await wait_process_frames(2)
 
+	assert_false(duel._guard_held, "重建输入后不应继承旧手柄的按住架")
+	assert_false(duel._p2_guard_held, "重建输入后 P2 的按住架也应复位")
 	assert_not_null(duel._context)
 	assert_ne(duel._context, old_context)
 	assert_true(duel._context.mappings.size() > 0)

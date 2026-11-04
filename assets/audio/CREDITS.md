@@ -1,7 +1,7 @@
 # 已入库音频来源与许可（Source Record）
 
 > 工程/许可记录，**不是**最终游戏内 credits 文案；最终 credits 由人类撰写。
-> 入库日期：2026-10-20。全部为 **CC0 1.0**：可商用、可修改、可再分发，署名非必需；下表用于致谢与审查。
+> 入库日期：2026-10-20（首批）／2026-11-04（雨声）。全部为 **CC0 1.0**：可商用、可修改、可再分发，署名非必需；下表用于致谢与审查。
 > 原始下载与完整候选见 `assets/audio/_sources/SOURCES.md`（该目录不入库）与 `docs/audio-assets-plan.md`。
 
 ## 1. 战斗音效
@@ -29,13 +29,15 @@
 
 | 入库文件 | 原始文件 | 词条 | 作者 | 许可 |
 |---|---|---|---|---|
-| `assets/audio/amb/amb_wind_loop.ogg` | `amb_wind_whoosh_loop_cc0.ogg` | [wind whoosh loop](https://opengameart.org/content/wind-whoosh-loop) | SketchMan3 | CC0 1.0 |
+| `assets/audio/amb/rain_calm_loop.wav` | `Ambiance_Rain_Calm_Loop_Stereo.wav` | 人类提供，原始下载页待补 | 人类提供 | CC0 1.0（声明） |
+| `assets/audio/amb/amb_wind_loop.ogg` | `amb_wind_whoosh_loop_cc0.ogg` | [wind whoosh loop](https://opengameart.org/content/wind-whoosh-loop) | SketchMan3 | CC0 1.0（**已退役**：2026-11-04 起无代码引用，由雨声替代） |
 
 ## 3. 来源链接
 
 - Kenney Impact Sounds：https://kenney.nl/assets/impact-sounds
 - Kenney RPG Audio：https://kenney.nl/assets/rpg-audio
-- OpenGameArt wind whoosh loop：https://opengameart.org/content/wind-whoosh-loop
+- OpenGameArt wind whoosh loop（已退役）：https://opengameart.org/content/wind-whoosh-loop
+- 雨声 `rain_calm_loop.wav`：**原始下载页待人类补齐**；当前依据为人类声明为 CC0 与 `temp_assets/` 文件本身。
 - CC0 1.0：https://creativecommons.org/publicdomain/zero/1.0/
 
 ## 4. 未入库的试听候选

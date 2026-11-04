@@ -59,9 +59,22 @@ static func action(context: GUIDEMappingContext, action_name: StringName) -> GUI
 	return null
 
 
-## 把 KeyBindings 的当前绑定套到上下文上：键盘槽按顺序替换，
-## 多出来的槽显式解绑；手柄槽只换按键、保留 joy_index；鼠标槽保持资源默认。
-static func build_remap_config(context: GUIDEMappingContext, meta: MetaSave) -> GUIDERemappingConfig:
+## 把 KeyBindings 的当前绑定套到上下文上。
+##
+## 单人对局：键盘槽按顺序替换，多出来的槽显式解绑；手柄槽只换按键、
+## 保留 joy_index；鼠标槽保持资源默认（键鼠与手柄同时可用）。
+##
+## 双人对局：按选人面板选定的输入方式重排六个玩家动作槽——手柄方 index 0
+## 绑手柄（独占一方手柄时 joy_index=0，双方手柄时 P1=0 / P2=1），其余槽解绑；
+## 键鼠方按键序绑键，鼠标只给键鼠玩家一次（P1 键鼠恒可用；P1 手柄时 P2 键鼠
+## 借用 P2 原有的手柄槽 index 2 挂鼠标）。全局暂停/重开保持键盘 + 手柄。
+static func build_remap_config(
+	context: GUIDEMappingContext,
+	meta: MetaSave,
+	versus: bool = false,
+	p1_gamepad: bool = false,
+	p2_gamepad: bool = false
+) -> GUIDERemappingConfig:
 	if context == null:
 		return null
 	var config := GUIDERemappingConfig.new()
@@ -71,22 +84,103 @@ static func build_remap_config(context: GUIDEMappingContext, meta: MetaSave) -> 
 		var binding_id: StringName = ACTION_BINDINGS.get(mapping.action.name, &"")
 		if binding_id == &"":
 			continue
-		var keys := KeyBindings.get_keys(meta, binding_id)
-		var joy_button := KeyBindings.get_joy_button(meta, binding_id)
-		var key_index := 0
-		for index in mapping.input_mappings.size():
-			var current: GUIDEInput = mapping.input_mappings[index].input
-			if current is GUIDEInputKey:
-				if key_index < keys.size():
-					var key_input := GUIDEInputKey.new()
-					key_input.key = keys[key_index]
-					config._bind(context, mapping.action, key_input, index)
-				else:
-					config._unbind(context, mapping.action, index)
-				key_index += 1
-			elif current is GUIDEInputJoyButton:
+		if versus and _is_player_binding(binding_id):
+			_remap_versus_action(config, context, mapping, meta, binding_id, p1_gamepad, p2_gamepad)
+		else:
+			_remap_default_action(config, context, mapping, meta, binding_id)
+	return config
+
+
+static func _is_player_binding(binding_id: StringName) -> bool:
+	return binding_id in [
+		&"attack_p1", &"guard_p1", &"spell_p1",
+		&"attack_p2", &"guard_p2", &"spell_p2",
+	]
+
+
+static func _is_p1_binding(binding_id: StringName) -> bool:
+	return binding_id in [&"attack_p1", &"guard_p1", &"spell_p1"]
+
+
+static func _mouse_button(binding_id: StringName) -> MouseButton:
+	if binding_id in [&"attack_p1", &"attack_p2"]:
+		return MOUSE_BUTTON_LEFT
+	if binding_id in [&"guard_p1", &"guard_p2"]:
+		return MOUSE_BUTTON_RIGHT
+	return MOUSE_BUTTON_MIDDLE
+
+
+static func _remap_default_action(
+	config: GUIDERemappingConfig,
+	context: GUIDEMappingContext,
+	mapping: GUIDEActionMapping,
+	meta: MetaSave,
+	binding_id: StringName
+) -> void:
+	var keys := KeyBindings.get_keys(meta, binding_id)
+	var joy_button := KeyBindings.get_joy_button(meta, binding_id)
+	var key_index := 0
+	for index in mapping.input_mappings.size():
+		var current: GUIDEInput = mapping.input_mappings[index].input
+		if current is GUIDEInputKey:
+			if key_index < keys.size():
+				var key_input := GUIDEInputKey.new()
+				key_input.key = keys[key_index]
+				config._bind(context, mapping.action, key_input, index)
+			else:
+				config._unbind(context, mapping.action, index)
+			key_index += 1
+		elif current is GUIDEInputJoyButton:
+			var joy_input := GUIDEInputJoyButton.new()
+			joy_input.joy_index = (current as GUIDEInputJoyButton).joy_index
+			joy_input.button = joy_button
+			config._bind(context, mapping.action, joy_input, index)
+
+
+static func _remap_versus_action(
+	config: GUIDERemappingConfig,
+	context: GUIDEMappingContext,
+	mapping: GUIDEActionMapping,
+	meta: MetaSave,
+	binding_id: StringName,
+	p1_gamepad: bool,
+	p2_gamepad: bool
+) -> void:
+	var is_p1 := _is_p1_binding(binding_id)
+	var uses_gamepad := p1_gamepad if is_p1 else p2_gamepad
+	var mouse_owner := (is_p1 and not p1_gamepad) or (not is_p1 and p1_gamepad)
+	var keys := KeyBindings.get_keys(meta, binding_id)
+	var mouse_button := _mouse_button(binding_id)
+	var joy_button := KeyBindings.get_joy_button(meta, binding_id)
+	var key_index := 0
+	var mouse_bound := false
+
+	for index in mapping.input_mappings.size():
+		var current: GUIDEInput = mapping.input_mappings[index].input
+		if uses_gamepad:
+			if index == 0:
 				var joy_input := GUIDEInputJoyButton.new()
-				joy_input.joy_index = (current as GUIDEInputJoyButton).joy_index
+				# 只有一方手柄时用第一只手柄（joy_index 0）；双方手柄时 P1=0、P2=1。
+				joy_input.joy_index = 0 if is_p1 or not p1_gamepad else 1
 				joy_input.button = joy_button
 				config._bind(context, mapping.action, joy_input, index)
-	return config
+			else:
+				config._unbind(context, mapping.action, index)
+			continue
+
+		if current is GUIDEInputKey:
+			if key_index < keys.size():
+				var key_input := GUIDEInputKey.new()
+				key_input.key = keys[key_index]
+				config._bind(context, mapping.action, key_input, index)
+			else:
+				config._unbind(context, mapping.action, index)
+			key_index += 1
+		elif current is GUIDEInputMouseButton or current is GUIDEInputJoyButton:
+			if mouse_owner and not mouse_bound:
+				var mouse_input := GUIDEInputMouseButton.new()
+				mouse_input.button = mouse_button
+				config._bind(context, mapping.action, mouse_input, index)
+				mouse_bound = true
+			else:
+				config._unbind(context, mapping.action, index)

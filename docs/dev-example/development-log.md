@@ -1,4 +1,4 @@
-# 开发过程留档（2026-10-19 → 2026-10-21）
+# 开发过程留档（2026-10-19 → 2026-11-04）
 
 > 用途：把「人类反馈 → 诊断 → 改动 → 验证」的完整链路留成可检索的记录，
 > 供后续调参、复盘、以及接手者快速理解「为什么现在是这些数字」。
@@ -457,5 +457,266 @@ UV 换极坐标得角度 `ang`，`head = mix(head_from, head_to, progress)` 是�
 
 **验证**：GUT **229/229（871 asserts，退出码 0）**；新截图 `docs/dev-example/duel-fx-sweep.png`（四格连拍）与
 `duel-fx-charge.png`；headless 240 帧冒烟无 `ERROR`。
+
+## 12. 补记：雨夜背景与战败去灰盒（2026-11-04）
+
+**需求**（人类原话，`m00525`）：「删除战败后还会显示的占位小人，将背景改为用 shader 生成出来的
+『看不清四周的雨夜』，`temp_assets/shader.txt` 是用于下雨效果的 shader，可以借鉴。」
+
+**战败灰盒不是「多画了一笔」，而是两套表现层没对齐**。旧 `DuelView._draw_fighter()` 在 `DOWN` 分支
+无条件画 140×26 矩形 + 圆头；旧 `SpineFighterView` 又在 `DOWN` 时把骨架隐藏。五动作版让 `siwang`
+保持可见后，灰盒矩形就成了叠在单膝跪地人物上的「影子」。修法是让 `DOWN` 只走一条路：
+`_draws_graybox(fighter)` 为真才画旧剪影。这个判断不能只看「Spine 是否激活」——档案没有 DOWN 映射时，
+骨架会隐藏，若灰盒也判 false，战败后**两边都不画**。所以 `SpineFighterView` 新增公开
+`has_animation_for_state(DOWN)`，把「显式映射 + 动画存在」暴露给 `DuelView`；回退测试用
+「复制 `char_a.tres` 并删掉 DOWN 键」锁住这条边界。
+
+**雨夜先定「读什么」，再调数值**。要的不是「下雨特效」，而是「看不清四周」：中心保留人物轮廓与
+脚下水光，边缘压到近黑。shader 分四层——夜空渐变、4 octave fbm 雨雾、远/近两层雨、地平线水光 +
+双人脚下湿反光；最后用 `p = uv * 2 - 1`、`p.x *= 0.92`、`smoothstep(0.34, 1.20, length(p))` 做重暗角
+（`edge_darkness=0.94`）。近雨长而亮（len 0.28 / width 0.10 / alpha 0.55），远雨密而细
+（amount×0.68 / speed×0.72 / len 0.10 / width 0.060 / alpha×0.60），两层叠出纵深。
+
+**首版雨线是一根根粗竖条**。把 `rain_layer` 的 `width` 当像素用了：`step(remainder * amount, width)`
+在整格内都返回 1，屏幕成了竖条纹。正确做法是先算格内中心距
+`center_dist = abs(remainder / cell - 0.5) * 2`，再 `slim = 1 - smoothstep(0, width, center_dist)`；
+`width` 是**格宽比例**。改完才是细线。这个坑和 §11 的 `tail_span` 是同一类：**shader 看起来不对，
+先怀疑参数与几何的量级关系**。
+
+**背景层放在 `DuelView` 的第一位**：`ColorRect` 1280×720、`z_index=-1`、`show_behind_parent`、
+鼠标穿透；`DuelView` 先建它，再建 Spine 与 FX。`ground_y/focus_left/focus_right` 不写死在
+shader 默认值里，而由 `_apply_background_focus()` 从 `GROUND_Y/P1_X/P2_X` 换算——否则改站位后
+湿反光会漂到人物旁边。背景为空时才回退旧纯色/地平线，保证无 shader 环境仍可跑。
+
+**截图坑**：第一次只等 58 个 `process_frame` 就拍，`siwang` 还停在起始姿态，看起来像站立。
+改为取 `p1._anim_state`，直接 `state.get_track(0).call("set_track_time", 0.8333)` 再等 3 帧，
+才稳定拍到单膝跪地末帧。非 headless 渲染仍走 `await RenderingServer.frame_post_draw` 后
+`root.get_texture().get_image().save_png()`。
+
+**验证**：全量 GUT **269/269（1005 asserts，33 脚本，退出码 0）**，本轮新增 5 例 28 asserts
+（背景 4 例 23 asserts + 无 DOWN 映射回退 1 例 5 asserts）；`--import` 退出码 0；
+截图 `docs/dev-example/rainy-night-preview.png`（对局中）与 `rainy-night-defeat.png`（P1 战败，
+无灰盒小人），均 1280×720。
+
+**限制**：雨线是屏幕空间，固定 1280×720；无地面溅射/闪电/设置开关；未做低端机性能剖析。
+美术 0% AI：背景由自写 shader 实时生成，无外部贴图；参考 `temp_assets/shader.txt`（Brian Smith，
+MIT）只借分格思路，若直接复用代码需补许可文本。
+
+## 13. 补记：CC0 雨声与无边框雨夜主题（2026-11-04）
+
+**需求**（人类原话，`m00800`）：「不使用原来的风声作为背景氛围音效，使用 temp_assets 里的
+`Ambiance_Rain_Calm_Loop_Stereo.wav`，该音效为 CC0 协议。然后重做游戏的 theme，使其和背景能很好
+融合在一起且必要信息高度可读。」随后补充（`m01037`）：「注意：减少 AI 风格，考虑主题和游戏类型。
+考虑无边框设计。」
+
+**第一版主题走错了方向**：深蓝玻璃卡片、圆角、阴影、整圈金色焦点——每个按钮都像一块独立面板，
+截图一眼就是「通用 SaaS / AI 生成 UI」。居合对决的信息本来就少，卡片会把「文字与留白」的节奏切碎。
+第二版改成三条硬约束：① 按钮 normal 全透明，没有圆角/阴影，只有 hover 钢色 7% 与 pressed 淡金 13%；
+② 文字优先，Label 近白 + 4px 深描边；③ 焦点只留底边 2px 刀鞘金，像夹在纸页里的刀镡。
+调色板压在墨蓝黑（`#060a10` / `#0a111a`），主文字 `#e9f0f7` 对比度 17.26:1，弱文字 `#8b9bac` 6.97:1，
+金色焦点 8.18:1。
+
+**焦点样式被运行时覆盖**：主题里明明写了下划线，菜单第一项还是整圈圆角金框。根因是 `scripts/ui/ui_focus.gd`
+在 `focus_entered` 时新建 StyleBoxFlat（3px 整圈、圆角、金色）并覆盖 `focus`。只改主题不够，
+必须把运行时焦点环一起改成 `border_width_bottom = 2`、`border_color = #c8a063`、圆角 0、背景透明。
+另一个小坑：第一版下划线画在左边（`border_width_left`），视觉上离文字太远；改到底边后才贴住按钮文字。
+
+**设置页开关不在基线**：CheckButton 原本带整行底色，像两个孤立胶囊。把 `alignment` 改左、
+`custom_minimum_size=(0,42)`、`size_flags_horizontal=SIZE_SHRINK_BEGIN`，主题 CheckButton margin 左侧归零，
+「静音 / 全屏」才和「主音量」同一条 x=170 基线。
+
+**HUD 不能只靠描边**：雨线是屏幕空间高频细节，直接压在 24px 血量与 16px 操作提示上会「字里有雨」。
+`DuelHud` 在 `HudRoot` 下加顶 190px / 底 120px 两层 `GradientTexture2D` scrim（alpha 0.66 → 0、鼠标穿透、
+位于 `_reward_dim` 之前），只压 HUD 带，不挡中间角色。文字描边仍保留，scrim 只做减噪。
+
+**雨声先试转码，失败后直接用 WAV**：素材为 2 声道 / 24-bit / 48 kHz / 30.0 s / 8,640,784 B。
+用 Python/soundfile 把整段转 OGG 时进程 exit 127 静默退出，只得到半成品；删掉半成品与临时脚本，
+直接入库 WAV。`DuelAudio` 先 `duplicate()` 再设 `LOOP_FORWARD`、`loop_begin=0`、
+`loop_end=int(round(get_length()*mix_rate))`；不能直接改 `load()` 缓存资源，否则污染其他引用。
+播放走 `SoundManager.play_ambient_sound(_rain, 2.0)`（第二个参数是 2 秒淡入，不是音量），
+播放器 `volume_db=-17`；停止走 `stop_ambient_sound(_rain, 0.3)`。`immediate` 分支只 `stop()` 不置空 stream，
+避免 SoundManager 池回收时对 null 取 `resource_path`。headless 下不启动环境音，GUT 不残留 playback。
+
+**验证**：全量 GUT **277/277（1050 asserts，35 脚本，退出码 0）**，本轮新增 8 例 45 asserts
+（主题 5 例 17 asserts / 音频 2 例 10 asserts / HUD scrim 1 例 18 asserts）。三张 1280×720 截图
+`theme-menu.png`、`theme-settings.png`、`theme-duel-hud.png` 已目视：无边框、焦点是底边金线、
+HUD 雨线被压住、中心角色仍通透。
+
+**限制**：UI 仍按 1280×720 写死；CheckButton 图标仍是 fallback 小圆点，`icon_max_width` 不能把 16px
+内置图标放大；雨声循环接缝/整体音量尚未人耳终混；主题由 `tools/build_rain_night_theme.gd` 生成，
+手改 `rain_night.tres` 会被下次生成覆盖；雨声原始下载页 URL 待人类补齐。美术/音频资产 0% AI。
+
+## 14. 刀光外移与形变、主菜单雨夜、心流核查（2026-11-04）
+
+**需求**（人类原话，`m01346`）：①「斩击特效稍微离刀身远一些，并根据出刀的效果进行一定形变」；
+②「主菜单也应用上雨夜背景」；③「心流现在长时间待机反而会自然下跌至低水平……检查并确认是否为 BUG。
+如果不是，告诉我当前设计以及原因」。
+
+**刀光先解决「贴着刀身」**：旧月牙的亮带弧心正好在 122 半径，与旧 `draw_arc` 判定弧重合，读起来像刀身长出一条白边。
+把 `SLASH_RADIUS` 提到 136，亮带落在 117–155，月牙离开刀身约 14px，又不至于脱开刀路变成独立光环。
+形变不能靠 Sprite2D 的整体旋转：用 `whip = sin(progress * PI)` 做包络，中段 `scale.x` 最大 1.13、`scale.y` 最小 0.93、
+`skew = 0.10`，起手/收刀自动回原形。位置、旋转、alpha 与刀光 shader 的 `progress` 都不动，所以判定与扇形消失不受影响。
+**没把半径拉得更远**：再远会读成「刀外另有一道月牙」，而不是刀的轨迹；14px 是让白边离开刀身、又保持因果关系的折中。
+
+**主菜单不能直接改共享材质**：`Menu` 的 `_build_ui()` 每次重建都会清空子节点，所以背景必须在清空后先建。
+更关键的是 `rainy_night.tscn` 里的 `ShaderMaterial` 与 `DuelView` 共用：若直接写 `ground_y`，对局的地面线会被菜单改成 0.96。
+做法是 `bg.material = bg.material.duplicate()` 后再写 `ground_y=0.96`、`pool_strength=0`；删除原纯色 `ColorRect`，
+保留场景缺失时的纯色回退。`pool_strength` 是这轮新加的 uniform：菜单没有角色，两团脚下湿反光会变成无主亮斑。
+
+**心流不是 BUG**：`_passive_flow()` 在 IDLE 且最近 180 帧有操作时每 24 帧 +1；超过 180 帧无输入后每 20 帧 -1，下限 15。
+起手 40/46/36，先涨到 47，再以 -3/秒跌到 15，总约 13.7 秒。设计意图是防止「龟缩等对手出刀」成为最优解，
+让心流成为用进废退的主动资源；依据在 `docs/dev-example/design.md` 与 `tests/unit/test_duel_sim.gd` 的 400 tick 断言。
+唯一改动是把 `duel_sim.gd` 里过时的「每 30f -1（约 -2/秒）」注释改成实际数值，行为未改。
+
+**验证**：全量 GUT **279/279（1068 asserts，35 脚本，退出码 0）**；刀光定向 21/21、83 asserts，菜单定向 4/4、24 asserts；
+`--import` 退出码 0。截图 `theme-menu.png`（雨夜菜单）、`duel-fx-slash.png` 与 `duel-fx-sweep.png`（刀光外移/形变）均 1280×720。
+
+**限制**：刀光偏移与形变幅度是首版，待人类实机手感确认；主菜单背景同样写死 1280×720 与地平线 0.96；
+未加「刀光强度/雨量」设置项。美术 0% AI：未绘制新贴图，刀光仍是既有 `twirl_03`，雨夜仍是自写 shader。
+
+## 15. P2 蓝色衣装图集（2026-11-04）
+
+**需求**（人类原话，`m01605`）：「使用 …`skeleton_p2.png` 作为 2P 的贴图（复制文件至目录并修改 2P
+骨骼绑定的贴图）」。
+
+**为什么不是改角色档案**：本地双人（`duel_controller.gd:278`）是 `DuelSim.new(p1_data, p1_data, ...)`，
+双方同角色镜像。若把 `char_b.tres` 的 `atlas_file` 改成 P2 图集，`char_b` 站 P1 时也会变蓝；而 2P 本质是
+「席位」，不是角色 id。最终把换装放在 `DuelView` 的表现层：`_profile_for_side(profile, P2)` 克隆档案，
+只换 `atlas_file`，按原档案 `instance_id` 缓存。`SpineFighterView._shared_data()` 的键包含 atlas 的
+`instance_id`，所以同角色 P1/P2 会命中两份不同的 `SpineSkeletonDataResource`，P1 不会被污染。
+
+**图集只改文本**：新 `skeleton_p2.atlas` 以 `skeleton.atlas` 为模板，仅首行页名改 `skeleton_p2.png`，
+26 个 region 坐标完全保留；`skeleton_p2.png` 由人类提供（1323×1537，蓝色衣装），AI 未改像素/拓扑。
+图集缺失或导入失败时 `_resolve_p2_atlas()` 返回 `null`，回退原图集，不阻断开局。
+
+**验证**：`tests/integration/test_duel_view_spine.gd` 新增 1 例——双方同选 `char_a`，断言 P1 仍是
+`skeleton.atlas`、P2 是 `skeleton_p2.atlas`、两者不是同一 Resource、P2 贴图页为 `skeleton_p2.png`，
+动作映射与原档案一致；定向 8/8。全量 GUT **280/280（1077 asserts，35 脚本，退出码 0）**，
+Spine 子集 37 例；`--import` 退出码 0。`rainy-night-preview.png` 重拍后 P1 棕、P2 蓝，已目视。
+
+**限制**：`p2_atlas_file` 是可选覆盖，默认走约定路径；若将来要「同一角色多套衣服」，应把 P2 图集
+并进档案/皮肤表，而不是继续加席位特判。P2 换装不改变动作映射与缩放，素材必须与主图集同尺寸/同 region。
+美术 0% AI：贴图由人类提供，AI 只复制文件、改 atlas 页名文本与接线。
+
+## 16. 试玩反馈 06 记录与方案（2026-11-04）
+
+**需求**（人类原话，`m00001`）：①「建议删除残心的显示，减少玩家入门游玩的门槛」；②「占位提示加上L键位开符卡的提示」；③「均衡的符卡设计没有实际意义，建议根据其他三个符卡的表现进行重新设计」。
+指令同时明确「**不改代码**」，因此本轮只做记录、诊断与方案，代码/场景/资源/本地化零改动，测试基线仍是 280/280。
+
+**记录**：`docs/dev-example/playtest-06.md`（新）——原文、现象、落点、判定、证据索引。
+
+**方案**：`docs/dev-example/balance-pass-06-plan.md`（新）——结论先行表、三项改法、排期、拍板项、验收清单。
+
+**三条落点与判定**：
+- 残心显示：唯一写入点是 `duel_hud.gd:354-359`（「第 N/5 场　金 X　残心 Y」）；机制在 `run_state.gd:157-170`，与显示解耦，删显示零机制风险；`test_run_state` 的机制断言不动。
+- L 键提示：`duel_hud.gd:266-281` 的 `_controls_text()` 只替换 attack/guard/restart/pause，**没有 spell**；`zh_CN.json:9-11` 三条操作行也没有符卡位；教程提示 `duel_hud.gd:468-479` 没有「符卡可用」分支，`tutorial.*` 仍是 T-12~T-16 占位。
+- 均衡符卡：`spell_a` 30 心流（开局净耗 25）、10f 蓄力、60f 必完美、**0 伤害**；对照 B 20 伤、C 30 伤、关底 30 伤。量化结论：净收益上限只是一次完美格挡的 +5 心流差（`PERFECT_BLOCK_FLOW_GAIN` 12 vs `BLOCK_FLOW_GAIN` 7），要回本需 5 次完美而 60f 内最多两次架；A 自己的架窗已有 24–32f，抬到 30 只对 SPREAD 档有意义；且 `_has_spell_charge()` 把 `spell_perfect_until_frame > frame` 算作蓄力，架势期间被砍中会**驱散 + 12f 惩罚**——风险与收益倒挂。人类说「没有实际意义」在数值上成立。
+
+**方案要点**：残心显示删（HUD 整行只留场次/金币，可选结算保留「残心 +1」）；操作行加 `%s`/`%S` 替换与三条模板（文案由人类定稿），教程加「符卡可用」触发点（新键 `tutorial.spell` 占位）；符卡推荐 S2「架势 · 反斩」——保留 60f 必完美与打断风险，架势内首次格挡成功即自动反斩 10 伤穿防，触发即结束架势，复用 `spell_power_amount`/`_enter_slash` 路径，回滚开关 `counter_damage = 0`。
+
+**未做**：任何代码改动；B2 教程触发与设置符卡改键需人类文案后再排。
+
+**v3 修订（同日，`m00159`）**：人类要求「反斩改为自动架刀＋反斩，窗口期45F，输入攻击打断或者受击直接自动完美弹开+反斩」。方案改为 S2'「自动架刀 · 反斩」：10f 蓄力后 45f 自动架刀窗口；窗口内受击不扣血，直接完美弹开（+12 心流 / 攻方 -8、进 28f 收招）并立即反斩 10 伤穿防，窗口随即结束；窗口内按攻击则清窗口转普通出刀；clash 优先，穿防符卡是否无视列为待确认。旧 S2「首次格挡后自动反斩」被取代；`balance-pass-06-plan.md` §3 全节重写（11600 字符），§3.9 留 4 项待确认、§5 扩为 7 项拍板、附 A 增 SPELL_AUTO_GUARD_FRAMES/COUNTER_DAMAGE 45/10。
+（v4 已去掉 10f 蓄力与「蓄力可被打断」路径，改为按 L 瞬间进入窗口。）
+
+
+
+**v4 定稿（`m00201`，人类逐项拍板）**：残心只删 HUD、机制保留（结算页保留「残心 +1」）；反斩伤害 10；45f 从按 L 瞬间起算，按 L 立即把防御动画播到末帧并保持（现状 SPELL 无动画映射会回退 zhanli，故需给 8 份档案补 "SPELL": "fangyu" 并在视图加「定位末帧并暂停」）；空放返还 10 心流；穿防分两档——玩家 B/C 符卡穿透自动架刀，关底 BOSS 符卡不穿透（防收割）；操作行中文「发动符卡」，英文与教程提示等人类文案。`balance-pass-06-plan.md` 升到 v4（11910 字符），§3 全节重写、§5 改为「已定 + 剩余 4 项默认值」、§6 验收清单同步。
+
+## 17. 实现落地：A 符卡瞬发自动架刀（2026-11-04）
+
+**触发**（`m00261`）：「现在开始实现。」——解除 `m00001` 的「不改代码」，落地 v4。
+
+**改动**：
+- `spell_card.gd`：`SpellCardData` 加 `auto_guard_frames` / `counter_damage` / `empty_refund_flow`；`_guard_stance()` 改瞬发（`cast_frames = 0`、`amount = 0`、45 / 10 / 10），心流 30 不变。
+- `fighter_state.gd`：加 `spell_auto_guard_until_frame`、`spell_refund_pending`，`reset_for_duel()` 清零。
+- `duel_sim.gd`：`tick()` 在 `_advance` 后跑 `_update_spell_window`，并在两轮 slash 结算后再补一轮（同帧反斩）；`_cast_spell` 的 `GUARD_STANCE` 置窗口并进 `SPELL`；`_apply_action` 顶部「窗口内 ATTACK → 清窗口、出刀」，`SPELL` 分支忽略 `GUARD`；`_resolve_slash` 在 clash 之后、受击分支之前拦截自动架刀；新增 `_do_spell_auto_guard` / `_trigger_spell_counter` / `_end_spell_window` / `_update_spell_window` / `_is_boss_fighter`；`_do_block` 加 `forced_perfect`；`_do_hit` 扣血前清窗口（穿防打破）；`_clear_spell_charge` 补清窗口。
+- `duel_hud.gd`：删顶部残心段；~~结算页新增 `_result_detail`（「残心 +N」）~~（v5 已整行删除）；操作行加 `%s` / `%S`；窗口期符卡行 `▶剩余帧`；开局 6 秒教程提示 `tutorial.spell`。
+- `spine_fighter_view.gd`：窗口内 `fangyu` 定位末帧 + `time_scale 0`，结束按剩余帧恢复；8 份 `.tres` 补 `"SPELL": "fangyu"`。
+- 本地化：`zh_CN` 操作行 / 教程 / `spell_a.desc` 更新；`en` 同步 `[PLACEHOLDER]`。
+
+**踩坑**：
+- JS 模板字符串行尾反斜杠吞换行，导致 `edit` 的 `old_string` 失配两次；含续行一律改 `String.raw`。
+- 方案 §3.2 写 `defender.state != SPELL`，与「45f 内保持 `SPELL`」矛盾；实现取 `== SPELL + 窗口有效`，并在 plan §7 记录为笔误。
+- 测试先 287/289：心流断言写成 `== 30`（窗口内按斩实际 26，另扣出刀 4）、BOSS 血量写 30（实为 40，应断 `data.max_hp`）；修正后全绿。
+
+**验证**：GUT **289/289、1111 asserts、35 脚本、退出码 0**；`--import` 退出码 0。**未做**：人类文案替换、非 16:9 目视、实机手感确认。
+
+**v5 修订（同日，`m00653`）**：人类要求「结算页也不应该保留『残心 +N』小字，只保留机制不变」。删除 `_result_detail` 整个 Label 及其创建/刷新分支；`test_duel_hud.gd` 的用例改为 `test_zanshin_is_hidden_everywhere_in_hud`——用 `find_children` 扫 HUD 全部可见 Label，断言局内与结算页都不含「残心」，并断言 `run.zanshin` 仍为 2（机制照常记数）。重跑全量 GUT 复核。
+
+## 18. 心流待机恢复：反转“用进废退”（2026-11-04）
+
+**需求**（人类原话，`m01751`）：「我意识到心流待机下跌实际上是不合适的游戏设计 —— 因为实际上玩家的心流资源恢复手段太差，如果用进废退实际上是将心流资源直接无效化了。同时这个设计也影响到了符卡决策问题 —— 无论是玩家还是AI都实际上无法主动使用符卡了。建议仍然恢复为待机恢复心流（开局前待机时间不算）。」
+
+**为什么反转**：旧实现 IDLE 180f 内每 24f +1，超过 180f 每 20f -1、下限 15。符卡成本 30–40；出刀 -4、中刀 -15、被架/空架 -8。中局只要出过几刀、挨过一刀，心流就会跌到 15 附近，而待机只会继续扣——符卡从“每场一次的关键资源”变成“只有开局能用的资源”。AI 同理：`_try_spell` 只检查 `me.flow >= card.flow_cost`，没有恢复路径就不可能在关底中段发动。
+
+**实现**：
+- `duel_sim.gd`：删除 `NO_INPUT_GRACE`、`NO_INPUT_PENALTY_INTERVAL` 与 `_passive_flow()` 的惩罚分支；`set_input()` 不再记录 `last_input_frame`。
+- `_passive_flow()` 现为：`unlocked := frame >= opening_lock_frames`；`unlocked && state == IDLE` 时每 `flow_regen_interval`（24f）`_add_flow(+1)`，否则计时清零。礼让期内不累计，礼让结束后从 0 开始——即“开局前待机不算”。
+- `fighter_state.gd`：删除 `last_input_frame` 与 `reset_for_duel()` 里的复位。
+- 对手“处于构时你保持不动 +1/20f、上限 +15”保持不变，仍由 `_passive_flow()` 的后半段处理。
+
+**验证**：
+- `test_opening_lock_grants_no_flow`：礼让期 179f 仍 40；结束后 30f >40 且 <48；再 140f >=41。
+- `test_idle_recovers_flow_without_penalty`：400f 后 56（16 次 +1），>40。
+- `test_idle_recovery_makes_spell_available_again`：20 心流待机 480f 后 >=40，按 L 进 SPELL，付 30 后被 `flow_floor` 夹到 15，次数归零。
+- 定向 `duel_sim` 47/47、138 asserts；`spell_cards` 22/22、90 asserts；全量 GUT **290/290、1115 asserts、35 脚本、退出码 0**。
+
+**限制**：待机 24f/点意味着从 15 回满 100 要约 34 秒，长于多数单场；正式节奏仍待实机确认。未改 AI 决策，也未新增“调息”按钮。旧 CHANGELOG/balance-pass 中的“用进废退”保留为历史记录，本轮明确反转。
+
+## 19. 防御特效白→金、看破预读弧与加法发光（2026-11-04）
+
+**需求**（人类原话，`m00720`）：「防御效果不是从白转黄而是直接黄色渲染，导致了看破这个心得实际上变得没有用了起来。这样即便有放大效果也没有直观的显示。」以及「希望光效不只是纯粹的半透明，希望能有类似发亮光的混合模式（可以尝试使用着色器实现）」。
+
+**诊断**：看破（U05，`hint_lead=6`）的唯一可视化是收束环提前 6f 出现；但 `_update_charge_fx()` 在 `imminent` 时把整环硬切成纯金，早期/中期/临刀三个阶段颜色几乎没有可读差异，6f 提前量在视觉上被抹平。同时所有粒子用 `BLEND_MODE_ADD`（只叠亮），亮部没有白芯。
+
+**实现**：
+- `duel_view.gd` 新增 `charge_color(progress, imminent, pulse)`：白段保留到中段（`warm=smoothstep(0.12,1.0,p)`），临刀只向金 `lerp 0.7` + alpha 呼吸；头顶进度点同步 `CHARGE_WHITE.lerp(CHARGE_GOLD, progress)`。
+- `_commit_state()` 增加 `lead`/`span`；`_draw_fighter()` 的 COMMIT 分支在环外加冷白预读弧（`lead/span` 比例、`lerpf(20,132,p)+12`、24 段、`Color(0.86,0.94,1.0,0.55)`）。
+- 新增 `resources/shaders/glow_add.gdshader`（`blend_add` + 白芯 `smoothstep(0.35,0.95,alpha)*core` + `glow` 提亮）；`duel_fx.gd` 用 `_make_glow_material()` 统一材质，删除 `CanvasItemMaterial` 分支。
+
+**踩坑**：
+- 第一版 `capture_fx_preview.gd` 拍 read 图时背景变棕：`DuelView._flash` 被控制器 tick 清成 1.0，并覆盖手动设置的 COMMIT。先 `scene.set_physics_process(false)`，再 `view.set("_flash", 0.0)`，最后手动 `queue_redraw()`。
+- 截图里 HUD 状态文本可能停留上一帧缓存，以画面中的环/弧为准。
+
+**验证**：全量 GUT **292/292、1123 asserts、35 脚本、退出码 0**；`test_charge_color_keeps_a_white_phase_before_gold`（起手 b≈r、中段 b>0.7、末段 b<r-0.25）、`test_block_burst_and_charge_use_glow_shader`（`ShaderMaterial` + `shader == DuelFx.GLOW_SHADER`）通过。截图 `duel-fx-charge.png` / `duel-fx-read.png` / `duel-fx-preview.png` 重拍。
+
+**限制**：发光强度（`glow=1.35`）与白芯（`core=0.5`）为首版，待人类在实机与不同分辨率目视；`alpha_gain` 尚未接设置页「特效强度」。
+
+## 20. 角色选择抽离、双人输入方式与可见 key 补全（2026-11-05）
+
+**需求**（人类原话，`m00002`）：①「将选择角色的功能单独抽离出来，要求选择游戏模式后单人只选玩家角色，双人需要各自选择角色」；②「补全没有本地化的可见key，例如设置页面的使用符卡」；③「允许双人对战一人使用键鼠一人使用手柄，在选择角色界面时选择输入方式。不用判断当前手柄是否接入，游戏中途插入手柄默认给1P玩家（此时键鼠为2P玩家）」。
+
+**实现**：
+- 新增 `CharacterSelectPanel`（`scripts/ui/character_select.gd` + `scenes/ui/character_select.tscn`）并注册 `PanelIds.character_select()`；主菜单删掉角色下拉框，模式确认后关闭模式面板 → 打开角色面板；单人只建 P1 角色行，双人建 P1/P2 角色行 + 两个输入方式下拉；确认写 `pending_character` / `pending_character_p2` / `pending_input_p1/p2` 后发 `character_confirmed`，菜单收到后进对局。
+- `GameBootstrap` 增加 `pending_character_p2`、`pending_input_p1/p2`（默认 `keyboard`）与角色面板注册；`DuelController._start_versus()` 改用 `pending_character_p2` 生成 P2 数据，HP/初始心流取该角色。
+- `InputGuide.build_remap_config()` 增加 `versus / p1_gamepad / p2_gamepad`：手柄方六动作只保留 `index 0` 的 `GUIDEInputJoyButton`（`joy_index=0`），其余槽 `_unbind`；键鼠方按 `KeyBindings.get_keys()` 占原键槽，鼠标只绑给键鼠方（P1 键鼠用原鼠标槽；P1 手柄时 P2 键鼠借 P2 原 `joy1` 槽 `index 2`）。全局 `restart/pause/offer` 仍走旧逻辑。
+- `DuelController` 按 `pending_input_*` 决定 raw 手柄事件路由和 HUD 提示；`joy_connection_changed` 时，双人且双方都未选手柄则把新接入的手柄给 P1、键盘留 P2 并写回字段；唯一手柄拔掉则双方回键鼠；单人保持旧行为。
+- `DuelHud.set_input_methods()` 让操作行按手柄/键鼠切换 `label_joy` / `label`，并纳入 refresh 签名。
+- 中英各补 13 个键：角色面板 10 个、`settings.key_spell_p1/p2`、`state.unknown`；两语言各 165 键。
+
+**踩坑**：
+- GUIDE 的 `GUIDERemappingConfig` 只能覆盖动作已有的 `input_mappings` 槽位，不能新增槽；P2 键鼠在 P1 手柄时必须借用 P2 原有 `joy1` 槽 `index 2` 放鼠标，否则鼠标映射不会生效。
+- 单人重映射有意不写鼠标槽（保持资源默认），所以断言不能只看 `config.remapped_inputs`；要回到 `context.mappings` 检查 `mapping.input_mappings[1].input` 仍是 `GUIDEInputMouseButton`。
+- 菜单删角色行后 `test_menu.gd` 的按钮数从 5 改为 4；`test_duel_gamepad.gd` 原先直接设 `_raw_p1_device/_raw_p2_device`，改为设 `_p1_uses_gamepad/_p2_uses_gamepad` 才能测到新分席逻辑。
+- HUD 操作行原先只按键盘键名渲染；双人时手柄方键盘槽已解绑，必须把输入方式纳入 `set_input_methods()` 和 refresh 签名，否则提示会指到不存在的键。
+
+**验证**：全量 GUT **305/305、1235 asserts、37 脚本、5.08 s、退出码 0**；`--import` 退出码 0；`--quit-after 240` 无头冒烟退出码 0、stderr 为空；中英键集一致、`_tr/get_text` 字面 key 无缺失。
+
+**限制**：真实手柄热插拔/手感/改键未实机复测；双方键鼠时鼠标只给 P1；角色面板不检测手柄数量；双方手柄需要两只已接入手柄，不足时先回退键鼠（第二只插入后自动补齐；暂停/重开始终可用键盘）。
+
+### 补充：双方手柄支持（2026-11-05，m00500）
+
+人类追加要求「双方手柄也应该做支持——你不能否定且必须支持多手柄输入」，因此废止初版「输入方式互斥」：
+
+- `character_select.gd` 删除 `_enforce_single_gamepad()` 与 `_select_input()`；P1/P2 独立选择键鼠或手柄，允许双方同时选手柄；`_on_start_pressed()` 不再把 P2 手柄降级。
+- `duel_controller.gd` 增加「面板偏好」与「实际席位」两层：`_p1_wants_gamepad/_p2_wants_gamepad` 记录玩家选择，`_resolve_gamepad_assignment(p1_wants, p2_wants, pad_count)` 按当前手柄数算出 `_p1_uses_gamepad/_p2_uses_gamepad`（双方手柄 + 2 只 → `(1,1)`，只有 1 只 → `(1,0)`，0 只 → `(0,0)`）。不足时先回退键鼠，第二只插入后自动补齐，不把玩家选择丢掉。
+- `_sync_raw_devices()` 在双方手柄时把 `pads[0]` 给 P1、`pads[1]` 给 P2；`_input()` 新增 `_raw_slot_for_device(device, claim)`，按设备精确分席，松手只清对应席位的 `_guard_held/_p2_guard_held`。这修掉了旧实现「所有手柄事件都给 P1」的串台。
+- `_on_joy_connection_changed()` 保留「双方都未选手柄时，中途插入默认归 P1」；已显式选择手柄时尊重选择。双方手柄拔掉一只时，若剩下的设备原本属于 P2 则保留 P2 席位，避免错绑。
+- `_rebuild_input()` 显式复位 `_guard_held/_p2_guard_held`：重建后旧手柄的「按住架」已收不到松手事件，不复位会让新席位继承旧按压。
+- `InputGuide._remap_versus_action()` 无需改逻辑，双方手柄时 P1 `joy_index=0`、P2 `joy_index=1`；只更新注释。设置页手柄行只显示连接数，不再暗示固定的「P2 手柄 2/键盘」。
+- 本地化只改写既有 `menu.char_select_hint_versus`、`settings.gamepad_hint`、英文 `menu.mode_hint`，未新增 key，中英仍各 165 条。
+
+**验证**：新增/改写 6 例——选人面板「双方可同时选手柄」「双方选择写回」、输入槽位「双方手柄 joy 0/1」、raw「双设备分席」「松 P1 手柄不清 P2 架子」、席位 resolver「0/1/2 只」与「双方偏好保留」。全量 GUT **311/311、1270 asserts、37 脚本、退出码 0**；`--import` 退出码 0。真实双手柄仍未实机复测。
 
 

@@ -1,8 +1,9 @@
 extends Node2D
 
 ## 灰盒对决控制器：GUIDE 输入 + RunState 阶梯 / 本地双人 + 表现层。
-## P1：J 斩 / K 架（鼠标左/右键、手柄 1 的 A/B 同时可用）；
-## P2：小键盘 1/2（或 I/O），检测到第二手柄时也可用手柄 2 的 A/B。
+## 单人：P1 键鼠与手柄同时可用。
+## 本地双人：角色与输入方式由选人面板决定（双方键鼠、一人键鼠一人手柄、双方手柄）；
+## 游戏中途接入手柄默认给 P1（此时键鼠为 P2），第二只手柄插入后补齐 P2。
 ## R 重开；Esc 暂停；1–3 选心得。
 
 const VIEW_SCENE := preload("res://scenes/duel/duel_view.tscn")
@@ -54,6 +55,11 @@ var _restart_queued := false
 var _settled := false
 var _raw_p1_device := -1
 var _raw_p2_device := -1
+var _p1_uses_gamepad := false
+var _p2_uses_gamepad := false
+## 玩家在选人面板的偏好；实际是否用手柄还要看当前接入数量（第二只插入后自动补齐）。
+var _p1_wants_gamepad := false
+var _p2_wants_gamepad := false
 var _last_pause_ms := -1000
 
 
@@ -64,12 +70,8 @@ func _ready() -> void:
 
 	_run_seed = _new_seed()
 
-	var pads := Input.get_connected_joypads()
-	if pads.size() >= 1:
-		_raw_p1_device = pads[0]
-	if pads.size() >= 2:
-		_raw_p2_device = pads[1]
-
+	_read_input_assignment()
+	_sync_raw_devices()
 	_setup_input()
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_view = VIEW_SCENE.instantiate() as DuelView
@@ -135,10 +137,11 @@ func _input(event: InputEvent) -> void:
 	if not joy.pressed:
 		# 松手也要跟踪：架子按「按住」保持，松开立刻收势。
 		# 暂停期间同样要跟（放在 _paused 守卫之前），否则暂停时松手被丢，
-		# 恢复后仍以为玩家按着架。
-		if joy.button_index == KeyBindings.get_joy_button(meta, &"guard_p1"):
+		# 恢复后仍以为玩家按着架。双方手柄时必须按设备分席，不能互相清架。
+		var release_slot := _raw_slot_for_device(joy.device, false)
+		if release_slot == 0:
 			_guard_held = false
-		if joy.button_index == KeyBindings.get_joy_button(meta, &"guard_p2"):
+		elif release_slot == 1:
 			_p2_guard_held = false
 		return
 	if _paused:
@@ -148,28 +151,22 @@ func _input(event: InputEvent) -> void:
 			_on_pause_pressed()
 		return
 
-	var device := joy.device
-	if _raw_p1_device < 0:
-		_raw_p1_device = device
-	var slot := 0
-	if mode == &"versus":
-		if _raw_p2_device < 0 and device != _raw_p1_device:
-			_raw_p2_device = device
-		slot = 1 if device == _raw_p2_device else 0
-
+	var slot := _raw_slot_for_device(joy.device, true)
 	var button := joy.button_index
 	if slot == 0:
 		if button == KeyBindings.get_joy_button(meta, &"attack_p1"):
 			_attack_queued = true
 		elif button == KeyBindings.get_joy_button(meta, &"guard_p1"):
 			_guard_queued = true
+			_guard_held = true
 		elif button == KeyBindings.get_joy_button(meta, &"spell_p1"):
 			_spell_queued = true
-	else:
+	elif slot == 1:
 		if button == KeyBindings.get_joy_button(meta, &"attack_p2"):
 			_p2_attack_queued = true
 		elif button == KeyBindings.get_joy_button(meta, &"guard_p2"):
 			_p2_guard_queued = true
+			_p2_guard_held = true
 		elif button == KeyBindings.get_joy_button(meta, &"spell_p2"):
 			_p2_spell_queued = true
 	if button == KeyBindings.get_joy_button(meta, &"pause"):
@@ -275,12 +272,15 @@ func _start_versus() -> void:
 	run = null
 	ai = null
 	var p1_data := FighterData.for_character(GameBootstrap.pending_character if GameBootstrap != null else &"char_a")
-	sim = DuelSim.new(p1_data, p1_data, _new_seed())
+	var p2_data := FighterData.for_character(
+		GameBootstrap.pending_character_p2 if GameBootstrap != null else &"char_a"
+	)
+	sim = DuelSim.new(p1_data, p2_data, _new_seed())
 	sim.opening_lock_frames = OPENING_LOCK_FRAMES
 	sim.p1.hp = p1_data.max_hp
-	sim.p2.hp = p1_data.max_hp
+	sim.p2.hp = p2_data.max_hp
 	sim.p1.flow = p1_data.start_flow
-	sim.p2.flow = p1_data.start_flow
+	sim.p2.flow = p2_data.start_flow
 
 	_clear_queued_input()
 	_settled = false
@@ -292,6 +292,7 @@ func _start_versus() -> void:
 	if _audio != null:
 		_audio.bind(sim)
 	if _hud != null:
+		_hud.set_input_methods(_p1_uses_gamepad, _p2_uses_gamepad)
 		_hud.set_versus(true)
 		_hud.set_run(null)
 		_hud.bind(sim)
@@ -328,7 +329,10 @@ func _setup_input() -> void:
 
 	var meta := GameBootstrap.meta if GameBootstrap != null else null
 	# 资源里是默认绑定；玩家改过的键用 GUIDERemappingConfig 覆盖，不动资源本身。
-	var remap := InputGuide.build_remap_config(_context, meta)
+	# 双人再按选人面板的输入方式重排玩家槽位（双方键鼠、一人手柄或双方手柄）。
+	var remap := InputGuide.build_remap_config(
+		_context, meta, mode == &"versus", _p1_uses_gamepad, _p2_uses_gamepad
+	)
 	if remap != null:
 		GUIDE.set_remapping_config(remap)
 
@@ -370,8 +374,107 @@ func _setup_input() -> void:
 	GUIDE.enable_mapping_context(_context, true)
 
 
-func _on_joy_connection_changed(_device: int, _connected: bool) -> void:
+func _on_joy_connection_changed(_device: int, connected: bool) -> void:
+	var old_p1 := _raw_p1_device
+	var old_p2 := _raw_p2_device
+	if mode == &"versus":
+		var pads := Input.get_connected_joypads()
+		if connected and not _p1_wants_gamepad and not _p2_wants_gamepad:
+			# 需求：不预判手柄是否接入；双方键鼠时中途插入的手柄默认归 P1，键鼠归 P2。
+			_p1_wants_gamepad = true
+			_p2_wants_gamepad = false
+			if GameBootstrap != null:
+				GameBootstrap.pending_input_p1 = &"gamepad"
+				GameBootstrap.pending_input_p2 = &"keyboard"
+		_apply_effective_assignment()
+		if not connected and pads.size() == 1 and _p1_wants_gamepad and _p2_wants_gamepad:
+			# 双方原本都用手柄，拔掉一只后若剩下的正是 P2 的手柄，
+			# 保留 P2 席位，避免把剩下的手柄错绑给 P1。
+			if old_p2 == pads[0] and old_p2 != old_p1:
+				_p1_uses_gamepad = false
+				_p2_uses_gamepad = true
+		_sync_raw_devices()
+	else:
+		_sync_raw_devices()
 	_rebuild_input()
+
+
+## 偏好 + 当前手柄数 → 实际席位。手柄不足时先退回键鼠，第二只插入后自动补齐。
+func _resolve_gamepad_assignment(
+	p1_wants: bool, p2_wants: bool, pad_count: int
+) -> Vector2i:
+	if not p1_wants and not p2_wants:
+		return Vector2i.ZERO
+	if p1_wants and p2_wants:
+		if pad_count >= 2:
+			return Vector2i(1, 1)
+		if pad_count == 1:
+			return Vector2i(1, 0)
+		return Vector2i.ZERO
+	if p1_wants:
+		return Vector2i(1, 0) if pad_count >= 1 else Vector2i.ZERO
+	return Vector2i(0, 1) if pad_count >= 1 else Vector2i.ZERO
+
+
+func _apply_effective_assignment() -> void:
+	var resolved := _resolve_gamepad_assignment(
+		_p1_wants_gamepad, _p2_wants_gamepad, Input.get_connected_joypads().size()
+	)
+	_p1_uses_gamepad = resolved.x == 1
+	_p2_uses_gamepad = resolved.y == 1
+
+
+func _read_input_assignment() -> void:
+	_p1_wants_gamepad = false
+	_p2_wants_gamepad = false
+	if mode == &"versus" and GameBootstrap != null:
+		_p1_wants_gamepad = GameBootstrap.pending_input_p1 == &"gamepad"
+		_p2_wants_gamepad = GameBootstrap.pending_input_p2 == &"gamepad"
+	_apply_effective_assignment()
+
+
+func _sync_raw_devices() -> void:
+	var pads := Input.get_connected_joypads()
+	_raw_p1_device = -1
+	_raw_p2_device = -1
+	if mode != &"versus":
+		if pads.size() >= 1:
+			_raw_p1_device = pads[0]
+		return
+	if _p1_uses_gamepad and pads.size() >= 1:
+		_raw_p1_device = pads[0]
+	if _p2_uses_gamepad:
+		if _p1_uses_gamepad:
+			if pads.size() >= 2:
+				_raw_p2_device = pads[1]
+		elif pads.size() >= 1:
+			_raw_p2_device = pads[0]
+
+
+## 原始手柄事件按实际设备分席。双方手柄时绝不能把两只手柄都算给 P1。
+## claim=true 用于按下事件：设备尚未登记时按当时的席位认领；
+## 松手事件 claim=false，只清已登记设备的架子，避免误认领。
+func _raw_slot_for_device(device: int, claim: bool) -> int:
+	if mode != &"versus":
+		if claim and _raw_p1_device < 0:
+			_raw_p1_device = device
+		return 0
+	if not _p1_uses_gamepad and not _p2_uses_gamepad:
+		# 双方键鼠：手柄没有归属，玩家动作一律不接；暂停/重开仍可用。
+		return -1
+	if _p1_uses_gamepad and device == _raw_p1_device:
+		return 0
+	if _p2_uses_gamepad and device == _raw_p2_device:
+		return 1
+	if not claim:
+		return -1
+	if _p1_uses_gamepad and _raw_p1_device < 0:
+		_raw_p1_device = device
+		return 0
+	if _p2_uses_gamepad and _raw_p2_device < 0 and device != _raw_p1_device:
+		_raw_p2_device = device
+		return 1
+	return -1
 
 
 ## 热插拔：重建 GUIDE 上下文，按新的手柄数量重新分配 P1/P2 设备；
@@ -381,9 +484,12 @@ func _rebuild_input() -> void:
 		GUIDE.disable_mapping_context(_context)
 		_context = null
 	_clear_queued_input()
+	# 重建后旧手柄的“按住架”已无从释放，必须主动复位，避免新席位继承旧按压。
+	_guard_held = false
+	_p2_guard_held = false
 	_setup_input()
 	if _hud != null:
-		_hud.refresh()
+		_hud.set_input_methods(_p1_uses_gamepad, _p2_uses_gamepad)
 
 
 func _on_attack_pressed() -> void:

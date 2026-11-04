@@ -42,8 +42,6 @@ const FEINT_SEEN_GAIN := 10
 const CLASH_FLOW_GAINS := [6, 4, 2, 0]
 const COMMIT_WAIT_INTERVAL := 20
 const COMMIT_WAIT_CAP := 15
-const NO_INPUT_GRACE := 180
-const NO_INPUT_PENALTY_INTERVAL := 20
 const WHIFF_LOCK_FRAMES := 120
 ## 「构」的下限帧数：心流 + 疾势叠加后不允许短到无法被读到。
 const COMMIT_MIN_FRAMES := 8
@@ -140,7 +138,6 @@ func set_input(side: int, attack_pressed: bool, guard_pressed: bool,
 	if action == DuelTypes.Action.NONE:
 		return
 	_pending[side] = action
-	fighter.last_input_frame = frame
 
 
 ## 测试/脚本用的单动作入口。
@@ -174,7 +171,15 @@ func tick() -> void:
 
 	_advance(p1)
 	_advance(p2)
+	_update_spell_window(p1)
+	_update_spell_window(p2)
 
+	if p1.entered_slash:
+		_resolve_slash(p1)
+	if p2.entered_slash:
+		_resolve_slash(p2)
+	# 自动反斩可能在对手落刀的结算里同帧发动（10 伤），补一次结算。
+	# _resolve_slash 入口会清 entered_slash，第二轮不会重复打同一刀。
 	if p1.entered_slash:
 		_resolve_slash(p1)
 	if p2.entered_slash:
@@ -226,6 +231,8 @@ func _snapshot(fighter: FighterState) -> Dictionary:
 				and fighter.flow >= fighter.spell_card.flow_cost,
 		"spell_charging": _has_spell_charge(fighter),
 		"spell_perfect": fighter.spell_perfect_until_frame > frame,
+		"spell_auto_guard": _spell_window_active(fighter),
+		"spell_auto_guard_left": maxi(0, fighter.spell_auto_guard_until_frame - frame),
 	}
 
 
@@ -277,8 +284,10 @@ func _cast_spell(fighter: FighterState) -> bool:
 	_sub_flow(fighter, card.flow_cost)
 	match card.effect:
 		SpellCardData.Effect.GUARD_STANCE:
-			fighter.spell_perfect_until_frame = frame + card.amount
-			_enter(fighter, DuelTypes.State.SPELL, card.cast_frames)
+			# 瞬发架刀：不做蓄力，按下的这一帧就完成防御姿态并展开自动窗口。
+			fighter.spell_auto_guard_until_frame = frame + card.auto_guard_frames
+			fighter.spell_refund_pending = card.empty_refund_flow
+			_enter(fighter, DuelTypes.State.SPELL, card.auto_guard_frames)
 		SpellCardData.Effect.BLADE_RUSH:
 			fighter.spell_power_amount = card.amount
 			fighter.spell_unblockable = card.unblockable
@@ -295,6 +304,13 @@ func _cast_spell(fighter: FighterState) -> bool:
 
 
 func _apply_action(fighter: FighterState, action: int) -> void:
+	# 瞬发架刀窗口内主动出刀：窗口让位给出刀，心流不返还（先出刀就是放弃保险）。
+	# 按架转普通架不清窗口；只有出刀 / 被穿防打中才清。
+	if action == DuelTypes.Action.ATTACK and _spell_window_active(fighter):
+		# 自己出刀即放弃自动保险：窗口关闭、心流不返还，按普通斩击出手。
+		_end_spell_window(fighter, false)
+		_enter_commit(fighter)
+		return
 	match fighter.state:
 		DuelTypes.State.IDLE:
 			if action == DuelTypes.Action.GUARD:
@@ -318,6 +334,9 @@ func _apply_action(fighter: FighterState, action: int) -> void:
 			# 架住之后：反击预备窗口内按斩 = 顺势斩；窗口外按下即作废。
 			if action == DuelTypes.Action.ATTACK:
 				_try_counter_strike(fighter)
+		DuelTypes.State.SPELL:
+			# 自动架刀已替玩家架住，窗口内再按架没有意义：忽略，保持自动姿态。
+			pass
 		DuelTypes.State.RECOVERY:
 			# 2026-10-21 收招取消：出刀 / 被架后的收招（14–32f）原本完全无法防御，
 			# 而 AI 前摇只有 24–36f，等于「主动出刀 = 把先手交给对手」，模拟里
@@ -559,6 +578,14 @@ func _resolve_slash(attacker: FighterState) -> void:
 		_do_clash(attacker, defender)
 		return
 
+	# 瞬发架刀：窗口内被刀，自动完美弹开并反斩。
+	# 玩家符卡的穿防可以穿透它；关底 BOSS 的穿防**不**穿透（防收割，
+	# 否则玩家按防御符卡直接被一刀打穿，等于符卡变成自杀键）。
+	if defender.state == DuelTypes.State.SPELL and _spell_window_active(defender):
+		if not attacker.spell_unblockable or _is_boss_fighter(attacker):
+			_do_spell_auto_guard(attacker, defender)
+			return
+
 	match defender.state:
 		DuelTypes.State.IDLE, DuelTypes.State.COMMIT, DuelTypes.State.RECOVERY, DuelTypes.State.GUARD_REC, DuelTypes.State.SPELL:
 			_do_hit(attacker, defender)
@@ -613,6 +640,11 @@ func _do_hit(attacker: FighterState, defender: FighterState) -> void:
 		damage_negated.emit(defender.side)
 		return
 
+	# 穿防刀打穿瞬发架刀：窗口作废且不返还（这笔心流就是失败的学费）。
+	# 正常命中走不到这里——窗口内会被 _resolve_slash 拦截成自动弹开。
+	if defender.spell_auto_guard_until_frame >= 0:
+		_end_spell_window(defender, false)
+
 	defender.hp -= damage
 	defender.perfect_streak = 0
 	defender.guard_blocked = false
@@ -650,15 +682,69 @@ func _clear_spell_charge(fighter: FighterState) -> void:
 	fighter.spell_perfect_until_frame = 0
 	fighter.spell_pending_slash = false
 	fighter.spell_unblockable = false
+	fighter.spell_auto_guard_until_frame = -1
+	fighter.spell_refund_pending = 0
 
 
-func _do_block(attacker: FighterState, defender: FighterState) -> void:
+## 瞬发架刀窗口是否仍然有效（窗口未展开时 -1，永不为真）。
+func _spell_window_active(fighter: FighterState) -> bool:
+	return fighter.spell_auto_guard_until_frame > frame
+
+
+## 结束自动架刀窗口；refund 为真且仍有待返还心流时返还。
+func _end_spell_window(fighter: FighterState, refund: bool) -> void:
+	if refund and fighter.spell_refund_pending > 0:
+		_add_flow(fighter, fighter.spell_refund_pending)
+	fighter.spell_refund_pending = 0
+	fighter.spell_auto_guard_until_frame = -1
+
+
+## 窗口自然到期：45f 内一刀未接，返还部分心流；接刀/被穿防则已在别处清零。
+func _update_spell_window(fighter: FighterState) -> void:
+	var until := fighter.spell_auto_guard_until_frame
+	if until < 0 or frame < until:
+		return
+	_end_spell_window(fighter, true)
+
+
+## 自动弹开：完美格挡 + 立刻反斩（关底穿防刀只弹开、不反斩）。
+func _do_spell_auto_guard(attacker: FighterState, defender: FighterState) -> void:
+	_do_block(attacker, defender, true)
+	# 反斩本身已是奖励，不再额外给「顺势斩」窗口。
+	defender.counter_until_frame = -1
+	if _is_boss_fighter(attacker):
+		# 防收割：BOSS 的穿防符卡被自动弹开时，只弹开、伤害归零，不反斩。
+		_end_spell_window(defender, false)
+		return
+	_trigger_spell_counter(defender)
+
+
+## 反斩：窗内被刀后立刻出一记 10 伤、穿防的刀（不进「构」、不吃间合）。
+func _trigger_spell_counter(defender: FighterState) -> void:
+	var card: SpellCardData = defender.spell_card
+	var amount: int = 0 if card == null else card.counter_damage
+	_end_spell_window(defender, false)
+	if amount <= 0:
+		return
+	defender.spell_power_amount = amount
+	defender.spell_unblockable = true
+	_enter_slash(defender)
+
+
+## 关底剑鬼的符卡：穿防被自动架刀视为「可以弹开」。
+func _is_boss_fighter(fighter: FighterState) -> bool:
+	return fighter != null and fighter.data != null and fighter.data.spell_id == &"spell_boss"
+
+
+func _do_block(attacker: FighterState, defender: FighterState, forced_perfect: bool = false) -> void:
 	var frames_since_active := defender.state_frame - defender.data.guard_startup
 	# 心流档位也放宽「完美格挡」判定窗（+0/+1/+2f），让高心流的回报可感知。
 	var perfect_window: int = PERFECT_BLOCK_WINDOW \
 			+ DuelTypes.PERFECT_TIER_OFFSET[DuelTypes.tier_for_flow(defender.flow)]
-	# 架势符卡有效期内：任意时刻的架都判定为完美格挡。
-	var stance_active: bool = defender.spell_perfect_until_frame > frame
+	# 强制完美：瞬发架刀的自动弹开；架势符卡有效期内也生效。
+	var stance_active: bool = forced_perfect \
+			or defender.spell_perfect_until_frame > frame \
+			or _spell_window_active(defender)
 	var perfect: bool = stance_active or frames_since_active <= perfect_window
 
 	var gain := BLOCK_FLOW_GAIN
@@ -708,15 +794,13 @@ func _clash_gain(fighter: FighterState) -> int:
 
 func _passive_flow(fighter: FighterState) -> void:
 	var foe := opponent_of(fighter)
-	# 开场礼让期内既不算「最近有操作」，也不累计惩罚：玩家还没法操作。
+	# 开场礼让期不计恢复：玩家还不能操作，白送心流会改变开局节奏；
+	# 礼让结束后的第一次待机才从 0 开始累计计时。
 	var unlocked := frame >= opening_lock_frames
-	# 礼让结束的一帧把「最近操作」时间重置，让无输入惩罚从真正能操作时开始计时。
-	if unlocked and fighter.last_input_frame < opening_lock_frames:
-		fighter.last_input_frame = opening_lock_frames
 
-	# 自然恢复：仅「待机」且最近有操作时累计，每 24f +1；完全干等会转入下面的惩罚。
-	var recently_active := unlocked and frame - fighter.last_input_frame <= NO_INPUT_GRACE
-	if fighter.state == DuelTypes.State.IDLE and recently_active:
+	# 待机自然恢复：IDLE 时每 flow_regen_interval 帧 +flow_regen_amount。
+	# 不做「无输入惩罚」：心流是符卡唯一资源，待机不回复会让玩家与 AI 都失去符卡决策。
+	if unlocked and fighter.state == DuelTypes.State.IDLE:
 		fighter.flow_regen_frames += 1
 		if fighter.flow_regen_frames >= fighter.data.flow_regen_interval:
 			fighter.flow_regen_frames = 0
@@ -733,12 +817,6 @@ func _passive_flow(fighter: FighterState) -> void:
 			_add_flow(fighter, 1)
 	else:
 		fighter.commit_wait_frames = 0
-
-	# 连续 3 秒没有任何输入：每 30f -1（约 -2/秒）。
-	if unlocked and fighter.state == DuelTypes.State.IDLE \
-			and frame - fighter.last_input_frame > NO_INPUT_GRACE:
-		if (frame - fighter.last_input_frame) % NO_INPUT_PENALTY_INTERVAL == 0:
-			_sub_flow(fighter, 1)
 
 
 func _add_flow(fighter: FighterState, amount: int) -> void:

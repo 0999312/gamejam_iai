@@ -10,12 +10,14 @@ extends SceneTree
 ##   docs/dev-example/duel-fx-slash.png     挥砍月牙（twirl_03）+ 符卡爆环（circle_02 紫）
 ##   docs/dev-example/duel-fx-charge.png    「构」的脚下法阵（circle_02 + circle_05）
 ##   docs/dev-example/duel-fx-sweep.png     刀光 0/35/70/100% 四格连拍（看扇形怎么塌）
+##   docs/dev-example/duel-fx-read.png      COMMIT + 看破：环外「预读弧」与更早变金
 ## 不参与游戏运行，也不被 GUT 引用。
 
 const OUT_PARTICLES := "res://docs/dev-example/duel-fx-preview.png"
 const OUT_SLASH := "res://docs/dev-example/duel-fx-slash.png"
 const OUT_CHARGE := "res://docs/dev-example/duel-fx-charge.png"
 const OUT_SWEEP := "res://docs/dev-example/duel-fx-sweep.png"
+const OUT_READ := "res://docs/dev-example/duel-fx-read.png"
 const P1_BLUE := Color("#6fc3ff")
 const P2_CORAL := Color("#ff8a72")
 const GROUND_Y := 540.0
@@ -81,7 +83,36 @@ func _run() -> void:
 	if not await _save(OUT_CHARGE):
 		return
 
-	# 第四张：刀光 0→1 的四格连拍。位图池只有两枚月牙，这里按同一套参数
+	# 第四张：COMMIT + 看破（u05）的「预读弧」。左 P1 无外弧，右 P2 有 6f 看破
+	# （外弧长度 = 6/18 圈），同时 P2 的蓄力环按带提前量的进度更金、更大。
+	fx.clear_all()
+	# 停掉 controller 的 `_physics_process`，否则 sim 会继续 tick 并把刚设的
+	# COMMIT 覆盖成出刀/命中（还会把 `_flash` 重新点成 1.0，背景一片棕）。
+	scene.set_physics_process(false)
+	var sim := view.sim
+	sim.mods["hint_lead"] = 6
+	view.set("_flash", 0.0)
+	var total := 18.0
+	var frame := 6.0
+	sim.p1.state = DuelTypes.State.COMMIT
+	sim.p1.state_frame = int(frame)
+	sim.p1.commit_total = int(total)
+	sim.p2.state = DuelTypes.State.COMMIT
+	sim.p2.state_frame = int(frame)
+	sim.p2.commit_total = int(total)
+	var p1_progress := frame / total
+	var p2_progress := clampf((frame + 6.0) / total, 0.0, 1.0)
+	fx.pose_charge(DuelTypes.Side.P1, Vector2(430.0, GROUND_Y - 90.0),
+			lerpf(20.0, 132.0, p1_progress), DuelView.charge_color(p1_progress, false, 0.0), 0.3)
+	fx.pose_charge(DuelTypes.Side.P2, Vector2(850.0, GROUND_Y - 90.0),
+			lerpf(20.0, 132.0, p2_progress), DuelView.charge_color(p2_progress, false, 0.0), 1.1)
+	view.queue_redraw()
+	for i in SETTLE_FRAMES:
+		await process_frame
+	if not await _save(OUT_READ):
+		return
+
+	# 第五张：刀光 0→1 的四格连拍。位图池只有两枚月牙，这里按同一套参数
 	# 复制出额外的 Sprite（工具专用，不进游戏），用来核「扇形是否沿刀向塌」。
 	fx.clear_all()
 	var base := (fx.get("_slash") as Array)[0] as Sprite2D

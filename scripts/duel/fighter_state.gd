@@ -24,8 +24,6 @@ var guard_blocked: bool = false
 var invuln: int = 0
 var whiff_lock: int = 0
 
-var last_input_frame: int = 0
-
 var perfect_streak: int = 0
 var clash_count: int = 0
 
@@ -64,6 +62,10 @@ var spell_unblockable: bool = false
 var spell_stagger_bonus: int = 0
 ## 蓄力结束时自动出刀（斩类符卡）。
 var spell_pending_slash: bool = false
+## 「瞬发架刀」窗口：此帧之前自动弹开并反斩（-1 表示窗口未展开）。
+var spell_auto_guard_until_frame: int = -1
+## 窗口超时未受击时返还的心流（被打破/主动取消则清零）。
+var spell_refund_pending: int = 0
 
 
 func reset_for_duel() -> void:
@@ -78,7 +80,6 @@ func reset_for_duel() -> void:
 	guard_blocked = false
 	invuln = 0
 	whiff_lock = 0
-	last_input_frame = 0
 	perfect_streak = 0
 	clash_count = 0
 	commit_wait_frames = 0
@@ -96,6 +97,8 @@ func reset_for_duel() -> void:
 	spell_unblockable = false
 	spell_stagger_bonus = 0
 	spell_pending_slash = false
+	spell_auto_guard_until_frame = -1
+	spell_refund_pending = 0
 	if data != null:
 		spell_card = SpellCardData.for_character_id(data.spell_id)
 		spell_uses_left = 0 if spell_card == null else spell_card.uses_per_duel

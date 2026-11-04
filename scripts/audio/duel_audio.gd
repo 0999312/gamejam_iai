@@ -28,21 +28,26 @@ const CLOTHS := [
 const DRAW := preload("res://assets/audio/sfx/sfx_draw.ogg")
 const START := preload("res://assets/audio/sfx/sfx_start.ogg")
 
+const RAIN_AMBIENT := preload("res://assets/audio/amb/rain_calm_loop.wav")
+const RAIN_VOLUME_DB := -17.0
+
 var _sim: DuelSim
-var _wind: AudioStreamOggVorbis
-var _wind_player: AudioStreamPlayer
+var _rain: AudioStreamWAV
+var _rain_player: AudioStreamPlayer
 ## 音效随机只用本实例的 RNG，不碰全局 RNG（审计 P3）。
 var _rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
 	_rng.randomize()
-	var source := load("res://assets/audio/amb/amb_wind_loop.ogg") as AudioStreamOggVorbis
-	if source != null:
-		# load() 有缓存：直接改 source.loop 会污染所有引用它的地方，先复制一份。
-		_wind = source.duplicate() as AudioStreamOggVorbis
-		if _wind != null:
-			_wind.loop = true
+	var source := RAIN_AMBIENT
+	# load() 有缓存：直接改 source 的循环点会污染所有引用它的地方，先复制一份。
+	_rain = source.duplicate() as AudioStreamWAV
+	if _rain != null:
+		_rain.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		_rain.loop_begin = 0
+		# loop_end 以采样帧计；用时长×采样率算，避免依赖导入后的位深/声道布局。
+		_rain.loop_end = int(round(_rain.get_length() * float(_rain.mix_rate)))
 
 
 func bind(sim: DuelSim) -> void:
@@ -88,27 +93,27 @@ func _disconnect_sim() -> void:
 
 
 func start_ambient() -> void:
-	if _wind == null:
+	if _rain == null:
 		return
 	# play_ambient_sound 的第二个参数是「淡入时长（秒）」，不是音量。
-	# 原先传 0.6 被当成「0.6 秒淡到 0 dB」，开场偏响再突降（审计 P2）。
-	_wind_player = SoundManager.play_ambient_sound(_wind, 0.0)
-	if _wind_player == null:
+	# 2 秒淡入，避免一进对局就被雨声糊脸；音量压在心流提示音之下。
+	_rain_player = SoundManager.play_ambient_sound(_rain, 2.0)
+	if _rain_player == null:
 		return
-	_wind_player.volume_db = -14.0
+	_rain_player.volume_db = RAIN_VOLUME_DB
 
 
 func stop_ambient(immediate: bool = false) -> void:
-	if _wind == null:
+	if _rain == null:
 		return
 	if immediate:
-		if is_instance_valid(_wind_player):
+		if is_instance_valid(_rain_player):
 			# 只 stop()，不把 stream 置空：这个播放器属于 SoundManager 的池，
 			# 置空会让池在回收时对 null 取 resource_path 而报错（审计 P2）。
-			_wind_player.stop()
-		_wind_player = null
+			_rain_player.stop()
+		_rain_player = null
 		return
-	SoundManager.stop_ambient_sound(_wind, 0.3)
+	SoundManager.stop_ambient_sound(_rain, 0.3)
 
 
 func play_start() -> void:

@@ -6,6 +6,370 @@
 
 ---
 
+## 未发布 — 2026-11-05（角色选择抽离 / 可见 key 补全 / 双人输入方式与双方手柄）
+
+本轮把「选角色」从主菜单拆到模式选择之后，并让本地双人各自选角色与输入方式（双方键鼠、一人键鼠一人手柄、双方手柄均可）；同时补齐设置页等界面漏掉的本地化 key。
+
+### 机制：角色选择独立成面板，双人各自选人
+
+- **问题** 主菜单用一行角色下拉框选人，双人开局时 `DuelController._start_versus()` 把同一个 `pending_character` 同时交给 P1/P2，双人只能镜像同角色；角色选择与「开始游戏」的流程也混在菜单里。
+  → **修法** 新增 `scripts/ui/character_select.gd`（`CharacterSelectPanel`）与 `scenes/ui/character_select.tscn`，注册为 `PanelIds.character_select()`。流程改为：主菜单「开始游戏」→ 模式选择 → 角色选择 → 对局。单人只显示 P1 角色；双人显示 P1/P2 两行角色。确认时写入 `GameBootstrap.pending_character` / `pending_character_p2`；`DuelController._start_versus()` 用 `FighterData.for_character(pending_character_p2)` 生成 P2 数据，HP/初始心流取各自角色的值。
+  → **验证** 新增 `tests/integration/test_character_select.gd`（单人只出 P1 角色、双人两角色两输入行、双方可同时选手柄、确认写回字段并发出信号，共 6 例）；`test_duel_versus` 增加「P1 选 char_a、P2 选 char_c 后 P2 HP=40」用例。
+
+### 机制：双人键鼠 / 手柄自由组合，支持双方手柄
+
+- **问题** 原逻辑按接入的手柄数量固定分配（P1 第一个手柄、P2 第二个手柄），玩家不能在选人时决定谁用手柄；未接入第二个手柄时 P2 只能用键盘，也无法预先选好手柄等中途接入。初版角色面板还加了「输入互斥」，直接否定双方手柄，与多手柄需求冲突。
+  → **修法** 角色面板双人模式各给一个「输入方式」下拉（键鼠 / 手柄），默认双方键鼠；两方独立选择，**允许双方手柄**。`InputGuide.build_remap_config()` 增加 `versus / p1_gamepad / p2_gamepad` 参数：手柄方三个玩家动作只保留 `index 0` 的 `GUIDEInputJoyButton`（只有一方手柄时 `joy_index = 0`；双方手柄时 P1 = 0、P2 = 1），其余槽解绑；键鼠方按原键槽绑定 `KeyBindings.get_keys()`，鼠标只绑给键鼠方（P1 键鼠用原鼠标槽；P1 手柄时 P2 键鼠借用 P2 原手柄槽 `index 2` 绑鼠标）。`DuelController` 读 `pending_input_p1/p2` 决定 raw 手柄事件路由与 HUD 提示；`_resolve_gamepad_assignment()` 按「偏好 + 当前手柄数」计算实际席位，手柄不足时先回退键鼠。
+  → **验证** `tests/unit/test_input_guide.gd` 覆盖 P1 键鼠/P2 手柄、P1 手柄/P2 键鼠、双方键鼠、**双方手柄（P1 joy 0 / P2 joy 1）**、单人、全局暂停，共 6 例；`test_duel_gamepad` 新增双方手柄 raw 分席、「松 P1 手柄不清 P2 架子」2 例，并在热插拔重建用例中断言旧的「按住架」会被复位；`test_duel_versus` 新增席位 resolver 与双人偏好保留 2 例；`test_duel_hud` 2 例断言操作提示会按手柄/键鼠切换键名。
+
+### 机制：中途接入手柄默认归 P1
+
+- **问题** 对局中接入新手柄时，原实现只重建 GUIDE 上下文，不改变双方输入方式；双方都用键鼠开局时，新手柄没有明确归属；双方手柄拔掉一只时也可能把剩下的手柄错绑给 P1。
+  → **修法** `DuelController._on_joy_connection_changed()` 在双人模式且「双方都未选择手柄」时，把新接入的手柄分配给 P1、键鼠留给 P2，并写回 `GameBootstrap.pending_input_p1/p2`。若玩家已显式选择手柄（含双方手柄），保留偏好，按「偏好 + 当前手柄数」重新计算：第二只插入后自动补齐 P2；拔掉一只时若剩下的正是 P2 的设备则保留 P2 席位，不重组；无手柄时暂时回退双方键鼠，重新插入后恢复。单人模式保持键鼠 + 手柄并存的旧行为。
+  → **验证** `test_duel_gamepad` 的 raw 分席、分设备松架、热插拔重建（含复位旧按压）用例通过；席位 resolver 的 0/1/2 手柄分支由 `test_duel_versus` 覆盖；热插拔路径尚无真实手柄实机复测（仅模拟事件）。
+
+### 本地化：补全可见 key
+
+- **问题** 设置页按 `KeyBindings.ACTION_ORDER` 生成 8 行动作，但 `settings.key_spell_p1` / `settings.key_spell_p2` 未定义，两行「使用符卡」直接显示原始 key；HUD 的 `state.unknown` 也缺；新增角色面板的标题/提示/选项同样没有文案。
+  → **修法** 中英各补 13 个键：`menu.char_select_title`、`menu.char_select_hint_solo`、`menu.char_select_hint_versus`、`menu.p1_character`、`menu.p2_character`、`menu.p1_input`、`menu.p2_input`、`menu.input_keyboard`、`menu.input_gamepad`、`menu.start_duel`、`settings.key_spell_p1`、`settings.key_spell_p2`、`state.unknown`。两语言键集保持一致，现各 165 键。
+  → **验证** `test_i18n` 新增用例检查上述 13 键中英均存在且不等于 key 本身；全量扫描 `_tr/get_text` 字面 key 无缺失（动态前缀 `state.`、`menu.%s`、`shop.item.%s.*` 除外）；新增可见文案均登记在 `ai-disclosure.md`，属功能性 UI 标签，待人类最终确认。
+
+### 文档与验证
+
+- 全量 GUT：**311/311、1270 asserts、37 脚本、退出码 0**；`--import` 退出码 0。
+- 无头冒烟：`godot.exe --headless --path . --quit-after 240` 退出码 0，stderr 为空。
+- 新建 `docs/dev-example/character-select-and-input.md`；同步 `README.md`、`docs/gamejam/ai-disclosure.md`、`docs/gamejam/submission-checklist.md`、`docs/dev-example/development-log.md` §20。双方手柄的输入槽位、席位回退与热插拔边界见该文档 §3/§4。
+
+---
+
+## 未发布 — 2026-11-04（防御特效白→金 / 发光叠加 / 看破预读弧）
+
+试玩反馈指出两件事：起构/防御特效「一亮就是纯金」，看破（提前 6f 看到收束环）因此失去可读价值；光效只是半透明叠加，没有「发光」的观感。
+
+### 表现：蓄力环恢复白→金渐变，看破多一段预读弧
+
+- **问题** `duel_view.gd` 的 `_update_charge_fx()` 在 `imminent`（临刀 8f 内）把整环直接写成 `CHARGE_GOLD`，头顶进度点也直接变纯白——玩家只看到「一亮就是金」，无法从颜色判断还剩多久；看破给的 6f 提前量没有对应的视觉差异，等于白给。
+  → **修法** 抽 `charge_color(progress, imminent, pulse)`：颜色按 `smoothstep(0.12,1.0,p)` 从近白 `#fffdf7` 过渡到亮金 `#ffc94a`，`imminent` 只做 `lerp(GOLD.lightened(0.18), 0.7)` 与 alpha 呼吸，不再硬切；圆点改为 `CHARGE_WHITE.lerp(CHARGE_GOLD, progress)`。`_commit_state()` 暴露 `lead`/`span`，`_draw_fighter()` 在 COMMIT 时于环外画一段冷白预读弧（长度 = `lead/span`、半径随进度外扩、24 段、alpha 0.55、线宽 2），只有带 `hint_lead` 的一方可见。
+  → **验证** `test_charge_color_keeps_a_white_phase_before_gold` 锁「起手近白 → 中段仍偏白 → 末段转金」；截图 `duel-fx-charge.png`（左白右金）与 `duel-fx-read.png`（P2 环外冷白弧、P1 无）人工目视。
+
+### 表现：粒子/切块改加法发光着色器
+
+- **问题** 命中、对刀、架住、爆环、蓄力环原本用 `CanvasItemMaterial(blend_mode=ADD)`，只是「叠亮」，亮部没有白芯，整体仍像半透明贴图。
+  → **修法** 新增 `resources/shaders/glow_add.gdshader`（`canvas_item` + `render_mode blend_add`）：以贴图 alpha 为掩码，`rgb = 源色 × 贴图色 × glow`，再按 `smoothstep(0.35,0.95,alpha) × core` 混入白色热芯，输出 alpha 乘 `alpha_gain`；`duel_fx.gd` 的 `_make_sprite()` / `_make_node()` 统一走 `_make_glow_material()`，删除原 `CanvasItemMaterial` 分支。
+  → **验证** `test_block_burst_and_charge_use_glow_shader` 断言爆环/蓄力环材质是 `ShaderMaterial` 且 `shader == DuelFx.GLOW_SHADER`；截图 `duel-fx-preview.png` 可见命中白芯。
+
+### 文档与验证
+
+- 全量 GUT：**292/292、1123 asserts、35 脚本、退出码 0**；`--import` 退出码 0。
+- 同步 `docs/particle-assets-plan.md` §6.6/§6.8、`docs/dev-example/design.md` §6.9、`development-log.md` §19、`ai-disclosure.md`、`submission-checklist.md` M7.7、`README.md`、新建 `playtest-07.md`。
+
+---
+
+## 未发布 — 2026-11-04（心流待机恢复）
+
+按人类反馈反转上一轮「用进废退」的待机惩罚。结论：问题不在「待机恢复」本身，而在「3 秒后转惩罚」——它让心流在实战里只降不升，符卡从关键资源变成开局一次性资源。
+
+### 机制：礼让结束后待机恢复，删除无输入惩罚
+
+- **问题** 心流是符卡唯一资源，符卡成本 30–40；出刀 −4、中刀 −15、被架/空架 −8。旧实现只在前 180f 有操作时每 24f +1，超过后每 20f −1、下限 15；中局只要出过几刀、挨过一刀，就再也回不到符卡费用，玩家与关底 AI（`_try_spell` 只检查 `me.flow >= card.flow_cost`）都无法主动使用符卡（人类 `m01751`）。
+  → **修法** `duel_sim.gd` 删除 `NO_INPUT_GRACE` / `NO_INPUT_PENALTY_INTERVAL` 与 `_passive_flow()` 的惩罚分支；改为 `frame >= opening_lock_frames` 且 `IDLE` 时每 `flow_regen_interval`（24f）+1，礼让期内不计、礼让结束后从 0 累计。`set_input()` 不再写 `last_input_frame`，`fighter_state.gd` 删除该字段。对手「构中待机每 20f +1、上限 +15」保持不变。
+  → **验证** `test_opening_lock_grants_no_flow` 改为锁「礼让期不涨、结束后从零累计、不会反转成惩罚」；`test_no_input_penalty_after_grace` 改名 `test_idle_recovers_flow_without_penalty`，400f 后 56；`test_spell_cards.test_idle_recovery_makes_spell_available_again` 从 20 恢复到 40，能发 A 符卡，付 30 后受 `flow_floor` 夹到 15。定向 `duel_sim` 47/47、`spell_cards` 22/22。
+
+### 文档与验证
+
+- 全量 GUT：**290/290 passed、1115 asserts、35 脚本、退出码 0**。
+- `docs/dev-example/design.md` 新增 D27、改写 §6.3/§6.6 与变更记录 v0.31；同步 `README.md`、`docs/gamejam/ai-disclosure.md`、`submission-checklist.md` M7.6、`development-log.md` §18。
+- 旧「用进废退」的 CHANGELOG 与开发日志保留为历史记录；本轮是对该设计判断的明确反转，不删除旧条目。
+
+---
+
+## 未发布 — 2026-11-04（试玩反馈 01–03：残心隐藏 / L 键提示 / A 符卡重设计）
+
+把第二轮试玩的三条反馈落地。三条都不改变按键与基本规则，只调「显示什么」「提示什么」「A 的符卡是什么」。
+
+### 机制：A 符卡改「瞬发自动架刀 + 反斩」
+
+- **问题** 旧 A「发动后 60f 内任意架必完美」必须先按架才生效，量化净收益仅 +5 心流差（0 伤害、开局净耗 25 心流、被砍中断还吃 12f 硬直），与 B/C 的自动出刀不在一个量级；试玩反馈「没有实际意义」。
+  → **修法** `spell_card.gd` 新增 `auto_guard_frames = 45`、`counter_damage = 10`、`empty_refund_flow = 10`；A 改 `cast_frames = 0`、`amount = 0`。`duel_sim.gd`：按 L 当帧进入 45f `SPELL` 窗口并直接完成防御动画（Spine 冻结 `fangyu` 末帧）；窗口内受刀自动完美弹开并反斩 10 伤（穿防）；窗口内按斩 = 放弃保险自己出刀；45f 无人出刀返还 10 心流；关底 BOSS 穿防不穿透（只弹开不反斩），玩家 B/C 穿防仍可穿透；被穿防/主动出刀不返还。
+  → **验证** `tests/unit/test_spell_cards.gd` 新增 6 例（瞬发姿态 / 自动弹开+反斩 / 到期返还 / 按斩取消 / BOSS 穿透例外 / 玩家穿防穿透）、改写 2 例；视图 2 例、HUD 1 例。
+
+### 机制：残心退出 HUD（含结算页）
+
+- **问题** 局内顶部常驻「残心 N」是未解释的持久计数器，新手不知道它是什么、也不影响按键，增加入门门槛。
+  → **修法** `duel_hud.gd` 的 `_run_info` 去掉残心段；结算页也不显示残心（人类 `m00653` 明确「结算页也不应该保留」，`_result_detail` 整行未保留）。残心机制（心流保证/加成）不变，只改显示。
+  → **验证** `tests/integration/test_duel_hud.gd` 新增 1 例：扫描 HUD 全部可见 Label，对局中与结算页都不含「残心」，且 `run.zanshin` 仍为 2（机制照常记数）。
+
+### 机制：操作行与教程补 L 键
+
+- **问题** 操作行只列斩/架/重开/暂停，玩家不知道符卡键存在；教程也没有符卡提示。
+  → **修法** 操作行模板新增 `%s`/`%S`（P1/P2 符卡键），`zh_CN` 三条与 `controls_versus` 写入「L 发动符卡」与 P2「P 发动符卡」；开局 6 秒内符卡可用时教程提示 `tutorial.spell`。中文文案已定稿，英文同步 `[PLACEHOLDER]` 并登记待人类定稿。
+  → **验证** `test_duel_hud.gd` 新增 1 例：`_controls.text` 含 `L` 与「发动符卡」、不含未替换的 `%s`。
+
+### 表现：SPELL 映射与冻结末帧
+
+- 8 份 `resources/spine/*.tres` 的 `animation_map` 补 `"SPELL": "fangyu"`（此前回退待机 `zhanli`）；`spine_fighter_view.gd` 在 A 窗口内把 `fangyu` 定位到末帧并 `time_scale = 0`，窗口结束恢复待机。新增 2 例视图测试。
+
+### 文档
+
+- `docs/dev-example/design.md` §6.11 / §9 数值表、`balance-pass-06-plan.md`（v4 + 落地记录）、`playtest-06.md`、`development-log.md`、`submission-checklist.md`（占位 45、PH-19 映射）、`README.md`（测试数）。
+
+### 验证
+
+- 全量 GUT：**289/289 passed、1111 asserts、35 脚本、退出码 0**；`--import` 退出码 0。
+## 未发布 — 2026-11-04（P2 蓝色衣装图集）
+
+把人类提供的 `skeleton_p2.png` 接成 P2 专属贴图：同一副骨架、同一套动作，按“席位”换图集，P1 不受影响。
+
+### 机制：P2 按席位换图集
+
+- **问题** P1/P2 共用 `resources/spine/skeleton.atlas`，本地双人又是同角色镜像，画面上两边同色，难以分清席位；只改 `char_b.tres` 会让 `char_b` 站 P1 时也变蓝。
+  → **修法** 新增 `resources/spine/skeleton_p2.atlas`（以原 atlas 为模板，仅首行页名改为 `skeleton_p2.png`，26 个 region 坐标不变）和人类提供的 `skeleton_p2.png`（1323×1537，蓝色衣装）。`DuelView` 新增 `P2_ATLAS_PATH`、`p2_atlas_file` 覆盖与 `_profile_for_side()`：P2 首次绑定时克隆原档案、只替换 `atlas_file`，按原档案 `instance_id` 缓存；P1 仍用原档案。图集缺失/导入失败时回退原图集，不崩。
+  → **验证** `tests/integration/test_duel_view_spine.gd` 新增 1 例：双方同选 `char_a` 时，P1 `skeleton.atlas`、P2 `skeleton_p2.atlas` 且不是同一资源，P2 贴图页为 `skeleton_p2.png`，动作映射与原档案一致；定向 8/8。
+  → **截图** `docs/dev-example/rainy-night-preview.png` 重拍（1280×720）：P1 棕色、P2 蓝色，同骨架同动作。
+
+### 验证与文档
+
+- 全量 GUT：**280/280 passed、1077 asserts、35 脚本、退出码 0**；`--import` 退出码 0（新图集/贴图已导入），仅既有字体 UID duplicate 警告。
+- `README.md` 同步 280/1077、P2 图集说明；`docs/dev-example/spine-integration.md` 增加 §6.1；`docs/dev-example/development-log.md` 追加 §15；`docs/gamejam/ai-disclosure.md`、`docs/gamejam/submission-checklist.md` 登记本轮。
+- **美术 0% AI**：蓝色贴图由人类提供，AI 只复制文件、生成同坐标 atlas 文本并接线；未改像素、未重拓扑。
+
+---
+
+## 未发布 — 2026-11-04（刀光形变、主菜单雨夜、心流核查）
+
+把斩击月牙从刀身上移开，并让它在挥砍中段做形变；主菜单接入同一套程序化雨夜；核对「长时间待机心流下跌」后确认是设计而非 BUG，只修正了过时注释。
+
+### 机制：刀光外移与挥砍形变
+
+- **问题** 旧月牙以 `SLASH_RADIUS=122` 贴在刀身/旧判定弧上，视觉上像刀身上长出一条白边；Sprite2D 只整体旋转/缩放，挥砍中段没有「甩出去」的形变。
+  → **修法** `scripts/duel/duel_fx.gd` 把 `SLASH_RADIUS` 提到 **136**（月牙亮带离刀身约 14px，弧心不变），新增 `SLASH_ARC_STRETCH=0.13`、`SLASH_RADIAL_SQUASH=0.07`、`SLASH_SKEW=0.10`；`pose_slash()` 用 `whip=sin(p*PI)` 在中段把贴图切向拉长 13%、径向收薄 7%、轻微剪切 0.10，起手/收刀回原形。位置、旋转、alpha 与 `slash_sweep.gdshader` 的 `progress` 不变。
+  → **验证** `tests/unit/test_duel_fx.gd` 新增 1 例：`SLASH_RADIUS>122`、p=0 正圆、p=0.5 横向更大/纵向更薄/skew>0、p=1 回正；定向 21/21、83 asserts。
+  → **截图** `docs/dev-example/duel-fx-slash.png`（249,246 B）与 `duel-fx-sweep.png`（237,872 B），均 1280×720；月牙已离开刀身，四格扫掠形变正常。
+
+### 机制：主菜单接入雨夜背景
+
+- **问题** 主菜单仍是 `#0b0e13` 纯色底，与对局的雨夜断层；`menu.gd` 的 `_build_ui()` 会清空子节点，直接往场景树塞背景会被下一次重建抹掉。
+  → **修法** `resources/shaders/rainy_night.gdshader` 新增 `pool_strength`（默认 1.0，地面湿反光乘它）；`scripts/ui/menu.gd` 新增 `BG_SCENE`、`MENU_GROUND_Y=0.96`、`MENU_POOL_STRENGTH=0.0`，在 `_build_ui()` 清空后先 `_build_background()`：实例化 `rainy_night.tscn`、`PRESET_FULL_RECT`、`show_behind_parent`、`z_index=-1`、鼠标穿透；**`material = material.duplicate()`** 后再写 `ground_y=0.96`、`pool_strength=0`，避免与 `DuelView` 共享材质互相污染；场景缺失时回退纯色。
+  → **验证** `tests/integration/test_menu.gd` 新增 1 例：背景父节点/索引 0/1280×720/层级/鼠标穿透、shader 路径、`ground_y=0.96`、`pool_strength=0`；定向 4/4、24 asserts。
+  → **截图** `docs/dev-example/theme-menu.png`（234,882 B，1280×720）已目视：雨线/暗角在菜单后，标题与四个入口清晰，焦点仍是底边金线；地平线压到底部提示下方。
+
+### 核查：长时间待机心流下跌
+
+- **问题** 人类观察到「长时间待机反而自然跌到低水平」，怀疑是 BUG。
+  → **结论** 不是 BUG，是 `_passive_flow()` 的「用进废退」设计：IDLE 且最近 180 帧内有操作时每 24 帧 +1；超过 180 帧无输入后每 20 帧 -1，下限 15。起手 40/46/36，约 3 秒后到 47，再以 -3/秒跌到 15，总计约 13.7 秒。目的：防止龟缩等对手出刀成为最优解，让心流成为主动资源。依据见 `docs/dev-example/design.md` 与 `tests/unit/test_duel_sim.gd` 的 400 tick 断言。
+  → **修法** 只把 `duel_sim.gd` 里过时的「每 30f -1（约 -2/秒）」注释改为「每 20f -1（-3/秒），扣到 flow_floor 为止；这是用进废退设计，不是自然恢复的反向 bug」；数值与行为未改。
+
+### 验证与文档
+
+- 全量 GUT：**279/279 passed、1068 asserts、35 脚本、退出码 0**；`--import` 退出码 0，仅既有字体 UID duplicate 警告。
+- `README.md` 同步 279/1068、主菜单雨夜与刀光形变说明；`docs/particle-assets-plan.md` 记录 136 半径与 §6.7；`docs/dev-example/rainy-night-background.md` 增加主菜单接线与 `pool_strength`；`docs/dev-example/development-log.md` 追加 §14；`docs/gamejam/ai-disclosure.md`、`docs/gamejam/submission-checklist.md` 登记本轮。
+
+---
+
+## 未发布 — 2026-11-04（雨声环境音与无边框雨夜主题）
+
+把对局环境音从旧风声换成人类提供的 CC0 雨声，并把浅色纸面主题重做为「墨蓝纸面 + 无边框 + 刀鞘金下划线」，
+让菜单/设置/HUD 与程序化雨夜背景融合，同时保证 HUD 文字在雨线上仍可读。
+
+### 机制：CC0 雨声替换风声
+
+- **问题** 旧环境音是 `assets/audio/amb/amb_wind_loop.ogg`（OpenGameArt CC0 风声），与雨夜背景的听觉语义不一致；
+  用户指定改用 `temp_assets/Ambiance_Rain_Calm_Loop_Stereo.wav`（CC0）。
+  → **修法** 复制为 `assets/audio/amb/rain_calm_loop.wav`（2 声道 / 24-bit / 48 kHz / 30.0 s / 8,640,784 B），
+  `DuelAudio` 预加载 WAV，运行时 `duplicate()` 后设 `LOOP_FORWARD`、`loop_begin=0`、
+  `loop_end=int(round(get_length()*mix_rate))`；`start_ambient()` 走 `SoundManager.play_ambient_sound(_rain, 2.0)`
+  （2 秒淡入）并把播放器 `volume_db` 压到 `-17.0`；停止走 `SoundManager.stop_ambient_sound(_rain, 0.3)`。
+  旧 `_wind/_wind_player` 已移除，`amb_wind_loop.ogg` 无代码引用，保留在磁盘待人类决定是否删除。
+  → **验证** `test_duel_audio.gd` 2 例 10 asserts：WAV 路径/循环模式/时长、启动后播放器 stream 与音量、
+  且播放的是 duplicate 而非共享资源；GUT 在 headless 不启动环境音，无残留 playback。
+  → **注意** 30 秒整段转 OGG 在本机以 exit 127 静默失败，已放弃转码、直接用 WAV；包体增加约 8.2 MB，
+  循环接缝与整体音量仍待人类试听终混。
+
+### 机制：无边框雨夜主题与 HUD 可读性
+
+- **问题** 旧主题 `minimal_vector.tres` 是浅米色纸面 + 4px 黑边 + 圆角按钮，与雨夜背景冲突；
+  第一版深色主题又用了圆角玻璃卡片、整圈金色焦点与阴影，偏「通用 AI 面板」。
+  用户明确要求「减少 AI 风格，考虑主题和游戏类型，无边框设计」。
+  → **修法** 新增生成器 `tools/build_rain_night_theme.gd`，产出 `assets/theme/rain_night.tres`；
+  `project.godot` 的 `gui/theme/custom` 切到新主题。按钮正常态完全透明，只有 hover（钢色 7%）与
+  pressed（淡金 13%）反馈；焦点改为底边 2px `#c8a063` 下划线，无圆角/无阴影；Label 用近白字 +
+  `#02050a` 4px 描边；OptionButton/LineEdit 只留 1px 底边；ProgressBar 深轨 + 近白填充，HUD 仍按心流档位染色。
+  `scripts/ui/ui_focus.gd` 同步改为只画底边 2px 金线，避免运行时把主题焦点覆盖回整圈圆角框。
+  设置页 CheckButton 改为左对齐、`custom_minimum_size=(0,42)`、`SIZE_SHRINK_BEGIN`，
+  主题 margin 左侧归零，使「静音/全屏」与「主音量」同基线。
+  `DuelHud` 在 `HudRoot` 下新增顶部 190px / 底部 120px 两层 `GradientTexture2D` scrim
+  （alpha 0.66 → 0，鼠标穿透，位于 `_reward_dim` 之前），只压 HUD 带、不挡中间角色。
+  → **验证** 新增 `test_rain_night_theme.gd` 5 例 17 asserts（主题路径、按钮透明、焦点仅底边 2px、
+  ProgressBar 亮填充、CheckButton 按下色）；`test_duel_hud.gd` 新增 scrim 1 例 18 asserts；
+  全量 GUT **277/277（1050 asserts，35 脚本，退出码 0）**；三张 1280×720 截图
+  `docs/dev-example/theme-menu.png`、`theme-settings.png`、`theme-duel-hud.png` 已目视：
+  无边框、文字优先、HUD 雨线被压住、角色区仍通透。
+  → **限制** UI 仍按 1280×720 写死，未在非开发机/不同宽高比验证；CheckButton 图标仍是 fallback 小圆点；
+  `rain_night.tres` 由生成器覆盖，调色/边距应改生成器后重跑；对比度按纯色 sRGB 计算，半透明叠加态仍需目视。
+
+### 文档
+
+- 新增 `docs/dev-example/rain-night-theme.md`：设计取舍、调色与对比度、主题接线、HUD scrim、雨声循环与限制。
+- README 同步测试数 277/277、35 脚本、1050 asserts、主题路径与雨声说明；
+  新增 `docs/dev-example/rain-night-theme.md` 索引。
+- `docs/gamejam/ai-disclosure.md` 追加本轮 AI 代码/文档披露；`docs/gamejam/submission-checklist.md` 增加 M7.2；
+  `docs/audio-assets-plan.md`、`assets/audio/CREDITS.md` 登记雨声来源与旧风声退役；
+  `docs/dev-example/development-log.md` 追加 §13。
+
+---
+
+## 未发布 — 2026-11-04（雨夜背景与战败表现）
+
+把对局背景改为 shader 实时生成的雨夜，并去掉战败后叠在 Spine `siwang` 上的灰盒「倒地小人」。
+
+### 修复：战败灰盒与 `siwang` 重叠 / 无 DOWN 映射时两边都不画
+
+- **问题** 旧 `DuelView._draw_fighter()` 在 `State.DOWN` 分支无条件调用 `_draw_down()`（140×26 矩形 + 圆头），
+  而此时 `SpineFighterView` 已把骨架隐藏；换成五动作后 `siwang` 本应保持可见，灰盒矩形反而叠在单膝跪地的
+  人物上。更隐蔽的是：`_draws_graybox()` 最初只判断「Spine 是否激活」，当档案没有 `DOWN` 映射时
+  骨架隐藏、灰盒也判 false，**战败后两边都不画**。
+  → **修法** `DuelView` 的 DOWN 分支只在 `_draws_graybox(fighter)` 为真时画旧剪影；`_draws_graybox()` 改为
+  「Spine 未接管 → true；已接管 → 看该视图是否有 DOWN 动画」。`SpineFighterView` 新增公开
+  `has_animation_for_state(state)`，包装既有的 `_has_state_animation()`（显式映射 + 动画存在性检查）。
+  → **验证** 新增 `test_missing_down_animation_falls_back_to_graybox()`：复制 `char_a.tres` 并 `erase("DOWN")`，
+  断言骨架隐藏且 `_draws_graybox()==true`；背景/战败 4 例断言 `siwang` 可见且 `_draws_graybox()==false`。
+  全量 GUT **269/269（1005 asserts，33 脚本，退出码 0）**；战败图 `docs/dev-example/rainy-night-defeat.png`
+  可看到 P1 单膝跪地、刀落地，无矩形/圆头。
+
+### 机制：程序化雨夜背景
+
+- **问题** 旧背景只有 `#0b0e13` 纯色 + 一条地平线 + 21 根刻线，没有雨夜氛围；用户要求「看不清四周的雨夜」，
+  并允许借鉴 `temp_assets/shader.txt`。
+  → **修法** 新增 `resources/shaders/rainy_night.gdshader`（`canvas_item`）：夜空渐变 + 4 octave fbm 雨雾 +
+  远/近两层雨 + 地平线水光 + 双人脚下湿反光 + 重暗角；新增 `scenes/duel/rainy_night.tscn`（1280×720
+  `ColorRect`、`z_index=-1`、`show_behind_parent`、鼠标穿透、`ShaderMaterial`）。`DuelView._ready()`
+  先 `_build_background()`，把 `ground_y=540/720`、`focus_left=430/1280`、`focus_right=850/1280` 写进材质；
+  `_draw()` 只在背景为空时回退旧纯色/地平线。
+  → **验证** `test_duel_view_background.gd` 4 例 23 asserts（层级/尺寸/鼠标穿透、shader 路径与三项 uniform、
+  场景自包含、DOWN 播 `siwang` 且不画灰盒）；`--import` 退出码 0；预览
+  `docs/dev-example/rainy-night-preview.png` 与 `rainy-night-defeat.png` 均 1280×720。
+  → **注意** 首版把 `rain_layer` 的 `width` 当像素用（`step(remainder * amount, width)`），整格发亮，
+  屏幕变成一根根粗竖条；改为「格内中心距 + `smoothstep`」后才成为细线（`width` 是格宽比例）。
+  参考文件为 Brian Smith 的 MIT 示例，只借「x 分格 + y 方向 `fract` 下落 + 拖尾」思路，雾/暗角/地面反光/
+  两层雨为独立实现；若后续直接复制其代码，需在仓库补 MIT 许可文本与署名。
+  → **限制** 背景固定 1280×720、雨线为屏幕空间，无地面溅射/闪电/设置开关；改站位或分辨率要同步
+  `_apply_background_focus()`；未做低端机性能剖析。
+
+### 文档
+
+- 新增 `docs/dev-example/rainy-night-background.md`（参数表、`rain_layer` 细节、接线与层级、战败三条路径、
+  测试与限制）；同步 `README.md`（269/1005、程序化背景说明与文档链接）、`docs/dev-example/spine-integration.md`
+  （测试数与 DOWN 回退说明）、`docs/gamejam/submission-checklist.md`（M7.1）、`docs/dev-example/development-log.md`
+  （§12）、`docs/gamejam/ai-disclosure.md`。
+- **美术 0% AI**：雨夜为自写 shader 实时生成，无外部背景贴图；两张预览是游戏内真实渲染，不是生成式美术；
+  未新增任何玩家可见文案。
+
+---
+
+## 未发布 — 2026-11-04（Spine 五动作素材）
+
+用美术新导出的 Spine 素材替换旧骨架，并把攻击/受击/防御/战败/站立五条动画接入战斗状态。判定层零改动。
+
+### 素材更新：五动作版（32 骨骼 / 33 槽位 / 10 IK）
+
+- **问题** 用户提供的新素材 `temp_assets/test_spine/` 为 `skeleton.json` 26454 B（仍 3.8.75）、`skeleton.atlas` 2685 B、`skeleton.png` 424741 B / **1323×1537**；动画从两段变为五段：`zhanli` 0.6667s、`gongji` 1.0000s、`bei_gongji` 1.3333s、`fangyu` 0.6667s、`siwang` 0.8333s。旧项目仍是 19 骨骼 / 28 槽位 / 5 IK / 1671×777 / 两段动画。
+  → **修法** 旧三件套备份到 `temp_assets/_prev_spine_1104/`；覆盖 `resources/spine/skeleton.atlas` 与 `skeleton.png`（页名 `skeleton.png`、26 regions 与 JSON 附件名全部匹配，**未改文本或像素**）；用提版工具重新生成 `skeleton.spine-json`（65551 B）；`--import` 重建 `.spatlas`/`.spjson`/`.ctex`；8 份 `resources/spine/*.tres` 的 `animation_map` 统一改为 IDLE `zhanli`、COMMIT/SLASH/RECOVERY `gongji`、GUARD/GUARD_REC/CLASH `fangyu`、HITSTUN `bei_gongji`、DOWN `siwang`。
+  → **验证** 数据层 32 骨骼 / 33 槽位 / 10 IK / 5 动画；`get_bounds()` = `Rect2(P(834.392,236.278), S(748.007,943.600))`，`fit_scale = 150 / 943.6001 ≈ 0.15897`；全量 GUT **264/264（977 asserts，32 脚本，退出码 0）**；五动作真实渲染预览见 `docs/dev-example/spine-animation-preview.png`。
+  → **注意** 素材没有符卡与专门的对刀动画：`SPELL` 回退 `zhanli`，`CLASH` 借 `fangyu`；`siwang` 播完停末帧。正式资产仍应由美术用 Spine 4.3 重导。
+
+### 修复：3.8 贝塞尔曲线在 4.3 下 signal 11
+
+- **问题** 新骨架即使改到 4.3.00、迁移完 10 条 IK，`gongji`/`bei_gongji`/`fangyu`/`siwang` 一加载就崩溃（exit 139 / signal 11，栈顶 `set_atlas_res`；实际崩在 spine-cpp 解析动画），只有 `zhanli` 能加载。
+  → **根因** 3.8 把曲线写成 `curve: <number>` + `c2/c3/c4`（归一化、四字段共用一条曲线），4.3 运行时却把 `curve` 当**每分量绝对控制点数组**读取；数字被当数组解引用。**末帧曲线会被忽略**，所以只有“曲线在非末帧”的动画崩，表现为“坏一部分”。本素材共 38 段 float 曲线 + 2 段 stepped。
+  → **修法** 扩展 `tools/upgrade_legacy_spine_json.gd`：新增 `_convert_legacy_curves()` 及 bones/slots/IK/deform 分支，按 `cx = t1 + c1x*(t2-t1)`、`cy = v1 + c1y*(v2-v1)` 换算绝对控制点；rotate 4 个数、translate/scale/shear 每分量 4 个（共 8）、color 16 个、deform 固定 0…1 的 4 个数。
+  → **验证** 工具输出「已转换 3.8 贝塞尔曲线：38 段」，退出码 0；探针 `load_from_file` 返回 0、`is_skeleton_data_loaded() == true`；五条动画均可加载并按轨推进。
+
+### 机制：动作映射与重定时
+
+- **问题** 旧逻辑把未映射状态回退 `IDLE`，且倒地直接隐藏骨架；攻击动画只压进 COMMIT 前摇，SLASH/RECOVERY 保持末帧，看起来像“刀没挥完”。
+  → **修法** `SpineFighterProfile` 映射补齐五动作；`SpineFighterView` 在 DOWN 有显式映射且动画存在时播放 `siwang` 并保持可见，无映射才隐藏回退灰盒；COMMIT 的重定时窗口改为 `commit_total + slash_frames + whiff_recovery`，让 `gongji` 覆盖整刀；每次进入 COMMIT 从第 0 帧重播，构→斩→收招不重启。
+  → **验证** 新增 5 动画名/时长、10 IK、GUARD/HITSTUN/CLASH/DOWN 映射、整刀窗口重定时、DOWN 可见用例；全量 GUT 264/264（977 asserts）。
+
+### 文档
+
+- 重写 `docs/dev-example/spine-integration.md`：三道硬门槛（版本 / 约束 / 曲线）、五动作表、当前 bounds 与 fit、映射与重定时、已知限制；同步 `README.md`、`docs/gamejam/submission-checklist.md`、`placeholder-inventory.md`、`ai-disclosure.md`。
+
+---
+
+## 未发布 — 2026-10-29
+
+Spine 角色接入批次：用美术提供的 Spine 素材（JSON + atlas + PNG）替换两个灰盒占位角色，接入 spine-godot 4.3 GDExtension；表现层做成「有档案就接管、无档案/无扩展回退灰盒」的可插拔结构，判定层零改动。
+
+### 修复：3.8 IK 约束被 4.3 静默丢弃（2026-10-31）
+
+- **问题** 用户实机反馈「并没有看到 gongji 和 zhanli 动画被正确导入和播放」；探针显示 `track_time` 正常递增，但四肢始终接近 setup pose，`SpineSkeletonDataResource.get_ik_constraints().size() == 0`。
+  → **根因** spine-godot 用 Spine C++ 4.3 的 `SkeletonJson::readSkeletonData()` 读骨架；4.3 只认顶层 `constraints` 数组（每项必须 `type:"ik"`），3.8 导出的顶层 `"ik"` 数组被**完全忽略**。只改 `skeleton.spine` 版本号只能骗过版本校验，5 条 IK 约束全部丢失：动画只平移不可见的 IK target，四肢骨骼没被驱动，所以看起来像“动画没播”。
+  → **修法** 扩展 `tools/upgrade_legacy_spine_json.gd`：新增 `_convert_legacy_constraints()`，把 `ik`/`transform`/`path`/`physics` 旧数组迁到 `constraints`，缺 `type` 的按来源键补上；重新生成 `resources/spine/skeleton.spine-json`（输出「已迁移旧约束：5 条」）并 `--import`。
+  → **验证** 数据层 `DATA IK COUNT=5`、`SKELETON IK COUNT=5`，5 条约束 `active=true mix=1.0`；gongji t=0→0.333s 的骨骼旋转实测变化（`zuoshou dabi` 2.088→2.651 rad、`youjiao2` 1.468→0.915、`zuoxiaotui` 1.672→2.400）；真实 `duel_view.tscn` 逐 process 帧截图 idle/commit 各 6/8 帧，四肢随 IK 移动。新增 GUT `test_skeleton_data_keeps_ik_constraints`，全量 **261/261（949 asserts，32 脚本，退出码 0）**。截图 `docs/dev-example/spine-takeover.png` 与 `spine-animation-preview.png` 已换为 IK 修复后版本。
+  → **注意** 素材源动画仍只有 `bones.translate`：gongji 是 0.333s 的身体压低/前移 + 抬脚，**不是完整挥刀**；要真正的斩击动作，需美术补旋转关键帧或用 Spine 4.3 重导。正式资产不要再依赖提版工具。
+
+### 素材更新（2026-10-30 18:56 版：头发 / 衣服 / 蝴蝶结）
+
+- **问题** 美术重新导出的三件套为 `skeleton.json` 9233 B（仍 3.8.75）、`skeleton.atlas` 2267 B、`skeleton.png` 324062 B / **1671×777**；相比 10-29 版（8051 B / 2630 B / 215935 B / 1400×778）新增 `前发`/`后发`/`耳发`/`蝴蝶结`/`衣服`/`袖子右`/`袖子左边` 七个槽位，槽位总数 21 → 28、附件/region 24 → 22 且一一匹配。
+  → **修法** 旧三件套备份到 `temp_assets/_prev_spine_1029/`；用 `tools/upgrade_legacy_spine_json.gd` 把新 JSON 提版为 4.3.00（18673 B）；直接复制新 atlas 与 PNG（本次页名已是 `skeleton.png`、region 无 `images/` 前缀，**未改任何文本/像素**）；`--import` 重新生成 `.spatlas`（2555 B）、`.spjson`（18673 B）、`.ctex`（250298 B）。
+  → **验证** 加载 `VERSION=4.3.00`、19 骨骼 / 28 槽位、`zhanli` 1.3333s / `gongji` 0.3333s；`get_bounds()` = `Rect2(P(987.044,241.589), S(540.917,933.250))`，`fit_scale = 150 / 933.25 ≈ 0.16073`；真实 `duel_view.tscn` 截图确认两人都被新素材接管（新增头发/耳朵/蝴蝶结/衣服/袖子可见），P1 按攻击后状态进 COMMIT 且动画切到 `gongji`；GUT **256/256（931 asserts，退出码 0）**。
+  → **注意** 档案 `.tres` 无需改动（仍指向同一骨架/图集）；`skeleton.spine-json` 仍是 3.8 数据体提版，正式资产应由 4.3 编辑器重导。
+
+### 动画播放加固（2026-10-31）
+
+- **问题** 档案已把 IDLE -> zhanli、COMMIT/SLASH/RECOVERY -> gongji 接上，但缺少「动画真的在播」的回归断言：待机是否推进、攻击是否按构窗口重定时、从收招直接再进构时会不会因为「同名动画不重启」而卡在末帧，都没有用例覆盖。
+  -> **修法** SpineFighterView._play_state() 增加「进入 COMMIT 视为新一次攻击」的强制重播；其余相邻状态（构 -> 斩 -> 收招）继续共用 gongji，不重启；新增 playback_time_scale() 暴露当前倍率；补 4 例 GUT（待机推进、攻击重定时、构 -> 斩不重启、再次进构重播）。
+  -> **验证** 240 帧探针里 zhanli 的 track_time 从 0.1535 -> 0.3536 持续递增；gongji 在 14f 构下倍率 1.4284（0.3333 / (14/60)）；全量 GUT **260/260（944 asserts，32 脚本，退出码 0）**；新增逐帧预览 docs/dev-example/spine-animation-preview.png（上排 zhanli、下排 gongji）。
+  -> **注意** 当前只把攻击动画压进 COMMIT 前摇，SLASH/RECOVERY 阶段保持末帧；若美术要求攻击动作覆盖到斩击结束，需要调整重定时目标（档案加字段，不动判定层）。
+
+### 素材更新（2026-10-29 04:16 版：gongji / zhanli）
+
+- **问题** 美术重新导出的 `skeleton.json` 仍是 **3.8.75**；新图集 1400×778 的页名是 `images.png`，24 个 region 全部带 `images/` 前缀，而 JSON 附件名不带前缀，匹配数为 0。
+  → **修法** 重跑 `tools/upgrade_legacy_spine_json.gd` 提版；atlas 首页行改为 `skeleton.png`（匹配实际文件名）；24 个 region 去掉 `images/` 前缀（**只改文本元数据，像素与拓扑未动**）；随后 `--import`。
+  → **验证** 首次改完 atlas 未重导入，运行时仍读旧 `.spatlas`，第一帧直接 `CrashHandlerException: Program crashed with signal 11`（栈顶 `libspine_godot.windows.editor.x86_64.dll+fc02a`），无 region-not-found 文字；重导入后 1400×778 图集正常渲染，真实 `duel_view.tscn` 截图 + A/B 两帧确认 `gongji` 在播（脚部 IK 位移/头部朝向变化）、`zhanli` 在 IDLE 循环；GUT **256/256（931 asserts，退出码 0）**。
+  → **教训** `.atlas` 由 `spine.atlas` 导入器缓存成 `.spatlas`，**改 atlas 文本后必须 `--import`**；region 名与附件名不匹配会在渲染阶段让 spine-cpp 段错误，而不是优雅报错。
+
+### 修复
+
+- **问题** 美术提供的 `skeleton.json` 是 Spine **3.8.75** 导出，4.3 运行时在 `update_skeleton_data()` 直接拒绝：`ERROR: Error message: Skeleton version 3.8.75 does not match runtime version 4.3`（`SpineSkeletonDataResource.cpp:307`），角色完全加载不出来。
+  → **修法** 新增 `tools/upgrade_legacy_spine_json.gd`，只改写 `skeleton.spine` 字段为 `4.3.00` 后另存（数据体原样保留），产出 `resources/spine/skeleton.spine-json`；工具注释与文档均标明这是过渡手段，正式资产应由美术在 Spine 4.3 编辑器重导。
+  → **验证** 加载成功（`is_skeleton_data_loaded()` 真、版本 `4.3.00`、19 骨骼 / 28 槽位 / 2 段动画全部可用），旧格式 atlas 也被 4.3 解析器接受；截图见 `docs/dev-example/spine-takeover.png`。
+- **问题** 骨架文件若仍叫 `.json` 则**不会**生成 `.import`，扩展只认 `.spine-json`；改名后未重新导入还会出现 `get_animation_state() == null`，极易误判成「headless 不支持 Spine」。
+  → **修法** 骨架统一用 `.spine-json` 扩展名，改名后强制 `--import`；文档把「改名 → 重导入」写成硬步骤。
+  → **验证** headless 与窗口模式都能跑通动画（`track_time` 递增），GUT 集成用例在 headless 下通过。
+- **问题** 灰盒视图每帧只读状态、没有可插拔的人物表现层，直接改 `_draw_fighter()` 会让灰盒回退路径丢失。
+  → **修法** 新增 `SpineFighterView` 子节点叠加在灰盒之上，`_draw_fighter()` 仅在 Spine 激活时跳过「躯干/头/刀」，判定提示层（构的进度点、架窗弧、符卡光柱与双环、架势安全区环、血条、档位条）**照旧用 `draw_*` 画在人物之上**。
+  → **验证** 无档案角色、无扩展环境均回退灰盒（`test_duel_view_spine.gd` 的 unknown character 用例），Spine 场景下判定提示未丢失（截图）。
+
+### 机制
+
+- **扩展装配** spine-godot 4.3（Godot 4.7.2 构建）装到 `addons/spine_godot/bin/`，只复制 Windows 三份 DLL（editor / template_debug / template_release，合计 6.2 MB）；`export_presets.cfg` 无需改动——导出时 Godot 自动把 `template_release` 库带成 `libspine_godot.windows.template_release.x86_64.dll`。
+- **素材入库** 美术提供的 `temp_assets/test_spine/`（skeleton.json / skeleton.atlas / skeleton.png，2026-10-30 18:56 版为 1671×777）复制到 `resources/spine/`；`skeleton.spine-json` 由提版工具生成。旧 1653×381 与 1400×778 两版分别备份在 `temp_assets/_old_spine/`、`temp_assets/_prev_spine_1029/`（均 gitignored）。
+- **可插拔档案** 新增 `SpineFighterProfile`（`class_name`，`Resource`）：`skeleton_file`/`atlas_file`/`animation_map`（键=`DuelTypes.state_name`）/`looping_animations`/`target_height`/`offset`/`flip_when_facing_left`/`sync_animation_to_state`/`hitstun_tint`；缺键回退 `IDLE`，`IDLE` 也缺则播放保持。约定路径 `res://resources/spine/<角色 id>.tres`（`SpineProfiles.resolve`），`DuelView.spine_profiles` 字典可显式覆盖。
+- **8 份档案** `char_a`/`char_b`/`char_c` + 5 个对手，均指向同一副测试骨架：`IDLE→zhanli`、`COMMIT/SLASH/RECOVERY→gongji`，其余状态回退待机；对手复用玩家骨架是测试期替身，正式素材到位后只换 `.tres`，代码不动。
+- **视图** `SpineFighterView` 用 `ClassDB.instantiate("SpineSprite")`（不硬引用扩展类型，未装扩展的机器也能解析脚本）；`SpineSkeletonDataResource` 按「骨架实例 id + 图集实例 id」静态缓存，两个角色共享一份；包围盒自动对位（中心 x=0、脚底 y=0）并按 `target_height / bounds.size.y` 缩放（2026-10-30 18:56 版素材 `150 / 933.25 ≈ 0.16073`）；朝左水平镜像；`DOWN` 隐藏骨架；缺动画 `push_warning` + 发 `animation_missing` 一次；暂停走 `SpineAnimationState.set_time_scale(0/1)`。
+- **帧同步** 非循环动画按 `time_scale = 动画时长 / (状态帧数 / 60)` 重定时（`gongji` 0.333s 对 14f 构约 1.428×）；相邻状态映射到同一段动画时**不重启**（构 → 斩 → 收招共用 `gongji`），但每次进入 `COMMIT` 强制从第 0 帧重播。`zhanli` 循环、保持原生速度。
+- **接线** `DuelView`：`_ready()` 先建两个 `SpineFighterView`（在 `_fx` 之下）、`bind()` → `_bind_spine()`（允许先 bind 再入树，供 headless 截图链路）、`_process()` → `_update_spine()`（P1 不镜像、P2 镜像）、`set_paused()` 透传。
+  → **验证** GUT **256/256（931 asserts，退出码 0）**：`test_spine_fighter_profile.gd` 10 例、`test_spine_fighter_view.gd` 11 例、`test_duel_view_spine.gd` 6 例（含先 bind 后入树、未知角色回退、显式字典覆盖、暂停透传、换局不重复挂节点）。
+  → **验证** 截图 `docs/dev-example/spine-takeover.png`（1280×720，真实 `duel_view.tscn`，2026-10-30 18:56 素材版）：两人脚踩 `GROUND_Y=540`，P1 处于构（暖金蓄力环 + 进度点），灰盒躯干/头/刀消失，新增头发/衣服/蝴蝶结正常显示。
+  → **验证** Windows 导出退出码 0（2026-10-30 18:56 素材版复验），产物 `iai.exe` 127,489,544 B + `libspine_godot.windows.template_release.x86_64.dll` 1,774,592 B；导出 EXE headless 冒烟 120 帧退出码 0。
+
+### 文档
+
+- 新增 `docs/dev-example/spine-integration.md`（11 节）：扩展装配 / 导入管线与四条实测坑 / 3.8→4.3 版本硬门槛与提版命令 / 素材实测数据 / 档案字段与回退规则 / 视图生命周期 / 帧同步公式 / `DuelView` 接线 / 回退表 / 动画映射 / 美术替换 6 步 / 验证与命令速查。
+- `CHANGELOG.md`、`README.md`（测试计数、环境表、目录、扩展点、已知限制）、`docs/gamejam/ai-disclosure.md`（§4 一行、§6 第三方表）、`docs/gamejam/submission-checklist.md`（Spine 授权确认项与测试 chibi 占位登记）同步更新。
+- 本次 **美术仍为 0% AI**：Spine 素材（骨架、图集、贴图）由美术提供，AI 未生成、未改像素，只写了代码与文档；`skeleton.spine-json` 仅是版本号提版的派生文件，像素与拓扑未动。
+
+### 已知未修
+
+- **Spine 运行时授权**：spine-godot 采用 Spine Runtimes License，使用需持有对应 Spine 授权；团队已明确无预算购买。当前接入属**内部测试**，公开仓库分发 `addons/spine_godot/` 与对外分发构建的合规性**必须由人类拍板**（详见 `docs/dev-example/spine-integration.md` §10）。
+- 素材只有两段动画（`zhanli`/`gongji`）且只有 bones 轨道：受击 / 架防 / 倒地 / 符卡全部回退待机，`DOWN` 直接隐藏骨架，没有倒地动画。
+- 未使用挂点（`SpineSlotNode`/`SpineBoneNode`），刀光与命中点仍按灰盒几何位置算；多页图集、法线贴图、皮肤切换未验证。
+- 3.8 提版工具会改版本字符串并迁移旧约束结构（`ik`/`transform`/`path`/`physics` → `constraints`），但不保证 3.8 全部特性在 4.3 下语义一致；正式资产必须由 Spine 4.3 编辑器重新导出。
+- SpineSprite 释放时每实例留下 21 个扩展内部对象（GUT 报 orphan，扩展自身行为，非本项目泄漏；未开 `-gfail_on_orphans`）。
+
+---
+
 ## 未发布 — 2026-10-23
 
 素材入库、粒子接线与刀光/符卡爆环批次：把第三方粒子素材包筛成可用的 36 张贴图，接入命中 / 对刀 / 架防三类战斗事件，再用 `twirl_03` 与 `circle_02` 替换自绘的挥砍弧与符卡爆环，同时把临时素材暂存区从 Godot 的扫描范围与版本控制里摘出去。

@@ -154,10 +154,26 @@ func test_pose_slash_lays_crescent_on_the_old_arc() -> void:
 	assert_eq(sprite.texture, DuelFx.TEX_SLASH, "刀光必须用 twirl_03")
 	assert_eq(sprite.position, Vector2(430.0, 460.0), "弧心沿用躯干上方 70")
 	assert_almost_eq(sprite.scale.x, DuelFx.SLASH_RADIUS / DuelFx.SLASH_TEX_BAND, 0.001,
-			"缩放后月牙亮带落在旧弧的 122 半径上")
+			"缩放后月牙亮带落在外移后的 136 半径上")
 	assert_almost_eq(sprite.rotation,
 			deg_to_rad(DuelFx.SLASH_TEX_CENTER_DEG) - 0.17, 0.001,
 			"P1 朝右：贴图带中心 -26° 转到 0°，再按进度前扫")
+
+
+func test_slash_is_offset_clear_of_the_blade_and_deforms_mid_swing() -> void:
+	assert_gt(DuelFx.SLASH_RADIUS, 122.0, "刀光半径要比旧弧外移，离开刀身")
+	_fx.pose_slash(DuelTypes.Side.P1, Vector2(430.0, 460.0), 0.0)
+	var sprite := _slash_of(DuelTypes.Side.P1)
+	var rest_x := sprite.scale.x
+	var rest_y := sprite.scale.y
+	assert_almost_eq(rest_x, rest_y, 0.0001, "起手时保持原形，先让玩家看清刀路")
+	_fx.pose_slash(DuelTypes.Side.P1, Vector2(430.0, 460.0), 0.5)
+	assert_gt(sprite.scale.x, rest_x, "中段切向拉长，刀光被挥砍带出去")
+	assert_lt(sprite.scale.y, rest_y, "中段径向收薄，避免整片糊住角色")
+	assert_gt(sprite.skew, 0.0, "中段轻微剪切，制造出刀的方向感")
+	_fx.pose_slash(DuelTypes.Side.P1, Vector2(430.0, 460.0), 1.0)
+	assert_almost_eq(sprite.scale.x, rest_x, 0.0001, "收刀时回到原形，衔接淡出")
+	assert_almost_eq(sprite.skew, 0.0, 0.0001)
 
 
 func test_pose_slash_mirrors_toward_p2() -> void:
@@ -242,3 +258,15 @@ func test_pause_blocks_slash_charge_and_spell_burst() -> void:
 	assert_false(_slash_of(DuelTypes.Side.P1).visible, "暂停期间不摆刀光")
 	assert_false(_charge_of(DuelTypes.Side.P1).visible, "暂停期间不摆起构法阵")
 	assert_false(_burst_ring().visible, "暂停期间不发符卡爆环")
+
+
+func test_block_burst_and_charge_use_glow_shader() -> void:
+	_fx.burst_block(Vector2(886.0, 445.0), Color("#ff8a72"), false)
+	var node := _emitting_nodes()[0]
+	var particle_mat := node.material as ShaderMaterial
+	assert_not_null(particle_mat, "架住粒子也要走发光叠加，不能只有 Sprite2D 发亮")
+	assert_eq(particle_mat.shader, DuelFx.GLOW_SHADER, "粒子与环共用同一枚发光 shader")
+	_fx.pose_charge(DuelTypes.Side.P1, Vector2(430.0, 534.0), 60.0, Color.WHITE)
+	var sprite_mat := _charge_of(DuelTypes.Side.P1).material as ShaderMaterial
+	assert_not_null(sprite_mat, "蓄力环必须用发光叠加，而不是半透明色块")
+	assert_eq(sprite_mat.shader, DuelFx.GLOW_SHADER)

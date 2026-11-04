@@ -10,6 +10,9 @@ const FONT := preload("res://assets/fonts/MiSans-Semibold.otf")
 var sim: DuelSim
 var run: RunState
 var versus: bool = false
+## 双人输入方式：手柄方在操作行显示手柄键名，避免提示与实际按键不符。
+var _p1_gamepad: bool = false
+var _p2_gamepad: bool = false
 
 var _p1_hp: Label
 var _p1_flow_bar: ProgressBar
@@ -33,12 +36,17 @@ var _last_signature: String = ""
 var _run_info: Label
 var _tutorial: Label
 var _result: Label
+
 var _controls: Label
 var _reward_box: VBoxContainer
 var _reward_dim: ColorRect
 var _reward_title: Label
 var _reward_hint: Label
 var _reward_buttons: Array[Button] = []
+## 雨线会从文字后面穿过：顶部/底部各压一层很薄的暗色渐变，
+## 只压 HUD 带，不挡角色。数值条与文字仍走主题白字 + 描边。
+var _top_scrim: TextureRect
+var _bottom_scrim: TextureRect
 
 
 func _ready() -> void:
@@ -49,6 +57,7 @@ func _ready() -> void:
 	root.anchor_bottom = 1.0
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	_build_scrims(root)
 
 	_reward_dim = ColorRect.new()
 	_reward_dim.color = Color(0, 0, 0, 0.55)
@@ -127,6 +136,38 @@ func _ready() -> void:
 		_reward_buttons.append(button)
 
 
+## 顶部压住血量/心流文字，底部压住操作提示；中间留空给刀光与角色。
+func _build_scrims(parent: Control) -> void:
+	_top_scrim = _make_scrim(parent, 190, true)
+	_bottom_scrim = _make_scrim(parent, 120, false)
+
+
+func _make_scrim(parent: Control, height: int, from_top: bool) -> TextureRect:
+	var gradient := Gradient.new()
+	var dark := Color(0.006, 0.012, 0.022, 0.66)
+	var clear := Color(0.006, 0.012, 0.022, 0.0)
+	gradient.offsets = PackedFloat32Array([0.0, 1.0])
+	gradient.colors = PackedColorArray([dark, clear] if from_top else [clear, dark])
+
+	var texture := GradientTexture2D.new()
+	texture.gradient = gradient
+	texture.width = 8
+	texture.height = height
+	texture.fill_from = Vector2(0, 0)
+	texture.fill_to = Vector2(0, 1)
+
+	var rect := TextureRect.new()
+	rect.name = "TopScrim" if from_top else "BottomScrim"
+	rect.texture = texture
+	rect.position = Vector2(0, 0 if from_top else 720 - height)
+	rect.size = Vector2(1280, height)
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.stretch_mode = TextureRect.STRETCH_SCALE
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(rect)
+	return rect
+
+
 func bind(p_sim: DuelSim) -> void:
 	if sim != null:
 		if sim.spell_cast.is_connected(_on_spell_cast):
@@ -155,6 +196,14 @@ func set_run(p_run: RunState) -> void:
 
 func set_versus(value: bool) -> void:
 	versus = value
+	refresh()
+
+
+## 由 DuelController 在开局与热插拔重建输入后调用；只影响操作行文案。
+func set_input_methods(p1_gamepad: bool, p2_gamepad: bool) -> void:
+	_p1_gamepad = p1_gamepad
+	_p2_gamepad = p2_gamepad
+	_last_signature = ""
 	refresh()
 
 
@@ -206,6 +255,8 @@ func _spell_remaining(fighter: FighterState) -> int:
 
 
 func _spell_modulate(fighter: FighterState) -> Color:
+	if fighter.spell_auto_guard_until_frame >= 0:
+		return Color("#b79bff")
 	if _spell_charging(fighter):
 		return Color("#b79bff")
 	if _spell_ready(fighter):
@@ -219,11 +270,21 @@ func _spell_text(fighter: FighterState) -> String:
 	if card == null:
 		return ""
 	var name_text := _tr(card.name_key)
+	# 瞬发架刀：开卡后次数已扣到 0，必须优先显示窗口剩余，否则看起来像「没放出来」。
+	if fighter.spell_auto_guard_until_frame >= 0:
+		return "%s ▶%d" % [name_text, _spell_window_left(fighter)]
 	if fighter.spell_uses_left <= 0:
 		return "%s ×0" % name_text
 	if _spell_charging(fighter):
 		return "%s ×%d ▶%d" % [name_text, fighter.spell_uses_left, _spell_remaining(fighter)]
 	return "%s ×%d (%d)" % [name_text, fighter.spell_uses_left, card.flow_cost]
+
+
+## 自动架刀窗口的剩余帧（HUD 只读窗口字段，不依赖当前状态）。
+func _spell_window_left(fighter: FighterState) -> int:
+	if sim == null:
+		return 0
+	return maxi(0, fighter.spell_auto_guard_until_frame - sim.frame)
 
 
 func _controls_text() -> String:
@@ -235,11 +296,18 @@ func _controls_text() -> String:
 	# 判等而非前缀：占位标记在不同语言下写法不同，不能拿中文前缀当控制流（审计 P3）。
 	if template == key:
 		return _tr("ui.controls_versus" if versus else "ui.controls")
+	# 双人里手柄方只认手柄槽（另一方的键盘键已解绑），提示必须跟着输入方式走。
+	var p1_label := func(binding_id: StringName) -> String:
+		return KeyBindings.label_joy(meta, binding_id) if _p1_gamepad else KeyBindings.label(meta, binding_id)
+	var p2_label := func(binding_id: StringName) -> String:
+		return KeyBindings.label_joy(meta, binding_id) if _p2_gamepad else KeyBindings.label(meta, binding_id)
 	return template \
-		.replace("%a", KeyBindings.label(meta, &"attack_p1")) \
-		.replace("%g", KeyBindings.label(meta, &"guard_p1")) \
-		.replace("%d", KeyBindings.label(meta, &"attack_p2")) \
-		.replace("%f", KeyBindings.label(meta, &"guard_p2")) \
+		.replace("%a", p1_label.call(&"attack_p1")) \
+		.replace("%g", p1_label.call(&"guard_p1")) \
+		.replace("%d", p2_label.call(&"attack_p2")) \
+		.replace("%f", p2_label.call(&"guard_p2")) \
+		.replace("%s", p1_label.call(&"spell_p1")) \
+		.replace("%S", p2_label.call(&"spell_p2")) \
 		.replace("%r", KeyBindings.label(meta, &"restart")) \
 		.replace("%p", KeyBindings.label(meta, &"pause"))
 
@@ -250,8 +318,8 @@ func refresh() -> void:
 	# 高频项（开始提示 / 符卡报幕淡出 / 结算显隐）每帧更新；
 	# 其余文本只在数据签名变化时重算——此前每帧拼十几条字符串（审计 P2-2）。
 	_refresh_transient()
-	var charging: bool = _spell_charging(sim.p1) or _spell_charging(sim.p2)
-	var signature := "%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d" % [
+	var charging: bool = _spell_charging(sim.p1) or _spell_charging(sim.p2) 			or sim.p1.spell_auto_guard_until_frame >= 0 			or sim.p2.spell_auto_guard_until_frame >= 0
+	var signature := "%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d" % [
 		sim.p1.hp, sim.p1.flow, sim.p1.state,
 		sim.p2.hp, sim.p2.flow, sim.p2.state,
 		sim.p1.spell_uses_left, sim.p2.spell_uses_left,
@@ -259,6 +327,7 @@ func refresh() -> void:
 		int(sim.frame < _p2_spell_fail_until),
 		int(sim.finished), int(versus),
 		run.gold if run != null else -1,
+		int(_p1_gamepad), int(_p2_gamepad),
 	]
 	if not charging and signature == _last_signature:
 		return
@@ -272,6 +341,7 @@ func _refresh_transient() -> void:
 	if _start_cue.visible:
 		_start_cue.text = _tr("ui.round_start")
 	_result.visible = sim.finished
+	# 残心机制保留，但整个 HUD（含结算页）都不再展示层数，降低入门门槛。
 
 	var banner_on := sim.frame < _banner_until_frame and not sim.finished
 	_spell_banner.visible = banner_on
@@ -315,10 +385,9 @@ func _refresh_body() -> void:
 	_controls.text = _controls_text()
 
 	if run != null and not versus:
-		_run_info.text = "%s %d/%d  %s %d  %s %d" % [
+		_run_info.text = "%s %d/%d  %s %d" % [
 			_tr("ui.run"), run.stage_index + 1, RunState.STAGE_COUNT,
 			_tr("ui.gold"), run.gold,
-			_tr("ui.zanshin"), run.zanshin,
 		]
 	elif versus:
 		_run_info.text = _tr("ui.versus")
@@ -439,6 +508,11 @@ func _tutorial_text() -> String:
 		return _tr("tutorial.attack")
 	if sim.p1.flow <= 20:
 		return _tr("tutorial.flow")
+	# 反馈 02：开局前 6 秒提醒一次「符卡可用」，把 L 键位摆到玩家眼前（文案仍占位）。
+	if sim.p1.spell_card != null and sim.p1.spell_uses_left > 0 \
+			and sim.p1.flow >= sim.p1.spell_card.flow_cost \
+			and sim.frame < sim.opening_lock_frames + 360:
+		return _tr("tutorial.spell")
 	return _tr("tutorial.wait")
 
 

@@ -6,9 +6,9 @@
     "run": "阶段",
     "gold": "金币",
     "zanshin": "残心",
-    "controls": "J 斩 / K 架 / R 重开 / Esc 暂停 / 1–3 选心得",
-    "controls_template": "P1 %a 斩 / %g 架　%r 重开　%p 暂停　1–3 选心得",
-    "controls_versus_template": "P1 %a 斩 / %g 架　P2 %d 斩 / %f 架　%r 重开　%p 暂停",
+    "controls": "J 斩 / K 架 / L 发动符卡 / R 重开 / Esc 暂停 / 1–3 选心得",
+    "controls_template": "P1 %a 斩 / %g 架 / %s 发动符卡　%r 重开　%p 暂停　1–3 选心得",
+    "controls_versus_template": "P1 %a 斩 / %g 架 / %s 发动符卡　P2 %d 斩 / %f 架 / %S 发动符卡　%r 重开　%p 暂停",
     "reward_title": "选一个心得",
     "reward_hint": "点击按钮，或按 1 / 2 / 3",
     "result_win": "胜利",
@@ -17,7 +17,7 @@
     "upgrade_unknown": "未命名心得",
     "round_start": "开始",
     "versus": "本地双人",
-    "controls_versus": "P1 J 斩 / K 架　P2 小键盘 1 斩 / 2 架　R 重开　Esc 暂停",
+    "controls_versus": "P1 J 斩 / K 架 / L 发动符卡　P2 小键盘 1 斩 / 2 架 / P 发动符卡　R 重开　Esc 暂停",
     "result_p1": "玩家 1 胜",
     "result_p2": "玩家 2 胜",
     "menu_hint": "Esc 返回菜单"
@@ -36,6 +36,16 @@
     "settings": "设置",
     "character": "角色",
     "character_hint": "更多角色在商店解锁",
+    "char_select_title": "选择角色",
+    "char_select_hint_solo": "选择你的角色，开始单人阶梯。",
+    "char_select_hint_versus": "双人各选一名角色与输入方式：双方键鼠、一人键鼠一人手柄，或双方手柄（P1 用第一只手柄，P2 用第二只）。游戏中途接入手柄默认给 P1。",
+    "p1_character": "角色（P1）",
+    "p2_character": "角色（P2）",
+    "p1_input": "输入方式（P1）",
+    "p2_input": "输入方式（P2）",
+    "input_keyboard": "键鼠",
+    "input_gamepad": "手柄",
+    "start_duel": "开始对决",
     "char_a": "A · 均衡",
     "char_b": "B · 快剑",
     "char_c": "C · 重剑",
@@ -76,8 +86,10 @@
     "keys": "按键与手柄",
     "key_attack_p1": "斩（P1）",
     "key_guard_p1": "架（P1）",
+    "key_spell_p1": "符卡（P1）",
     "key_attack_p2": "斩（P2）",
     "key_guard_p2": "架（P2）",
+    "key_spell_p2": "符卡（P2）",
     "key_pause": "暂停",
     "key_restart": "重开",
     "press_key": "请按键…",
@@ -93,7 +105,7 @@
     "gamepads": "手柄",
     "gamepad_p2_pad": "P2：手柄 2",
     "gamepad_p2_keyboard": "P2：键盘",
-    "gamepad_hint": "键鼠与手柄可同时操作；同一动作可同时绑定两者；接入手柄 2 后 P2 自动可用手柄",
+    "gamepad_hint": "键鼠与手柄可同时操作；同一动作可同时绑定两者；双人支持双方手柄，输入方式在选人界面选择",
     "wipe_save": "清除存档",
     "wipe_confirm": "再按一次确认清除",
     "wipe_done": "存档已清除",
@@ -129,6 +141,7 @@
     "hitstun": "受击",
     "clash": "刃鸣",
     "down": "败北",
+    "unknown": "未知",
     "spell": "[占位] 符卡"
   },
   "tutorial": {
@@ -136,6 +149,7 @@
     "guard": "[占位] 对手起构：按住防御，在刀到之前架住",
     "attack": "[占位] 对手收招：现在出刀，他挡不住",
     "flow": "[占位] 心流偏低：架窗变窄，先稳住",
+    "spell": "[占位] 符卡已就绪：按 L 发动符卡",
     "wait": "[占位] 对峙中：别先出手，等他的破绽"
   },
   "upgrade": {
@@ -181,7 +195,7 @@
     }
   },
   "spell": {
-    "spell_a": {"name": "[占位] 架势", "desc": "[占位] 展开架势：60 帧内任意架刀都判定为完美格挡"},
+    "spell_a": {"name": "[占位] 架势", "desc": "[占位] 瞬发架刀：45 帧内挨刀自动完美弹开并反斩 10 伤害；无人出刀返还 10 心流"},
     "spell_b": {"name": "[占位] 疾风连斩", "desc": "[占位] 蓄力 8 帧后自动出刀，20 伤害，无视对手的架"},
     "spell_c": {"name": "[占位] 崩山", "desc": "[占位] 蓄力 20 帧后自动出刀，30 伤害，无视架并追加硬直"},
     "spell_boss": {"name": "[占位] 终式", "desc": "[占位] 蓄力 14 帧后自动出刀，30 伤害，无视架并追加硬直"}

@@ -34,6 +34,9 @@ const TEX_PERFECT: Texture2D = preload("res://assets/particles/guard/light_02.pn
 const TEX_SLASH: Texture2D = preload("res://assets/particles/slash/twirl_03.png")
 ## 刀光的扇形消失由 shader 做：只留刀锋附近的窗口，扫过的部分塌掉。
 const SLASH_SHADER: Shader = preload("res://resources/shaders/slash_sweep.gdshader")
+## 发光叠加：ADD 混合 + 高 alpha 核心过曝成白芯（`glow_add.gdshader`）。
+## 环、月牙、粒子全部走同一枚 shader，避免一半「发光」一半「半透明」。
+const GLOW_SHADER: Shader = preload("res://resources/shaders/glow_add.gdshader")
 ## 符卡爆环：`circle_02` 是细环，按「环半径 = 目标半径」缩放。
 const TEX_SPELL_RING: Texture2D = preload("res://assets/particles/guard/circle_02.png")
 ## 「构」（攻击前摇）的蓄力环：**代替** `duel_view.gd` 原先自绘的那道收束弧，
@@ -45,8 +48,14 @@ const TEX_CHARGE: Texture2D = preload("res://assets/particles/spell/light_03.png
 ## 张角 -80°…+28°（中心 -26°）。据此两个常数把贴图对到旧的 122 半径弧上。
 const SLASH_TEX_BAND := 203.0
 const SLASH_TEX_CENTER_DEG := 26.0
-## 与旧 `draw_arc` 同半径，弧心也沿用「躯干上方 70」。
-const SLASH_RADIUS := 122.0
+## 弧心沿用「躯干上方 70」；半径从旧 `draw_arc` 的 122 外移到 136，
+## 让月牙离开刀身约 14px，不再贴着刀锋糊成一团。
+const SLASH_RADIUS := 136.0
+## 挥砍中段的形变：切向拉长、径向收薄、轻微剪切，读作「刀在加速」。
+## 用 sin(πp) 让起手/收刀回到原始形状，只有中段被拉出速度感。
+const SLASH_ARC_STRETCH := 0.13
+const SLASH_RADIAL_SQUASH := 0.07
+const SLASH_SKEW := 0.10
 
 ## circle_02 的环外缘在 172 / 512，缩放系数 = 目标半径 / 172。
 const SPELL_RING_TEX_RADIUS := 172.0
@@ -135,18 +144,27 @@ func _make_sprite(tex: Texture2D, sprite_name: String) -> Sprite2D:
 	sprite.name = sprite_name
 	sprite.texture = tex
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	var blend := CanvasItemMaterial.new()
-	blend.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	sprite.material = blend
+	sprite.material = _make_glow_material()
 	sprite.visible = false
 	add_child(sprite)
 	return sprite
 
 
+## 发光叠加材质：ADD + 白芯过曝（见 `resources/shaders/glow_add.gdshader`）。
+## 粒子的颜色经 `ParticleProcessMaterial` 烘进 `COLOR`，Sprite2D 走 `modulate`，
+## 两条路径共用同一套参数，环/月牙/粒子不会一个发亮一个发闷。
+func _make_glow_material() -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = GLOW_SHADER
+	return mat
+
+
 ## 挥砍弧（每帧由 `DuelView` 按 `_is_swinging()` 喂进来）：
-## - 位置＝旧弧心，缩放＝122 / 203 ≈ 0.60，月牙正好压在 122 半径上；
+## - 位置＝弧心，缩放＝136 / 203 ≈ 0.67，月牙亮带落在 136 半径上，离刀身更远；
+## - 中段用 sin(πp) 做切向拉长 / 径向收薄 / 轻微剪切，起手和收刀回到原形，
+##   让刀光有「被刀带出去」的形变，而不是一枚固定贴图平移；
 ## - 旋转＝贴图带中心从 -26° 转到出刀方向（P1 朝右 0°，P2 朝左 180°），
-##   再随进度小幅前扫 10°，读作「刀在走」；
+##   再随进度小幅前扫，读作「刀在走」；
 ## - alpha 随进度 quadratic 淡出，收刀帧不会「啪」地消失；
 ## - `progress` 同时喂给 shader，让月牙按扇形从刀尾一侧塌掉（见 `slash_sweep.gdshader`）。
 func pose_slash(side: int, center: Vector2, progress: float) -> void:
@@ -155,10 +173,15 @@ func pose_slash(side: int, center: Vector2, progress: float) -> void:
 	var sprite := _slash[0 if side == DuelTypes.Side.P1 else 1]
 	var p := clampf(progress, 0.0, 1.0)
 	var base := 0.0 if side == DuelTypes.Side.P1 else PI
+	var base_scale := SLASH_RADIUS / SLASH_TEX_BAND
+	var whip := sin(p * PI)
 	sprite.visible = true
 	sprite.position = center
 	sprite.rotation = base + deg_to_rad(SLASH_TEX_CENTER_DEG) + lerpf(-0.17, 0.12, p)
-	sprite.scale = Vector2.ONE * (SLASH_RADIUS / SLASH_TEX_BAND)
+	sprite.scale = Vector2(
+			base_scale * (1.0 + SLASH_ARC_STRETCH * whip),
+			base_scale * (1.0 - SLASH_RADIAL_SQUASH * whip))
+	sprite.skew = SLASH_SKEW * whip
 	# 消失主要交给 shader 的扇形塌陷，这里只补一点整体淡化，避免末帧硬切。
 	sprite.modulate = Color(1.0, 1.0, 1.0, 0.9 * (1.0 - 0.35 * p * p))
 	var shader_mat := sprite.material as ShaderMaterial
@@ -288,9 +311,7 @@ func _make_node(kind: int, spec: Dictionary, slot: int) -> GPUParticles2D:
 	# 爆点可能落在半屏之外，默认 200×200 的可视区会被整发剔掉。
 	node.visibility_rect = Rect2(-640.0, -640.0, 1280.0, 1280.0)
 	node.process_material = _make_process_material(spec)
-	var blend := CanvasItemMaterial.new()
-	blend.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	node.material = blend
+	node.material = _make_glow_material()
 	node.finished.connect(_on_finished.bind(node))
 	return node
 

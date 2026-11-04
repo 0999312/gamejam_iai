@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="SpineFighterProfile" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/duel/spine_fighter_profile.gd" id="1_script"]
+[ext_resource type="SpineSkeletonFileResource" path="res://resources/spine/skeleton.spine-json" id="2_skeleton"]
+[ext_resource type="SpineAtlasResource" path="res://resources/spine/skeleton.atlas" id="3_atlas"]
+
+[resource]
+script = ExtResource("1_script")
+skeleton_file = ExtResource("2_skeleton")
+atlas_file = ExtResource("3_atlas")
+animation_map = {
+"IDLE": "zhanli",
+"COMMIT": "gongji",
+"SLASH": "gongji",
+"RECOVERY": "gongji",
+"GUARD": "fangyu",
+"GUARD_REC": "fangyu",
+"SPELL": "fangyu",
+"HITSTUN": "bei_gongji",
+"CLASH": "fangyu",
+"DOWN": "siwang"
+}
+looping_animations = PackedStringArray("zhanli")
+target_height = 150.0
+offset = Vector2(0, 0)
+flip_when_facing_left = true
+sync_animation_to_state = true
+hitstun_tint = Color(1, 0.74, 0.74, 1)

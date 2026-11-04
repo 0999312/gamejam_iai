@@ -377,7 +377,9 @@ func _add_slider_row(parent: VBoxContainer, label_key: String, setting_key: Stri
 func _add_check_row(parent: VBoxContainer, key: String, handler: Callable) -> CheckButton:
 	var check := CheckButton.new()
 	check.text = _tr(key)
-	check.custom_minimum_size = Vector2(430, 42)
+	check.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	check.custom_minimum_size = Vector2(0, 42)
+	check.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	check.add_theme_font_override("font", FONT)
 	check.add_theme_font_size_override("font_size", 18)
 	check.toggled.connect(handler)
@@ -432,11 +434,8 @@ func _refresh_keys() -> void:
 		(_key_buttons[_rebinding] as Button).text = _tr("settings.press_key")
 	if _joy_rebinding != &"" and _joy_buttons.has(_joy_rebinding):
 		(_joy_buttons[_joy_rebinding] as Button).text = _tr("settings.press_joy")
-	_pads.text = "%s: %d · %s" % [
-		_tr("settings.gamepads"),
-		InputDevices.count(),
-		_tr(InputDevices.p2_source_key()),
-	]
+	# 双人输入方式由选人面板决定，这里只报告当前接入数量，避免写成固定席位。
+	_pads.text = "%s: %d" % [_tr("settings.gamepads"), InputDevices.count()]
 
 
 func _begin_rebind(id: StringName) -> void:
