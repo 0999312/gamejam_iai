@@ -426,10 +426,12 @@ func _refresh_keys() -> void:
 	var meta := GameBootstrap.meta if GameBootstrap != null else null
 	for id in _key_buttons.keys():
 		var button: Button = _key_buttons[id]
-		button.text = KeyBindings.label(meta, id)
+		var key_label := KeyBindings.label(meta, id)
+		button.text = key_label if not key_label.is_empty() else "—"
 	for id in _joy_buttons.keys():
 		var joy_button: Button = _joy_buttons[id]
-		joy_button.text = KeyBindings.label_joy(meta, id)
+		var joy_label := KeyBindings.label_joy(meta, id)
+		joy_button.text = joy_label if not joy_label.is_empty() else "—"
 	if _rebinding != &"" and _key_buttons.has(_rebinding):
 		(_key_buttons[_rebinding] as Button).text = _tr("settings.press_key")
 	if _joy_rebinding != &"" and _joy_buttons.has(_joy_rebinding):
@@ -584,6 +586,8 @@ func _on_back_pressed() -> void:
 
 func _tr(key: String) -> String:
 	var text := I18NManager.get_text(key)
-	if text == key:
-		return "[占位] " + key
+	# 缺键留空，由界面标识空位；不再输出占位前缀（2026-11-06 人类指令）。
+	if text == key or text.is_empty():
+		push_warning("I18N missing key: " + key)
+		return ""
 	return text

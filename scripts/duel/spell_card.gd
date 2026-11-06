@@ -3,7 +3,7 @@ extends Resource
 
 ## 符卡（技能）：与角色硬绑定，每场限次数，消耗心流。
 ## 只声明机制数据；name_key / desc_key 指向 I18N，文案由人类提供
-## （缺失时 HUD 会显示 [占位] 前缀，见 DuelHud._tr）。
+## （缺失时 HUD 留空，由界面标识空位，见 DuelHud._tr）。
 
 enum Effect {
 	## 瞬发架刀·反斩：按 L 立刻完成防御姿态，窗口内被刀自动完美弹开并反击。

@@ -14,11 +14,12 @@ func test_upgrade_registry_contains_ten_entries() -> void:
 	assert_eq(data.amount, 3)
 
 
-func test_upgrade_text_comes_from_i18n_placeholder() -> void:
-	# 2026-10-21：占位形态保留（文案待人类定稿），但描述已同步实际数值。
-	assert_true(I18NManager.get_text("upgrade.u01.name").begins_with("[占位]"))
+func test_upgrade_text_comes_from_i18n() -> void:
+	# 2026-11-06：44 条文案已按 docs/gamejam/44条本地化占位-定稿.md 回填，占位前缀不再出现。
+	assert_eq(I18NManager.get_text("upgrade.u01.name"), "铁壁")
 	assert_true(I18NManager.get_text("upgrade.u01.desc").contains("+3"))
-	assert_true(I18NManager.get_text("tutorial.start").begins_with("[占位]"))
+	assert_eq(I18NManager.get_text("tutorial.start"), "屏息凝神，尚待剑发")
+	assert_false(I18NManager.get_text("upgrade.u01.name").begins_with("[占位]"))
 
 
 func test_generic_ui_text_is_plain() -> void:

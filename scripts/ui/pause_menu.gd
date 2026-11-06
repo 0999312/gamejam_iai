@@ -95,6 +95,8 @@ func _on_menu_pressed() -> void:
 
 func _tr(key: String) -> String:
 	var text := I18NManager.get_text(key)
-	if text == key:
-		return "[占位] " + key
+	# 缺键留空，由界面标识空位；不再输出占位前缀（2026-11-06 人类指令）。
+	if text == key or text.is_empty():
+		push_warning("I18N missing key: " + key)
+		return ""
 	return text

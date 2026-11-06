@@ -1,5 +1,9 @@
 # 占位字符串清单（Placeholder Inventory）
 
+> **状态（2026-11-06）：44 条主表已按人类定稿全部回填**，见 `docs/gamejam/44条本地化占位-定稿.md` 与 `docs/dev-example/localization-final-copy-and-release-build.md`。
+> 全文保留为 2026-11-04 的历史快照；**玩家可见占位已于 2026-11-06 清零**——`tutorial.spell` 显示已删除、修罗模式/快刀重刀已同步、8 处 `_tr()` 兜底改为缺键留空，详见 §9。
+> 本文件 §2 的「44 条 × 2 份 = 88 条字符串」是回填前的统计，请勿再当作现状。
+
 > 快照时间：2026-11-04　|　对象：本仓库当前工作树（语义化版本 `0.1.0`）
 > 口径：**玩家可见文本占位** = 本地化文件里以 `[占位]` / `[PLACEHOLDER]` 开头的条目，加上提交清单里仍标「待提供」的文本项。
 > 数据来源：直接解析 `localization/zh_CN.json`、`localization/en.json`，并逐条核对脚本里的取词调用链（不依赖文档里的历史统计）。
@@ -213,3 +217,23 @@ Get-ChildItem scripts -Recurse -Filter *.gd | Select-String -Pattern '[占位] '
 ```
 
 > 口径提醒：`about.ai_body`（`localization/zh_CN.json:117`）正文里含「显式占位」四个字，用「含『占位』」计数会得到 45，**它不是占位条目**。用 `[占位]` 精确匹配即得 44。
+> **2026-11-06 更新：此复核命令的期望值已失效**——两份 JSON 现只剩 1 条占位（`tutorial.spell`），代码内兜底串仍是 8 处（`about.ai_body` 措辞已过时）。
+
+---
+
+## 9. 2026-11-06 最终现状（本节为最新）
+
+已完成：
+
+- 44 条按定稿回填，`zh_CN.json` / `en.json` 各 165 键；GUT 311/311（1309 asserts）通过。改写过的 5 处占位断言见 `docs/dev-example/localization-final-copy-and-release-build.md` §1。
+- `shop.hard_on/off` → 「修罗模式：开/关」（en `Asura Mode: ON/OFF`）；`menu.char_b/c` → 「B · 快刀 / C · 重刀」（en `B · Swift Blade / C · Heavy Blade`），与商店条目名统一。
+- 8 处 `_tr()` 兜底取消占位前缀：缺键时 `push_warning` 并返回空串；`scripts/ui/settings.gd` 键位按钮在空绑定时显示 `—`（标识空键位）。`scripts/duel/spell_card.gd:6` 注释同步。
+- `tutorial.spell` 的**显示已删除**：`scripts/duel/duel_hud.gd` 的 `_tutorial_text()` 不再返回它；底部操作行（`ui.controls` / `ui.controls_template`）已含「L 发动符卡」。键保留在 JSON 中但无引用。
+
+仍保留（不阻塞提交）：
+
+1. `tutorial.spell` 键仍是 `[占位]` / `[PLACEHOLDER]` 值（无显示路径）；定稿表补文案后可直接替换，或按需删除该键。
+2. `spell.*.desc` 4 条无显示路径（`scripts/duel/spell_card.gd` 只赋 `desc_key`，HUD 不读），按人类指令「先记着」保留。
+3. 非文本占位（§5）：Spine 运行时授权、封面/README 等提交材料仍需人类确认；导出构建已产出（见 `docs/dev-example/localization-final-copy-and-release-build.md` §2），Spine 运行时会随包分发，对外发布前须确认授权。
+
+> 复核命令（2026-11-06 口径）：`Select-String -Path localization/zh_CN.json -Pattern '[占位]' -SimpleMatch` 命中 **1**（`tutorial.spell`，无显示路径）；`Get-ChildItem scripts -Recurse -Filter *.gd | Select-String -Pattern '"[占位] "'` 命中 **0**。

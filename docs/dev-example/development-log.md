@@ -720,3 +720,25 @@ Spine 子集 37 例；`--import` 退出码 0。`rainy-night-preview.png` 重拍�
 **验证**：新增/改写 6 例——选人面板「双方可同时选手柄」「双方选择写回」、输入槽位「双方手柄 joy 0/1」、raw「双设备分席」「松 P1 手柄不清 P2 架子」、席位 resolver「0/1/2 只」与「双方偏好保留」。全量 GUT **311/311、1270 asserts、37 脚本、退出码 0**；`--import` 退出码 0。真实双手柄仍未实机复测。
 
 
+## 21. 工作流开发经验文档（2026-11-05，m00002）
+
+**背景**：人类要求「针对本工作区的开发经过、经验教训和工作区会话记录，总结出工作流开发经验，记录成开发文档」。此前经验是分散的：`docs/dev-contract.md` 讲规矩，`development-log.md` 讲过程，`balance-pass-*.md` 讲数值，CHANGELOG 讲交付——没有一份文档横向回答「这套工作流为什么成立」。
+
+**做法**：
+- 通读 `docs/dev-contract.md`、`development-log.md`（723 行）、`design.md`（806 行）、`CHANGELOG.md`、`docs/audit/code-audit-2026-10-21.md`、`balance-pass-01..06`、`playtest-06/07`、`ai-disclosure.md` 等。
+- 解析 18 个 DSH 会话文件：按 zstd 魔数 `28 B5 2F FD` 切帧（Node 的 `zstdDecompressSync` 只解第一帧），2844 帧全部解压成功，得到约 2100 万字符 JSONL；再按事件类型统计会话数、turn 数、人类消息数、工具调用分布，导出到 `.tmp-analysis/` 供写作引用。
+- 把经验抽象为两条轴：**经验 E01–E10**（是什么、为什么、怎么做、判据）与**案例 C01–C20**（真实症状 → 根因 → 处理 → 数字）；再补分阶段手册、反模式、模板、取数方法、度量体系与迁移清单。
+- 文档本身按项目契约留痕：ai-disclosure 追加一行、CHANGELOG 追加一节、本节记录过程。
+
+**产出**：`docs/workflow-development-experience.md`（1059 行，11 章 + 附录 B）。
+
+**踩坑**：
+- 用 `run_code` 写长文时，JS 双引号字符串里出现英文双引号会解析失败（`Expected ',' got ident`）；模板字符串里出现反引号会提前结束（`Expected ';', '}' or eof`）。最终改用「整段模板字符串 + ``` 占位再 `replaceAll` 回反引号」，并且内容里一律用中文引号「」。
+- 用 `edit` 往 Markdown 大表格插入一行时，拿「下一行行首」当 `old_string` 会把相邻两行合并（本次在 ai-disclosure 上真的发生了：新增行与「双方手柄」行被粘成一行）。教训：表格插入要选**行尾唯一片段**作锚点，插完必须 `read` 回读校验；本次靠回读发现并修回。
+- 文档里所有行号/数字都回原文核对（如 `duel_hud.gd:354-359`、`run_state.gd:157-170`、`about_panel.gd:16`），避免「总结出来的事实」再次漂移。
+
+**验证**：GUT **311/311、1270 asserts、37 脚本、退出码 0**；`--headless --import` 退出码 0；`--quit-after 240` 无头冒烟退出码 0、stderr 无 ERROR（仅既有 WARNING）。
+
+**限制**：文档中的「人类反馈」引用为消息编号（如 `m01481`），需在会话文件里检索原文；`.tmp-analysis/` 为临时产物，已删除。
+
+

@@ -32,7 +32,7 @@ func test_reward_buttons_show_offers_and_emit() -> void:
 	watch_signals(hud)
 	hud.show_rewards(run.offers)
 	assert_true(hud._reward_box.visible)
-	assert_true(hud._reward_buttons[0].text.begins_with("1. [占位]"))
+	assert_true(hud._reward_buttons[0].text.begins_with("1. 铁壁"))
 	assert_eq(hud._reward_buttons[0].visible, true)
 
 	hud._reward_buttons[1].pressed.emit()
@@ -99,8 +99,9 @@ func test_scrims_soften_the_rain_behind_hud_bands() -> void:
 	assert_true(bottom.get_index() < dim.get_index())
 
 
-## 反馈 01：HUD 任何位置（含结算页）都不再显示残心，机制仍照常记数。
-func test_zanshin_is_hidden_everywhere_in_hud() -> void:
+## 反馈 01：HUD 任何位置（含结算页）都不再显示残心层数，机制仍照常记数。
+## 2026-11-06：A 符卡定稿名就是「残心」，所以只禁止"层数"形态，不禁止符卡名本身。
+func test_zanshin_count_is_hidden_everywhere_in_hud() -> void:
 	var hud := _make_hud()
 	await wait_process_frames(1)
 	var run := RunState.new(1)
@@ -110,15 +111,35 @@ func test_zanshin_is_hidden_everywhere_in_hud() -> void:
 	hud.bind(sim)
 	hud.refresh()
 	assert_false(hud._run_info.text.contains("残心"), "局内不显示残心")
-	assert_false(_hud_texts(hud).any(func(t: String) -> bool: return t.contains("残心")), "局内任何标签都不带残心")
+	for text in _hud_texts_without_spell_row(hud):
+		assert_false(_shows_zanshin_count(text), "局内任何标签都不显示残心层数: %s" % text)
 
 	run.phase = RunState.Phase.CLEAR
 	sim.finished = true
 	sim.winner = DuelTypes.Side.P1
 	hud.refresh()
 	assert_true(hud._result.visible, "结算页仍显示败北/胜利")
-	assert_false(_hud_texts(hud).any(func(t: String) -> bool: return t.contains("残心")), "结算页也不带残心")
+	for text in _hud_texts_without_spell_row(hud):
+		assert_false(_shows_zanshin_count(text), "结算页也不显示残心层数: %s" % text)
 	assert_eq(run.zanshin, 2, "残心机制照常记数")
+
+
+## 符卡行「残心 ×1 (30)」里的数字是符卡次数与耗心流，不属于残心层数，检查层数时排除。
+func _hud_texts_without_spell_row(hud: DuelHud) -> Array[String]:
+	var skip: Array[Label] = [hud._p1_spell, hud._p2_spell]
+	var texts: Array[String] = []
+	for node in hud.find_children("*", "Label", true, false):
+		var label := node as Label
+		if label != null and label.visible and not skip.has(label):
+			texts.append(label.text)
+	return texts
+
+
+## 「残心」后面紧跟数字/乘号才算层数显示；单独的符卡名「残心」不算。
+func _shows_zanshin_count(text: String) -> bool:
+	var regex := RegEx.new()
+	regex.compile("残心\\s*[×xX:：]?\\s*\\d")
+	return regex.search(text) != null
 
 
 ## 反馈 02：操作行补上开符卡的键，玩家不必翻设置才知道 L 能放符卡。

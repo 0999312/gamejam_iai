@@ -6,6 +6,55 @@
 
 ---
 
+## 未发布 — 2026-11-06（44 条定稿文案回填 / 资源精简 / 发布构建）
+
+本轮把人类定稿表里的 44 条玩家可见文案落进本地化文件，并把工程资源与大包体积压下来、产出可提交的 Windows 构建。
+
+### 内容：44 条占位按定稿回填
+
+- **问题** `localization/zh_CN.json` / `en.json` 中 44 条玩家可见文案仍是 `[占位]` / `[PLACEHOLDER]`；`tests/` 里 5 处断言以「必须以占位开头」为前提，直接替换会让测试变红。
+  → **修法** 按 `docs/gamejam/44条本地化占位-定稿.md` 逐键精确替换（先命中 zh 36 / en 31，再补 en 5 条前缀差异项）；顺手去掉 en `ui.controls` / `ui.controls_versus` 的残留前缀。改写 5 处断言：`test_game_data.gd` 升级文案用例改名并断言「铁壁 / +3 / 屏息凝神，尚待剑发」，`test_i18n.gd` 断言 `Iron Wall` 与 9 个符卡键「非键名、非占位」，`test_duel_hud.gd` 奖励按钮改判 `1. 铁壁` 前缀。残心用例因定稿把 A 符卡命名为「残心」而与 HUD 符卡行 `残心 ×1 (30)` 撞车，改为**排除 `_p1_spell`/`_p2_spell` 后**再用 `残心\s*[×xX:：]?\s*\d` 判层数形态。
+  → **验证** 两份 JSON 各 165 键、解析通过；GUT **311/311（1309 asserts，37 脚本，退出码 0）**。`tutorial.spell` 是唯一剩余占位条目（定稿表未提供该条）；同日收尾后其显示路径已删除（见下）。
+
+### 构建：资源精简 + 换非 mono 模板 + 打包
+
+- **问题** 旧 `build/windows/iai.exe` 129,180,864 B（pck ≈19.5 MB）；字体在 `assets/` 根与 `assets/fonts/` 各存 otf+ttf（合计约 29 MB）；粒子贴图 36 张里 29 张零引用；工程无 `.csproj` 却用 mono 模板导出，平白引入 .NET 运行时依赖。
+  → **修法** ① python 静态审计全库 `res://` 引用（全部为静态 `preload`，无动态拼接）后，把 33 个零引用文件移入 `temp_assets/_unused_2026-11-06/`（不入库不导出），`assets/particles/` 只剩 `duel_fx.gd` 用到的 7 张；② 字体去重，只留 `assets/fonts/MiSans-Semibold.otf`（6,530,232 B）；③ 从官方 tpz 抽出 `windows_release_x86_64.exe`（109,268,480 B）临时顶替 mono 模板导出，导出后自动还原；④ `windows.zip` 用 deflate level 9 重打。
+  → **验证** `iai.exe` **119,757,264 B**（pck ≈10.49 MB），`windows.zip` **48,226,367 B**（原 57,402,956 B）。关键结论：**Godot 4.7 Windows 模板本身约 109 MB**（mono 与非 mono 只差约 245 KB），减体积只能从 pck 下手，换模板换来的是「不依赖 .NET」。`--headless --import`、`--export-release` 退出码 0，无资源缺失；产物 `--headless --quit-after 300` 冒烟退出码 0，无 `SCRIPT ERROR`。
+
+### 收尾：按人类指令清掉剩余占位痕迹
+
+- **问题** 首轮回填后仍有玩家可见的占位痕迹：`tutorial.spell` 在开局 6 秒弹出；商店按钮写「困难模式：开/关」而商店条目叫「修罗模式」；角色下拉写「B · 快剑 / C · 重剑」而商店叫「快刀/重刀」；8 个 UI 脚本的 `_tr()` 在缺键时输出 `"[占位] " + key`。
+  → **修法** ① `duel_hud._tutorial_text()` 删除 `tutorial.spell` 分支（底部操作行 `ui.controls` 已含「L 发动符卡」）；② `shop.hard_on/off` →「修罗模式：开/关」、「Asura Mode: ON/OFF」；③ `menu.char_b/c` →「B · 快刀 / C · 重刀」、「B · Swift Blade / C · Heavy Blade」；④ 8 处 `_tr()` 缺键改为 `push_warning` + 返回空串，`settings.gd` 空绑定显示 `—`；⑤ `spell_card.gd` 注释同步。
+  → **验证** GUT **311/311（1309 asserts，37 脚本，退出码 0）**；重新导出 `iai.exe` **119,757,696 B**（pck 10,489,216 B）、`windows.zip` **48,226,724 B**；包内字节校验「修罗模式」「快刀」「重刀」各命中、旧「困难模式 / 快剑 / 重剑」0 次；干净目录 `%TEMP%/iai_clean3` 冒烟退出码 0，中英各 165 条。
+
+### 仍待人类处理
+
+- 人类复核 `spell_a.desc` 的 45 帧措辞（AI 按既有机制改写，见 `docs/dev-example/localization-final-copy-and-release-build.md` §3）。
+- `tutorial.spell` 键保留在 JSON（无显示路径），定稿表补文案后可替换或删除。
+- `spell.*.desc` 4 条无显示路径，按人类指令「先记着」保留。
+- Spine 运行时授权未解决，但**已随构建分发**，对外发布前必须由人类决定（移除/购买/不公开）。
+
+---
+
+## 未发布 — 2026-11-05（工程文档：工作流开发经验）
+
+本轮不改任何 `.gd` / `.tscn` 代码，只把项目积累的工作流经验整理成可复用的工程文档。
+
+### 文档：工作流经验沉淀为 11 章文档
+
+- **问题** 18 个会话、90 turn、6415 次工具调用积累的经验散落在 `docs/dev-contract.md`、`docs/dev-example/development-log.md`、`balance-pass-*.md` 与 CHANGELOG 里，没有任何一处回答「这个项目的工作流是什么、为什么这样、换一个项目怎么迁移」；新会话必须靠重读多个长文档重建上下文。
+  → **修法** 新增 `docs/workflow-development-experience.md`（1059 行）：§0 阅读指南、§1 项目与角色、§2 工作流总览（七阶段 + 三个反馈闭环）、§3 十条核心经验 E01–E10、§4 分阶段操作手册、§5 案例库 C01–C20、§6 反模式 12 条、§7 可复用模板 7 份、§8 会话记录取数方法（zstd 多帧）、§9 度量体系、§10 迁移清单、§11 遗留与证据索引；并在 `docs/dev-example/development-log.md` §21 与 `docs/gamejam/ai-disclosure.md` §4 留痕。
+  → **验证** 未改代码；GUT **311/311、1270 asserts、37 脚本、退出码 0**；`--headless --import` 退出码 0；`--quit-after 240` 无头冒烟退出码 0、stderr 无 ERROR（仅既有 WARNING）。
+
+### 文档：会话复盘取数方法可复用
+
+- **问题** 上一轮统计 18 个会话的工具分布用的是一次性脚本；Node 的 zstd 解压只解第一帧的坑也没有记录，换人做同一件事会重踩。
+  → **修法** 文档 §8 给出按魔数 `28 B5 2F FD` 切帧逐帧解压的代码、事件结构表（user / assistant / tool-call / tool-result）与统计口径（会话数 / turn / 人类消息 / 工具调用）。
+  → **验证** 本项目 2844 帧全部解压成功，约 2100 万字符；统计结果与 §1.4 的量化画像一致。
+
+---
+
 ## 未发布 — 2026-11-05（角色选择抽离 / 可见 key 补全 / 双人输入方式与双方手柄）
 
 本轮把「选角色」从主菜单拆到模式选择之后，并让本地双人各自选角色与输入方式（双方键鼠、一人键鼠一人手柄、双方手柄均可）；同时补齐设置页等界面漏掉的本地化 key。

@@ -6,7 +6,7 @@
     "run": "Stage",
     "gold": "Gold",
     "zanshin": "Zanshin",
-    "controls": "[PLACEHOLDER] J Slash / K Guard / L Spell / R Restart / Esc Pause / 1–3 Pick",
+    "controls": "J Slash / K Guard / L Spell / R Restart / Esc Pause / 1–3 Pick",
     "controls_template": "P1 %a Slash / %g Guard / %s Spell   %r Restart   %p Pause   1–3 Pick",
     "controls_versus_template": "P1 %a Slash / %g Guard / %s Spell   P2 %d Slash / %f Guard / %S Spell   %r Restart   %p Pause",
     "reward_title": "Choose one insight",
@@ -17,14 +17,14 @@
     "upgrade_unknown": "Unnamed insight",
     "round_start": "Start",
     "versus": "Local Versus",
-    "controls_versus": "[PLACEHOLDER] P1 J Slash / K Guard / L Spell   P2 Numpad 1 Slash / 2 Guard / P Spell   R Restart   Esc Pause",
+    "controls_versus": "P1 J Slash / K Guard / L Spell   P2 Numpad 1 Slash / 2 Guard / P Spell   R Restart   Esc Pause",
     "result_p1": "Player 1 wins",
     "result_p2": "Player 2 wins",
     "menu_hint": "Esc to menu"
   },
   "menu": {
-    "title": "[PLACEHOLDER] Sword · Flow",
-    "subtitle": "[PLACEHOLDER] One instant decides",
+    "title": "Sword · Flow",
+    "subtitle": "Victory decided in a fleeting instant",
     "gold": "Gold",
     "start": "Start Game",
     "mode_title": "Choose Mode",
@@ -47,8 +47,8 @@
     "input_gamepad": "Gamepad",
     "start_duel": "Start Duel",
     "char_a": "A · Balanced",
-    "char_b": "B · Swift",
-    "char_c": "C · Heavy",
+    "char_b": "B · Swift Blade",
+    "char_c": "C · Heavy Blade",
     "quit": "Quit",
     "hint": "Click or press Enter"
   },
@@ -60,18 +60,18 @@
     "owned": "Unlocked",
     "insufficient": "Not enough gold",
     "requires_clear": "Clear the run to unlock",
-    "hard_on": "Hard mode: ON",
-    "hard_off": "Hard mode: OFF",
+    "hard_on": "Asura Mode: ON",
+    "hard_off": "Asura Mode: OFF",
     "section": {
       "character": "Characters",
       "perk": "Run Perks",
       "mode": "Modes"
     },
     "item": {
-      "char_b": {"name": "[PLACEHOLDER] B · Swift", "desc": "[PLACEHOLDER] 11-frame windup, fastest recovery, 7 damage per cut"},
-      "char_c": {"name": "[PLACEHOLDER] C · Heavy", "desc": "[PLACEHOLDER] 40 HP, 15 damage plus 12 frames of stagger, longest windup"},
-      "start_slot": {"name": "[PLACEHOLDER] Starting Insight", "desc": "[PLACEHOLDER] Gain one random insight at the start of each run"},
-      "hard_mode": {"name": "[PLACEHOLDER] Hard Mode", "desc": "[PLACEHOLDER] Opponents start with more flow and act more often; guard windows drop one tier"}
+      "char_b": {"name": "Swift Blade", "desc": "11-frame windup, fastest recovery, 7 damage per cut"},
+      "char_c": {"name": "Heavy Blade", "desc": "40 HP, 15 damage per cut plus 12 frames of stagger, longest windup"},
+      "start_slot": {"name": "Training", "desc": "Gain one random insight at the start of each run"},
+      "hard_mode": {"name": "Asura Mode", "desc": "Foes are faster, stronger, and far more perilous. Try not to fall too quickly."}
     }
   },
   "settings": {
@@ -142,62 +142,62 @@
     "clash": "Clash",
     "down": "Down",
     "unknown": "Unknown",
-    "spell": "[PLACEHOLDER] Spell"
+    "spell": "Spell Card"
   },
   "tutorial": {
-    "start": "[PLACEHOLDER] Opening: read the tell before you move",
-    "guard": "[PLACEHOLDER] Opponent commits: hold guard before the blade lands",
-    "attack": "[PLACEHOLDER] Opponent recovering: strike now, they cannot block",
-    "flow": "[PLACEHOLDER] Low flow: your guard window narrows, steady yourself",
+    "start": "Hold your breath and focus; wait for the blade",
+    "guard": "Guard watertight; nothing slips through",
+    "attack": "Their blade has yet to return; strike the opening",
+    "flow": "Flow runs low; gather your mind first",
     "spell": "[PLACEHOLDER] Spell ready: press L to cast",
-    "wait": "[PLACEHOLDER] Standoff: do not strike first, wait for the opening"
+    "wait": "Blades locked; do not move rashly"
   },
   "upgrade": {
     "u01": {
-      "name": "[PLACEHOLDER] Guard Window",
-      "desc": "[PLACEHOLDER] Guard lasts 3 more frames, easier to catch fast cuts"
+      "name": "Iron Wall",
+      "desc": "Guard lasts 3 more frames; fast cuts are easier to catch"
     },
     "u02": {
-      "name": "[PLACEHOLDER] Quick Commit",
-      "desc": "[PLACEHOLDER] Slash windup -3 frames, win the race"
+      "name": "Swift Commit",
+      "desc": "Slash windup -3 frames; strike first"
     },
     "u03": {
-      "name": "[PLACEHOLDER] Perfect",
-      "desc": "[PLACEHOLDER] Perfect guard returns 18 flow (base is 12)"
+      "name": "True Parry",
+      "desc": "Perfect guard restores 18 flow (base 12)"
     },
     "u04": {
-      "name": "[PLACEHOLDER] Calm Mind",
-      "desc": "[PLACEHOLDER] Start each duel with +10 flow"
+      "name": "Clear Mind",
+      "desc": "Start each duel with +10 flow for an easier opening"
     },
     "u05": {
-      "name": "[PLACEHOLDER] Read",
-      "desc": "[PLACEHOLDER] The opponent's blade warning appears 6 frames earlier"
+      "name": "Edge Glimpse",
+      "desc": "The opponent's blade warning appears 6 frames earlier"
     },
     "u06": {
-      "name": "[PLACEHOLDER] See-Through",
-      "desc": "[PLACEHOLDER] At 50+ flow, negate one hit for an extra 30 flow (once per duel)"
+      "name": "See-Through",
+      "desc": "At 50+ flow, spend 30 flow to negate one hit (once per duel)"
     },
     "u07": {
-      "name": "[PLACEHOLDER] Pursuit",
-      "desc": "[PLACEHOLDER] The next hit within 3s after a hit deals +10 damage (once per duel)"
+      "name": "Pursuit",
+      "desc": "After landing a hit, your next attack within 3s deals +10 damage (once per duel)"
     },
     "u08": {
-      "name": "[PLACEHOLDER] Guts",
-      "desc": "[PLACEHOLDER] No flow loss for 5s after taking a hit"
+      "name": "Guts",
+      "desc": "No flow loss for 5s after taking a hit"
     },
     "u09": {
-      "name": "[PLACEHOLDER] First Strike",
-      "desc": "[PLACEHOLDER] Slash windup -3 frames from second 3 to 8"
+      "name": "First Strike",
+      "desc": "Slash windup -3 frames from second 3 to 8"
     },
     "u10": {
-      "name": "[PLACEHOLDER] Recovery",
-      "desc": "[PLACEHOLDER] Healing after each win is doubled"
+      "name": "Renewal",
+      "desc": "Healing after each win is doubled"
     }
   },
   "spell": {
-    "spell_a": {"name": "[PLACEHOLDER] Stance", "desc": "[PLACEHOLDER] Instant stance: an incoming cut within 45 frames is auto-perfect-blocked and countered for 10 damage; refunds 10 flow if unused"},
-    "spell_b": {"name": "[PLACEHOLDER] Gale Slash", "desc": "[PLACEHOLDER] After an 8-frame charge, cut for 20 damage, ignoring guard"},
-    "spell_c": {"name": "[PLACEHOLDER] Mountain Fall", "desc": "[PLACEHOLDER] After a 20-frame charge, cut for 30 damage, ignoring guard and adding stagger"},
-    "spell_boss": {"name": "[PLACEHOLDER] Final Form", "desc": "[PLACEHOLDER] After a 14-frame charge, cut for 30 damage, ignoring guard and adding stagger"}
+    "spell_a": {"name": "Zanshin", "desc": "Assume a stance: for 45 frames an incoming cut is parried perfectly and answered with a 10-damage counter that ignores guard; if no cut comes, 10 flow is refunded; attacking first cancels the stance."},
+    "spell_b": {"name": "Grand Flurry", "desc": "After an 8-frame charge, strike automatically for 20 damage, ignoring the opponent's guard"},
+    "spell_c": {"name": "Sky Tyrant", "desc": "After a 20-frame charge, strike for 30 damage, ignoring guard and adding stagger"},
+    "spell_boss": {"name": "Lingering Reverie", "desc": "After a 14-frame charge, strike for 30 damage, ignoring guard and adding stagger"}
   }
 }

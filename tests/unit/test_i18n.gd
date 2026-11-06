@@ -12,7 +12,7 @@ func test_english_locale_loads() -> void:
 	I18NManager.set_language("en")
 	assert_eq(I18NManager.get_text("menu.settings"), "Settings")
 	assert_eq(I18NManager.get_text("ui.result_lose"), "Defeat")
-	assert_true(I18NManager.get_text("upgrade.u01.name").begins_with("[PLACEHOLDER]"))
+	assert_eq(I18NManager.get_text("upgrade.u01.name"), "Iron Wall")
 
 
 func test_english_has_all_generic_keys() -> void:
@@ -38,8 +38,8 @@ func test_visible_keys_added_2026_11_05_are_localized() -> void:
 		assert_ne(I18NManager.get_text(key), key, "英文缺失: %s" % key)
 
 
-func test_spell_and_spell_state_have_explicit_placeholders() -> void:
-	# 符卡键与 SPELL 状态名都必须在 JSON 里有显式占位，不能靠 _tr() 回退。
+func test_spell_and_spell_state_have_final_copy() -> void:
+	# 2026-11-06：符卡键与 SPELL 状态名已按定稿回填（不再带占位前缀），且不能靠 _tr() 回退成键名。
 	var keys: Array[String] = [
 		"spell.spell_a.name", "spell.spell_a.desc",
 		"spell.spell_b.name", "spell.spell_b.desc",
@@ -48,7 +48,11 @@ func test_spell_and_spell_state_have_explicit_placeholders() -> void:
 		"state.spell",
 	]
 	for key in keys:
-		assert_true(I18NManager.get_text(key).begins_with("[占位]"), "缺失中文占位: %s" % key)
+		var zh := I18NManager.get_text(key)
+		assert_ne(zh, key, "中文缺文案: %s" % key)
+		assert_false(zh.begins_with("[占位]"), "中文仍是占位: %s" % key)
 	I18NManager.set_language("en")
 	for key in keys:
-		assert_true(I18NManager.get_text(key).begins_with("[PLACEHOLDER]"), "缺失英文占位: %s" % key)
+		var en := I18NManager.get_text(key)
+		assert_ne(en, key, "英文缺文案: %s" % key)
+		assert_false(en.begins_with("[PLACEHOLDER]"), "英文仍是占位: %s" % key)

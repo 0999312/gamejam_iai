@@ -508,11 +508,6 @@ func _tutorial_text() -> String:
 		return _tr("tutorial.attack")
 	if sim.p1.flow <= 20:
 		return _tr("tutorial.flow")
-	# 反馈 02：开局前 6 秒提醒一次「符卡可用」，把 L 键位摆到玩家眼前（文案仍占位）。
-	if sim.p1.spell_card != null and sim.p1.spell_uses_left > 0 \
-			and sim.p1.flow >= sim.p1.spell_card.flow_cost \
-			and sim.frame < sim.opening_lock_frames + 360:
-		return _tr("tutorial.spell")
 	return _tr("tutorial.wait")
 
 
@@ -522,8 +517,10 @@ func _state_label(state: int) -> String:
 
 func _tr(key: String) -> String:
 	var text := I18NManager.get_text(key)
-	if text == key:
-		return "[占位] " + key
+	# 缺键留空，由界面标识空位；不再输出占位前缀（2026-11-06 人类指令）。
+	if text == key or text.is_empty():
+		push_warning("I18N missing key: " + key)
+		return ""
 	return text
 
 
