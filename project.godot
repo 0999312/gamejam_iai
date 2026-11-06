@@ -10,8 +10,12 @@ config_version=5
 
 [application]
 
-config/name="godot_dsh_test"
+config/name="刀剑 · 心流"
 config/version="0.1.0"
+; 窗口标题在运行时按本地化（menu.title）刷新；这里固定 user:// 目录名，
+; 避免改名后存档路径漂移（原 godot_dsh_test 目录见 docs/dev-example/icon-and-window-title.md）。
+config/use_custom_user_dir=true
+config/custom_user_dir_name="iai"
 run/main_scene="res://scenes/menu/menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"

@@ -103,11 +103,14 @@
 | 2026-11-06 | `localization/zh_CN.json`、`localization/en.json`、`tests/unit/test_game_data.gd`、`tests/unit/test_i18n.gd`、`tests/integration/test_duel_hud.gd`、`docs/gamejam/placeholder-inventory.md`、`docs/dev-example/localization-final-copy-and-release-build.md`、`scripts/duel/duel_hud.gd`、`scripts/duel/spell_card.gd`、`scripts/ui/{menu,mode_select,pause_menu,settings,shop,about_panel,character_select}.gd` | DeepSeek Harness（deepseek-flash） | 按人类定稿表 `docs/gamejam/44条本地化占位-定稿.md` 把 44 条占位替换为定稿文案（中英各 165 键），并改写 5 处以「必须以占位开头」为前提的 GUT 断言（奖励按钮前缀、升级/符卡文案、残心层数显示） | **0%（文案）**／100%（测试与工程文档） | 文案逐字对照定稿表复核；**`spell_a.desc` 写「60 帧」而代码 `auto_guard_frames=45`，冲突未改，交人类裁决** | **未新增任何玩家可见文案**；GUT **311/311（1309 asserts，37 脚本，退出码 0）**；同日按人类指令收尾：删除 `tutorial.spell` 显示路径（操作行已含 L）、`shop.hard_on/off` →「修罗模式」、`menu.char_b/c` →「快刀/重刀」、8 处 `_tr()` 兜底改为缺键留空（空绑定显示 `—`）——**未新增玩家可见文案**；`tutorial.spell` 键保留但无显示路径，玩家可见占位为 0；重新导出 `iai.exe` 119,757,696 B / `windows.zip` 48,226,724 B，干净目录冒烟退出码 0 |
 | 2026-11-06 | `assets/fonts/`（重复字体移出）、`assets/particles/`（36→7 张）、`assets/audio/`（4 个零引用音频移出）、`build/windows/`、`docs/dev-example/localization-final-copy-and-release-build.md`（新）、`CHANGELOG.md`、`docs/gamejam/submission-checklist.md` | DeepSeek Harness（deepseek-flash） | 加载 `godot-export-builds` / `godot-platform-desktop` 技能；按人类 `m00002` 第 2 项「整理资源、精简体积、压缩构建成果、直接本地打包」：① 静态审计全库 `res://` 引用并把 33 个零引用素材移入 `temp_assets/`；② 字体去重（只留被引用的 `assets/fonts/MiSans-Semibold.otf`）；③ 换非 mono 导出模板去掉 .NET 运行时依赖；④ release 导出 + 无头冒烟；⑤ zip 重打包 | 100%（构建脚本与工程文档）／**0%（美术、音频）** | 移出的 33 个文件保留在 `temp_assets/_unused_2026-11-06/` 待人类确认后再删；**Spine 运行时授权仍未解决，对外分发前须人类决定** | `iai.exe` 129,180,864 → **119,757,264 B**（pck ≈19.5→10.49 MB），`windows.zip` 57,402,956 → **48,226,367 B**；`--headless --import`、`--export-release`、产物 `--quit-after 300` 冒烟退出码均 0 |
 
+| 2026-11-06 | `icon.svg`、`project.godot`、`export_presets.cfg`、`scripts/core/game_bootstrap.gd`、`README.md`、`AGENTS.md`（红染阴阳图标 / 窗口标题） | DeepSeek Harness（deepseek-flash） | 加载 `godot-export-builds` / `godot-platform-desktop` 技能；按人类 m00002：① 以人类提供的 `temp_assets/Yin_yang.svg` 为底，把原 `icon.svg` 的 X 替换为阴阳、黑色改 `#8e3b3b` 砖红，保留原深蓝圆角底板；② 窗口标题取 `menu.title` 并随 `LanguageChangedEvent` 刷新，`config/name` 与 exe `product_name/file_description` 同步为「刀剑 · 心流」，固定 `user://` 到 `%APPDATA%/iai` 并迁移旧档；③ 重导入、GUT、release 导出、zip 重打 | **代码/配置/文档 100%；美术 0%** | 人类明确判定图标为素材拼接、非 AI 生成美术（m00002）；标题复用既有 `menu.title` 定稿，未新增文案；红色饱和度与底板是否保留待人类目视确认 | **未生成美术资产**：图标 = 人类素材 + 原底板拼接（仅改填充色与构图）；未新增玩家可见文案；GUT **311/311（1309 asserts，37 脚本，退出码 0）**；`iai.exe` 119,893,104 B / `windows.zip` 48,302,523 B；产物 `--quit-after 300` 冒烟退出码 0 |
+
 ## 5. 艺术资产声明（提交时填写并保留）
 
 > 请在提交前由团队负责人确认后勾选：
 
 - [ ] 本作**美术**（角色、场景、UI 视觉、特效贴图、封面）全部由人类制作，**未使用任何 AI 生成工具**。
+- [ ] **应用图标**为人类素材拼接：原 `icon.svg` 底板 + 人类提供的 `Yin_yang.svg`（仅改填充色与构图），**非 AI 生成美术**；说明见 `docs/dev-example/icon-and-window-title.md`。
 - [ ] 本作**音乐 / 音效 / 配音**全部由人类制作或使用合法授权的第三方素材，**未使用任何 AI 生成工具**。
 - [ ] 本作**文案**（剧情、对白、旁白、道具与技能描述、UI 文字、作品 README、宣发文案）全部由人类撰写，**未使用任何 AI 生成工具**。
 - [ ] 本作代码允许使用 AI 辅助，明细见 §4。
@@ -132,6 +135,7 @@
 | Kenney Particle Pack 1.1 | Kenney（CC0） | CC0，可商用 | 已入库 **7 张**（2026-11-06 起；原 36 张中 29 张零引用已移入 `temp_assets/_unused_2026-11-06/`，不入库不导出）：——刀光/回旋（`assets/particles/slash/`）、命中与对刀火花（`impact/`）、架防环与完美格挡（`guard/`）、符卡法阵与蓄力光柱（`spell/`）、扬尘碎屑（`dust/`）、心流光晕（`glow/`） | README 致谢（可选），来源与逐张清单见 `assets/particles/CREDITS.md` |
 | Spine 运行时 spine-godot 4.3（GDExtension） | Esoteric Software | Spine Runtimes License（使用需持有对应 Spine 授权） | 已入库：`addons/spine_godot/bin/`（仅 Windows 库） | 若仓库公开或构建对外分发，需人类先确认授权；当前仅供内部测试 |
 | 测试 chibi 骨架与图集（`resources/spine/skeleton.spine-json` / `.atlas` / `.png`） | 本项目美术 | 团队自有（测试素材，非最终美术） | 已入库：两个灰盒占位的临时替换；五动作版 32 骨骼 / 33 槽位 / 10 IK / 1323×1537 | 正式素材到位后替换；提交清单按 `PLACEHOLDER` 登记 |
+| `icon.svg` 的阴阳基素材 `Yin_yang.svg` | 人类提供（本地 `temp_assets/Yin_yang.svg`） | 团队自有 | 应用图标：保留原底板，阴阳改 `#8e3b3b` 后合成 | 拼接说明见 `docs/dev-example/icon-and-window-title.md`；**非 AI 生成美术** |
 | Ambiance_Rain_Calm_Loop_Stereo.wav → `assets/audio/amb/rain_calm_loop.wav` | 人类提供（原始下载页待补） | CC0（人类声明） | 已入库：对局环境雨声（2 声道 / 24-bit / 48 kHz / 30 s） | README 致谢（可选） |
 
 > 雨声原始下载页 URL 尚未提供；CC0 依据目前来自人类声明与 `temp_assets/` 文件。补来源后请同步 `assets/audio/CREDITS.md`。

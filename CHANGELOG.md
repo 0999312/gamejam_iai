@@ -6,6 +6,39 @@
 
 ---
 
+## 未发布 — 2026-11-06（红染阴阳图标 / 窗口标题随本地化）
+
+本轮把应用图标换成「红染阴阳」，并让窗口标题、导出 exe 的名称与版本资源跟随游戏标题。
+
+### 图标：以 Yin_yang.svg 为底重制 icon.svg
+
+- **问题** 原 `icon.svg` 是深蓝圆角底板 + 红蓝两条 X 线，与「剑术 · 心流 / 阴阳」的主题符号无关。
+  → **修法** 保留原 128×128、`rx=16`、`#2c3e50` 底板（即原图标的背景不动），删掉两条 `stroke-width="16"` 的 X 线，改为 `translate(64 64)` 居中的阴阳：外圆 `r=39` 由黑改 `#8e3b3b`（低饱和砖红，比原 X 的 `#e74c3c` 明度/饱和度各压约一半），白色鱼身与两点取自人类提供的 `temp_assets/Yin_yang.svg`（未改形状、未缩放）。
+  → **验证** `Image.load_svg_from_string(svg, 4.0)` 渲染 512px 预览 → `--headless --import` 后读回 128px 导入纹理 → 导出后从 exe 提取图标（ExtractAssociatedIcon），三处均确认红白阴阳 + 深蓝底板。
+
+### 标题：窗口标题 / exe 元数据跟随 menu.title
+
+- **问题** `config/name` 仍是工程名 `godot_dsh_test`，窗口标题、exe 的 ProductName / FileDescription 全是工程名，与游戏标题脱节。
+  → **修法** ① `project.godot` `config/name` 改「刀剑 · 心流」；② `export_presets.cfg` 的 `product_name` / `file_description` 同步，开启 `application/modify_resources`（实测 Godot 4.7 内置写 PE 资源，无需 rcedit），版本资源 `0.1.0.0`；③ `GameBootstrap` 新增 `_apply_window_title()`，取 `I18NManager.get_text("menu.title")`（zh「刀剑 · 心流」/ en「Sword · Flow」），缺键回退 `application/config/name`，headless 跳过，并订阅 `LanguageChangedEvent` 随语言刷新；④ 因 `config/name` 会改变默认 `user://` 目录，设置 `use_custom_user_dir=true` + `custom_user_dir_name="iai"` 固定存档路径，并把旧档 `%APPDATA%/Godot/app_userdata/godot_dsh_test/meta_save.json`（含 `.bak`）复制到 `%APPDATA%/iai/`。
+  → **验证** GUT **311/311（1309 asserts，37 脚本，退出码 0）**；`--import` 与 `--export-release` 退出码 0；`iai.exe` **119,893,104 B**，`windows.zip` **48,302,523 B**；产物 `--headless --quit-after 300` 退出码 0、中英各 165 条；exe 版本资源读出「刀剑 · 心流」/ 0.1.0.0。
+
+### 坑：改完 icon.svg 必须重导入
+
+- 现象：导入缓存未刷新时，运行中的窗口/任务栏仍显示旧图标，容易被误判为「颜色没改」。处置：改 SVG 后先 `--headless --import`（或编辑器重导入）再运行/导出；Windows 资源管理器另有 exe 图标缓存，覆盖同名 exe 后可能仍显示旧图。
+- 细节与验证数据见 `docs/dev-example/icon-and-window-title.md`。
+
+### 合规
+
+- 图标为**素材拼接**（原底板 + 人类提供的 Yin_yang.svg，仅改填充色/平移），**不属于 AI 生成美术**；`ai-disclosure` 按「美术 0% AI」记录，新增来源行。
+- 未新增玩家可见文案；标题复用既有 `menu.title` 定稿。
+
+### 仍待人类处理
+
+- 红色明度（`#8e3b3b`）与深蓝底板是否保留，可由人类一句话微调（改 `icon.svg` 后重导入 + 重导出即可）。
+- Spine 运行时授权仍未解决，对外分发前须人类决定。
+
+---
+
 ## 未发布 — 2026-11-06（44 条定稿文案回填 / 资源精简 / 发布构建）
 
 本轮把人类定稿表里的 44 条玩家可见文案落进本地化文件，并把工程资源与大包体积压下来、产出可提交的 Windows 构建。

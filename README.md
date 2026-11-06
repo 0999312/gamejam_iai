@@ -1,4 +1,4 @@
-# godot_dsh_test — 开发说明
+# 刀剑 · 心流（gamejam_iai）— 开发说明
 
 > 本文件是**工程开发说明**，供内部开发与外部协作者了解结构、运行、测试和构建；**不是** GameJam 提交用的作品 README。
 > 提交用 README 必须由人类按 `docs/gamejam/submission-checklist.md` §4 撰写，不得由 AI 代写。
@@ -167,3 +167,4 @@ CHANGELOG.md       已交付变更的逐批记录（问题 → 修法 → 验证
 - [Spine 接入](docs/dev-example/spine-integration.md)
 - [雨夜背景与战败表现](docs/dev-example/rainy-night-background.md)
 - [雨夜主题与 CC0 雨声](docs/dev-example/rain-night-theme.md)
+- [工作流开发经验（工程文档）](docs/workflow-development-experience.md)

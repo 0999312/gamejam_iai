@@ -70,6 +70,25 @@ func _ready() -> void:
 	_ensure_audio_buses()
 	apply_settings()
 	_refresh_guide_joy_devices.call_deferred()
+	EventBus.subscribe(&"LanguageChangedEvent", _on_language_changed)
+	_apply_window_title()
+
+
+## 窗口标题跟随本地化：`menu.title` 是人类定稿的游戏名（zh_CN「刀剑 · 心流」/ en「Sword · Flow」）。
+## 缺键时回退 project.godot 的 `config/name`，保证任何构建都有可读标题。
+## 无头运行（GUT / CI / 导出）没有窗口，直接跳过。
+func _apply_window_title() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var title := I18NManager.get_text("menu.title")
+	if title.is_empty() or title == "menu.title":
+		title = String(ProjectSettings.get_setting("application/config/name", ""))
+	DisplayServer.window_set_title(title)
+
+
+## autoload 常驻，不需要 _exit_tree 反订阅；语言一变就刷新标题。
+func _on_language_changed(_event: Event) -> void:
+	_apply_window_title()
 
 
 ## Godot 可能在 autoload 初始化帧还没枚举完已连接的手柄，GUIDE 的

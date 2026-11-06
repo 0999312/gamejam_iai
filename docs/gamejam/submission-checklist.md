@@ -17,7 +17,7 @@
 
 - [ ] 作品内容围绕本期主题，能在 README 中用一句话说清「为什么契合主题」。
 - [ ] 无 NSFW 内容、无违反公序良俗内容。
-- [ ] **美术 0% AI**：立绘/场景/UI/图标/封面均为人类创作或授权素材（逐项核对 `ai-disclosure.md` §6）。
+- [ ] **美术 0% AI**：立绘/场景/UI/图标/封面均为人类创作或授权素材（逐项核对 `ai-disclosure.md` §6）。 **2026-11-06 图标**：`icon.svg` = 原深蓝底板 + 人类提供 `Yin_yang.svg` 的拼接（阴阳黑改 `#8e3b3b`，只改填充色与构图），**非 AI 生成美术**，见 `docs/dev-example/icon-and-window-title.md`。
 - [ ] **音乐/音效 0% AI**：均为人类创作或 CC0/授权素材。
 - [ ] 音频素材许可已逐条登记（CC0/CC-BY/可商用），原始文件未入库，credits 完整（见 `docs/audio-assets-plan.md`）。
 - [ ] 粒子贴图许可已登记：Kenney Particle Pack 1.1（**CC0 1.0**，可商用、署名非必需），**7 张**在库 `assets/particles/**`（2026-11-06 起：原 36 张中 29 张零引用已移入 `temp_assets/_unused_2026-11-06/`，不入库不导出，清单见 `docs/dev-example/localization-final-copy-and-release-build.md` §2），来源清单见 `assets/particles/CREDITS.md`；原始素材包留在本地 `temp_assets/`（已 `.gitignore` + `.gdignore`，不入库、不被 Godot 扫描）。**已接入**命中 / 对刀 / 架防三类（`scripts/duel/duel_fx.gd` + `scenes/duel/duel_fx.tscn`），并由 `slash/twirl_03` 替换挥砍弧、`guard/circle_02`（紫）替换符卡爆环（2026-10-23，验收截图 `docs/dev-example/duel-fx-preview.png` 与 `duel-fx-slash.png`）；符卡法阵/光柱、扬尘、空架、收刀、心流氛围仍待后续批次（映射见 `docs/particle-assets-plan.md` §5）。
@@ -59,8 +59,9 @@
 - [x] 导出预设存在且导出成功（Windows exe 或 web，按主办方要求）。2026-10-20：`Windows Desktop`，`build/windows/iai.exe`，123,636,728 B，嵌入 PCK。2026-10-30（含 Spine，18:56 素材版）：`build/spine_check/iai.exe` **127,489,544 B** + 伴随的 `libspine_godot.windows.template_release.x86_64.dll`（1,774,592 B，Godot 自动带出，无需改 export_presets）；该目录被 `.gitignore` 忽略，仅本地验证用。
 - [x] 导出包内资源齐全（字体、音效、主题、shader 无丢失；`.pck` 一并打包）。已确认中英 151 条在导出 EXE 中加载；2026-11-05 起本地化为 165 条（新增 13 条选人/输入/符卡/状态键），导出包需随下一项重导后复核（本地化 JSON 由 `all_resources` 打包，导出日志可检索到 `res://localization/*.json`）；字体/音效路径未报缺失（导出日志仍有两处重复字体 UID 警告，不影响运行）。
 - [x] **2026-11-06 发布构建（资源精简 + 非 mono 模板 + 打包）**：`build/windows/iai.exe` **119,757,264 B**（pck ≈10.49 MB，模板 109,268,480 B 为非 mono 版，**不依赖 .NET 运行时**）+ `libspine_godot.windows.template_release.x86_64.dll`（1,774,592 B）；`build/windows/windows.zip` **48,226,367 B**（旧 57,402,956 B）。导出前静态审计移除 33 个零引用素材、字体去重；`--headless --import`、`--export-release` 退出码 0；产物 `--headless --quit-after 300` 冒烟退出码 0、无 `SCRIPT ERROR`，日志可见 `Language [zh_CN] loaded successfully with 165 entries`（中英各 165 键）。细节见 `docs/dev-example/localization-final-copy-and-release-build.md` §2。
+- [x] **2026-11-06 图标与标题批次**：`icon.svg` 改为红染阴阳（`#8e3b3b`）+ 原深蓝底板；`config/name` 与 exe `product_name/file_description` 改「刀剑 · 心流」，窗口标题随 `menu.title` 切换；`build/windows/iai.exe` **119,893,104 B** + dll 1,774,592 B，`build/windows/windows.zip` **48,302,523 B**；`--import` / `--export-release` 退出码 0，产物 `--quit-after 300` 冒烟退出码 0（中英各 165 条）；exe 版本资源（ProductName/FileDescription=刀剑 · 心流、0.1.0.0）与图标已解包核对。细节见 `docs/dev-example/icon-and-window-title.md`。
 - [x] 在**干净目录**解压/运行一次（2026-11-06）：把 `windows.zip` 解到 `%TEMP%/iai_clean`（无 `.godot/` 导入缓存），`iai.exe --headless --quit-after 300` **退出码 0**，日志两行语言加载各 165 条、无 `SCRIPT ERROR`。**仍未做的**：GUI 模式（非 headless）与另一台非开发机。 
-- [x] 记录构建版本号与导出时间。Godot 4.7.2.stable.mono / 最新本地产物 2026-10-20 19:54；语义化版本 **`0.1.0`**（2026-10-21 起），构建号 `YYYY-MM-DD-NN`。
+- [x] 记录构建版本号与导出时间。Godot 4.7.2.stable（导出模板：非 mono `windows_release_x86_64`）/ 最新本地产物 2026-11-06 19:16；语义化版本 **`0.1.0`**（2026-10-21 起），构建号 `YYYY-MM-DD-NN`。
 - [x] GitHub Action 自动导出并创建 Release（`.github/workflows/build.yml`）：构建号 `YYYY-MM-DD-NN`（UTC，01 起），tag/Release 标题/附件同名；EXE 只作 Release 附件与 Artifact，不入库。远端已于 2026-10-20 跑通，Release `2026-10-20-02` 带 118 MB EXE；首次空 Release `2026-10-20-01` 保留未删。
 - [ ] 保留一份带 tag 的源码快照（如 `v0.9-submit`），避免提交后误改。
 - [x] 开发说明 README 已写（`README.md`，仅工程/构建/测试说明，不是提交用作品 README）；提交用 README 仍须人类按 §4 撰写。
