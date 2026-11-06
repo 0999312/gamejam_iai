@@ -6,6 +6,21 @@
 
 ---
 
+## 未发布 — 2026-11-06（提交前打包验证，20:00）
+
+截止前一日打包：不改功能，只重导出、重打包、复测。
+
+### 构建
+- **问题** 19:22 打出的 `windows.zip` 早于 19:23 的图标提交，无法证明包内 exe 与 HEAD `ce7c1cf` 一致。
+  → **修法** 从 HEAD 重新 `--export-release "Windows Desktop"`，再重打 zip。
+  → **验证** `iai.exe` **119,893,104 B**（与旧产物尺寸一致，说明图标提交未改变构建结果）、dll 1,774,592 B；`windows.zip` **48,490,953 B**；干净目录 `%TEMP%/iai_final_check` 中 `--headless --quit-after 300` 退出码 0，中英各 165 条，ERROR 与 SCRIPT ERROR 均 0；GUT **311/311（1309 asserts，37 脚本，退出码 0，5.5s）**。
+
+### 合规
+- 「关于」页二创声明 `about.derivative` 在位；中英各 165 键，仅 `spell_a.desc` 一条无显示路径的占位。
+- 记录见 `docs/gamejam/submission-checklist.md` §3 与 `docs/gamejam/ai-disclosure.md` §4。
+
+---
+
 ## 未发布 — 2026-11-06（红染阴阳图标 / 窗口标题随本地化）
 
 本轮把应用图标换成「红染阴阳」，并让窗口标题、导出 exe 的名称与版本资源跟随游戏标题。

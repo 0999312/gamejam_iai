@@ -60,6 +60,7 @@
 - [x] 导出包内资源齐全（字体、音效、主题、shader 无丢失；`.pck` 一并打包）。已确认中英 151 条在导出 EXE 中加载；2026-11-05 起本地化为 165 条（新增 13 条选人/输入/符卡/状态键），导出包需随下一项重导后复核（本地化 JSON 由 `all_resources` 打包，导出日志可检索到 `res://localization/*.json`）；字体/音效路径未报缺失（导出日志仍有两处重复字体 UID 警告，不影响运行）。
 - [x] **2026-11-06 发布构建（资源精简 + 非 mono 模板 + 打包）**：`build/windows/iai.exe` **119,757,264 B**（pck ≈10.49 MB，模板 109,268,480 B 为非 mono 版，**不依赖 .NET 运行时**）+ `libspine_godot.windows.template_release.x86_64.dll`（1,774,592 B）；`build/windows/windows.zip` **48,226,367 B**（旧 57,402,956 B）。导出前静态审计移除 33 个零引用素材、字体去重；`--headless --import`、`--export-release` 退出码 0；产物 `--headless --quit-after 300` 冒烟退出码 0、无 `SCRIPT ERROR`，日志可见 `Language [zh_CN] loaded successfully with 165 entries`（中英各 165 键）。细节见 `docs/dev-example/localization-final-copy-and-release-build.md` §2。
 - [x] **2026-11-06 图标与标题批次**：`icon.svg` 改为红染阴阳（`#8e3b3b`）+ 原深蓝底板；`config/name` 与 exe `product_name/file_description` 改「刀剑 · 心流」，窗口标题随 `menu.title` 切换；`build/windows/iai.exe` **119,893,104 B** + dll 1,774,592 B，`build/windows/windows.zip` **48,302,523 B**；`--import` / `--export-release` 退出码 0，产物 `--quit-after 300` 冒烟退出码 0（中英各 165 条）；exe 版本资源（ProductName/FileDescription=刀剑 · 心流、0.1.0.0）与图标已解包核对。细节见 `docs/dev-example/icon-and-window-title.md`。
+- [x] **2026-11-06 20:00 提交前最终重导出（从 HEAD `ce7c1cf`）**：先前 `windows.zip`（48,302,523 B，19:22）早于 19:23 的图标提交，无法证明与 HEAD 一致；故重新 `--export-release "Windows Desktop"`（退出码 0）→ `build/windows/iai.exe` **119,893,104 B** + `libspine_godot.windows.template_release.x86_64.dll` 1,774,592 B，`windows.zip` 重打 **48,490,953 B**（含 2 文件）；解压到干净目录 `%TEMP%/iai_final_check`（无 `.godot/`）后 `iai.exe --headless --quit-after 300` **退出码 0**，日志仅 `Language [zh_CN] loaded successfully with 165 entries` / `[en] … 165 entries`，`ERROR` 与 `SCRIPT ERROR` 各 0；全量 GUT **311/311（1309 asserts，37 脚本，退出码 0，5.5s）**。**仍未做**：GUI（非 headless）实机、非开发机。
 - [x] 在**干净目录**解压/运行一次（2026-11-06）：把 `windows.zip` 解到 `%TEMP%/iai_clean`（无 `.godot/` 导入缓存），`iai.exe --headless --quit-after 300` **退出码 0**，日志两行语言加载各 165 条、无 `SCRIPT ERROR`。**仍未做的**：GUI 模式（非 headless）与另一台非开发机。 
 - [x] 记录构建版本号与导出时间。Godot 4.7.2.stable（导出模板：非 mono `windows_release_x86_64`）/ 最新本地产物 2026-11-06 19:16；语义化版本 **`0.1.0`**（2026-10-21 起），构建号 `YYYY-MM-DD-NN`。
 - [x] GitHub Action 自动导出并创建 Release（`.github/workflows/build.yml`）：构建号 `YYYY-MM-DD-NN`（UTC，01 起），tag/Release 标题/附件同名；EXE 只作 Release 附件与 Artifact，不入库。远端已于 2026-10-20 跑通，Release `2026-10-20-02` 带 118 MB EXE；首次空 Release `2026-10-20-01` 保留未删。
@@ -70,6 +71,7 @@
 
 - [ ] 可运行构建（按主办方指定格式）。
 - [ ] **README**（人类撰写）：一句话创意、玩法与操作说明、主题契合说明、亮点、截图、致谢（第三方素材 + AI 披露链接）。
+  - 2026-11-06：已建立**空骨架** `docs/gamejam/README-submit-skeleton.md`（章节结构 + 已核实事实表 + 规约固定声明），**正文仍为 `[待人类撰写]`**；按 R2 不得由 AI 起草正文。
 - [ ] **封面图**（人类绘制或授权素材，非 AI）。
 - [ ] `docs/gamejam/ai-disclosure.md`（或仓库链接 + 该文件）。
 - [ ] 团队信息与署名。
@@ -123,6 +125,7 @@
 | PH-17 | 多语言 | `localization/en.json` 内容占位（通用 UI 已英文，其余 `[PLACEHOLDER]`；含 `ui.controls` 两条） | 47 | 人类 | 待翻译/改写 |
 | PH-18 | HUD / 符卡（v0.17 起含关底） | 符卡名 + 描述（`spell.spell_a/b/c/boss.name`、`spell.spell_a/b/c/boss.desc`） | 8 | 人类 | 待提供；v0.21 起已有 `[占位] 符卡 A/B/C/关底` 文本，替换为正式文案即可 |
 | PH-19 | 战斗 / 角色表现（2026-10-29 新增） | 测试 chibi Spine 骨架（`resources/spine/skeleton.spine-json` / `.atlas` / `.png` + 8 份 `resources/spine/<id>.tres`） | 8 角色共用 1 套 | 人类（美术） | 已接入，2026-11-04 换入**五动作版**（32 骨骼 / 33 槽位 / 10 IK / 1323×1537 / 26 regions）：`zhanli` 站立、`gongji` 攻击、`bei_gongji` 受击、`fangyu` 防御、`siwang` 战败；档案映射为 IDLE / COMMIT·SLASH·RECOVERY / HITSTUN / GUARD·GUARD_REC·CLASH / DOWN，倒地播 `siwang` 并保持可见；`SPELL` 已映射 `fangyu`（A 窗口内冻结末帧）、`CLASH` 借 `fangyu`；3.8 导出经提版（10 条 `constraints` + 38 段曲线转换），正式素材需 4.3 重导；**不是最终美术**，替换见 `docs/dev-example/spine-integration.md` §7；是否随作品分发取决于 §1 授权决策 |
+| PH-20 | 提交 README 正文 | 一句话简介 / 主题契合 / 玩法亮点等正文（骨架：`docs/gamejam/README-submit-skeleton.md`） | 1 篇 | 人类 | 2026-11-06 建骨架，正文待撰写 |
 
 - [ ] 全部占位已替换为人类内容（§7 清零）。
 

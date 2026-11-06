@@ -105,6 +105,7 @@
 
 | 2026-11-06 | `icon.svg`、`project.godot`、`export_presets.cfg`、`scripts/core/game_bootstrap.gd`、`README.md`、`AGENTS.md`（红染阴阳图标 / 窗口标题） | DeepSeek Harness（deepseek-flash） | 加载 `godot-export-builds` / `godot-platform-desktop` 技能；按人类 m00002：① 以人类提供的 `temp_assets/Yin_yang.svg` 为底，把原 `icon.svg` 的 X 替换为阴阳、黑色改 `#8e3b3b` 砖红，保留原深蓝圆角底板；② 窗口标题取 `menu.title` 并随 `LanguageChangedEvent` 刷新，`config/name` 与 exe `product_name/file_description` 同步为「刀剑 · 心流」，固定 `user://` 到 `%APPDATA%/iai` 并迁移旧档；③ 重导入、GUT、release 导出、zip 重打 | **代码/配置/文档 100%；美术 0%** | 人类明确判定图标为素材拼接、非 AI 生成美术（m00002）；标题复用既有 `menu.title` 定稿，未新增文案；红色饱和度与底板是否保留待人类目视确认 | **未生成美术资产**：图标 = 人类素材 + 原底板拼接（仅改填充色与构图）；未新增玩家可见文案；GUT **311/311（1309 asserts，37 脚本，退出码 0）**；`iai.exe` 119,893,104 B / `windows.zip` 48,302,523 B；产物 `--quit-after 300` 冒烟退出码 0 |
 
+| 2026-11-06 | `build/windows/`（重导出与重打包）、`docs/gamejam/submission-checklist.md`、`docs/gamejam/ai-disclosure.md`、`CHANGELOG.md` | DeepSeek Harness（deepseek-flash） | 加载 `godot-export-builds` / `godot-testing-patterns` 技能，做截止前一日打包验证（功能冻结，不改游戏代码）：① 全量 GUT；② 从 HEAD `ce7c1cf` 重新 `--export-release`；③ 重打 `windows.zip` 并在干净目录解压冒烟；④ 复核本地化键数与「关于」页二创声明 | 100%（构建/验证与工程文档）／**0%（美术、音频、文案）** | 未改动任何游戏代码与玩家可见文案；**Spine 运行时授权、提交 README 正文与封面仍待人类** | GUT **311/311（1309 asserts，37 脚本，退出码 0，5.5s）**；`iai.exe` **119,893,104 B** + dll 1,774,592 B（20:00）；`windows.zip` **48,490,953 B**（2 文件）；干净目录 `%TEMP%/iai_final_check` 冒烟 `--quit-after 300` 退出码 0、中英各 165 条、ERROR 与 SCRIPT ERROR 均 0；`about.derivative` 声明在位 |
 ## 5. 艺术资产声明（提交时填写并保留）
 
 > 请在提交前由团队负责人确认后勾选：
