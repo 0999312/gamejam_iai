@@ -12,6 +12,15 @@ const MENU_SCENE := "res://scenes/menu/menu.tscn"
 
 const OFFER_KEYS: Array[Key] = [KEY_1, KEY_2, KEY_3]
 
+## 单人阶梯前四关的敌方图集：第 N 关给 P2 席位换 skeleton_eN 贴图。
+## BOSS 关（第 5 关）不在此表，沿用默认 P2 图集；本地双人同理。
+const STAGE_ENEMY_ATLASES: Array[String] = [
+	"res://resources/spine/skeleton_e1.atlas",
+	"res://resources/spine/skeleton_e2.atlas",
+	"res://resources/spine/skeleton_e3.atlas",
+	"res://resources/spine/skeleton_e4.atlas",
+]
+
 ## 开场礼让与对手开局心流：写进常量，避免三处魔法数字各自漂移。
 const OPENING_LOCK_FRAMES := 180
 const ENEMY_START_FLOW := 40
@@ -258,6 +267,7 @@ func _start_stage() -> void:
 	_close_pause_panel()
 
 	if _view != null:
+		_view.set_seat_atlas(enemy_atlas_for_stage(run.stage_index))
 		_view.bind(sim)
 	if _audio != null:
 		_audio.bind(sim)
@@ -288,6 +298,7 @@ func _start_versus() -> void:
 	_close_pause_panel()
 
 	if _view != null:
+		_view.set_seat_atlas(null)
 		_view.bind(sim)
 	if _audio != null:
 		_audio.bind(sim)
@@ -311,6 +322,18 @@ func _clear_input_flags() -> void:
 	_p2_attack_queued = false
 	_p2_guard_queued = false
 	_p2_spell_queued = false
+
+
+## 第 N 关（0 基）的敌方图集；BOSS 关、越界或资源缺失都返回 null，
+## 让 DuelView 沿用默认 P2 图集，不影响开局。
+static func enemy_atlas_for_stage(stage_index: int) -> Resource:
+	if stage_index < 0 or stage_index >= STAGE_ENEMY_ATLASES.size():
+		return null
+	var path: String = STAGE_ENEMY_ATLASES[stage_index]
+	if not ResourceLoader.exists(path):
+		push_warning("DuelController: 敌方图集缺失 %s，回退默认 P2 图集" % path)
+		return null
+	return load(path)
 
 
 func _on_offer_chosen(index: int) -> void:

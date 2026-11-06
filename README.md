@@ -74,7 +74,7 @@ scripts/
   audio/           DuelAudio
 input/             GUIDE 动作与上下文资源（actions/*.tres、contexts/*.tres）
 resources/unlocks/ 商店条目（数据驱动，唯一数据源）
-resources/spine/   Spine 骨架（skeleton.spine-json / skeleton.atlas / skeleton.png）、P2 图集（skeleton_p2.atlas / skeleton_p2.png）与每角色档案 <id>.tres
+resources/spine/   Spine 骨架（skeleton.spine-json / skeleton.atlas / skeleton.png）、P2 图集（skeleton_p2.atlas / skeleton_p2.png）、单人前四关敌方配色（skeleton_e1..e4.atlas / .png）与每角色档案 <id>.tres
 localization/      zh_CN.json、en.json
 tests/             unit / integration（GUT）
 tools/             一次性脚本（GUIDE 上下文生成、平衡模拟器、逐帧追踪）

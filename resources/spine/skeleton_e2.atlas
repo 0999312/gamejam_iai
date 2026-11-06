@@ -1,0 +1,188 @@
+
+skeleton_e2.png
+size: 1323,1537
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+meimao
+  rotate: false
+  xy: 1067, 512
+  size: 202, 53
+  orig: 204, 55
+  offset: 1, 1
+  index: -1
+qugan
+  rotate: true
+  xy: 2, 32
+  size: 377, 819
+  orig: 377, 819
+  offset: 0, 0
+  index: -1
+tongkong_you
+  rotate: true
+  xy: 1256, 1171
+  size: 34, 54
+  orig: 36, 58
+  offset: 1, 2
+  index: -1
+tongkong_zuo
+  rotate: false
+  xy: 1157, 7
+  size: 149, 61
+  orig: 151, 63
+  offset: 1, 1
+  index: -1
+tou
+  rotate: false
+  xy: 641, 821
+  size: 328, 326
+  orig: 330, 328
+  offset: 1, 1
+  index: -1
+yanbai
+  rotate: true
+  xy: 1256, 1367
+  size: 168, 59
+  orig: 170, 61
+  offset: 1, 1
+  index: -1
+yanjing
+  rotate: false
+  xy: 973, 5
+  size: 182, 63
+  orig: 184, 65
+  offset: 1, 1
+  index: -1
+zuiba
+  rotate: false
+  xy: 595, 411
+  size: 37, 17
+  orig: 39, 19
+  offset: 1, 1
+  index: -1
+zuojiao
+  rotate: true
+  xy: 1067, 567
+  size: 89, 234
+  orig: 91, 236
+  offset: 1, 1
+  index: -1
+zuoshou dabi
+  rotate: false
+  xy: 1194, 708
+  size: 89, 121
+  orig: 91, 124
+  offset: 1, 2
+  index: -1
+zuoshou shouzhang
+  rotate: true
+  xy: 1256, 1207
+  size: 70, 49
+  orig: 72, 51
+  offset: 1, 1
+  index: -1
+zuoshou xiaobi
+  rotate: true
+  xy: 971, 923
+  size: 128, 160
+  orig: 133, 162
+  offset: 1, 1
+  index: -1
+zuoxiaotui
+  rotate: true
+  xy: 823, 2
+  size: 66, 148
+  orig: 68, 150
+  offset: 1, 1
+  index: -1
+刀身
+  rotate: false
+  xy: 2, 816
+  size: 637, 719
+  orig: 699, 752
+  offset: 47, 13
+  index: -1
+刀鞘
+  rotate: false
+  xy: 2, 411
+  size: 591, 403
+  orig: 1920, 1080
+  offset: 724, 440
+  index: -1
+前发
+  rotate: false
+  xy: 823, 70
+  size: 496, 358
+  orig: 498, 360
+  offset: 1, 1
+  index: -1
+右手大臂
+  rotate: true
+  xy: 1133, 963
+  size: 88, 100
+  orig: 90, 103
+  offset: 1, 2
+  index: -1
+右手小臂
+  rotate: false
+  xy: 1235, 965
+  size: 86, 86
+  orig: 88, 89
+  offset: 1, 2
+  index: -1
+右手手掌
+  rotate: true
+  xy: 1256, 1279
+  size: 86, 59
+  orig: 89, 61
+  offset: 1, 2
+  index: -1
+右脚
+  rotate: true
+  xy: 971, 1053
+  size: 94, 303
+  orig: 100, 308
+  offset: 0, 5
+  index: -1
+后发
+  rotate: true
+  xy: 595, 430
+  size: 384, 470
+  orig: 386, 472
+  offset: 1, 1
+  index: -1
+耳发
+  rotate: true
+  xy: 1104, 831
+  size: 90, 175
+  orig: 92, 177
+  offset: 1, 1
+  index: -1
+蝴蝶结
+  rotate: true
+  xy: 1016, 1159
+  size: 376, 238
+  orig: 379, 240
+  offset: 1, 1
+  index: -1
+衣服
+  rotate: false
+  xy: 641, 1149
+  size: 373, 386
+  orig: 376, 388
+  offset: 0, 0
+  index: -1
+袖子右
+  rotate: true
+  xy: 971, 819
+  size: 102, 131
+  orig: 105, 132
+  offset: 0, 1
+  index: -1
+袖子左边
+  rotate: false
+  xy: 1067, 658
+  size: 125, 159
+  orig: 130, 166
+  offset: 2, 3
+  index: -1

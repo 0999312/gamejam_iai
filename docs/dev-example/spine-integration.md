@@ -280,8 +280,8 @@ time_scale = 动画时长(秒) / (动作窗口帧数 / 60)
 站 P1 时也变蓝。因此 P2 换装放在 `DuelView` 的表现层：
 
 - `P2_ATLAS_PATH = "res://resources/spine/skeleton_p2.atlas"`；
-- `_profile_for_side(profile, side)` 在 `side == P2` 时克隆原档案，只把 `atlas_file` 换成 P2 图集，
-  按原档案 `instance_id` 缓存，避免每次 bind 重建骨架；P1 直接返回原档案；
+- `_profile_for_side(profile, side)` 在 `side == P2` 时克隆原档案，只把 `atlas_file` 换成席位图集；
+  缓存键是「档案 `instance_id` + 图集 `instance_id`」，换关换图集不会复用旧克隆；P1 直接返回原档案；
 - `SpineFighterView._shared_data()` 的缓存键包含 atlas 的 `instance_id`，所以同角色 P1/P2 会命中
   两份不同的 `SpineSkeletonDataResource`，互不污染；
 - 图集缺失或导入失败时返回 `null`，回退原图集，不会阻断开局；
@@ -294,6 +294,23 @@ time_scale = 动画时长(秒) / (动作窗口帧数 / 60)
 > 换 2P 贴图时只更新 `skeleton_p2.png` 与 `skeleton_p2.atlas` 首行页名，**不要把 `char_b.tres` 改成
 > P2 图集**；2P 是席位，不是角色。
 
+### 6.2 单人阶梯前四关的敌方图集
+
+单人模式第 1–4 关的敌人是同一副骨架的不同配色（`skeleton_e1..e4.png`），第 5 关 BOSS 与本地双人
+继续用 P2 蓝色衣装。图集仍是「按席位覆盖」，只是覆盖源由控制器按关卡提供：
+
+- `duel_controller.gd` 的 `STAGE_ENEMY_ATLASES` 只列 4 项（`skeleton_e1.atlas`…`skeleton_e4.atlas`）；
+- `static func enemy_atlas_for_stage(stage_index: int) -> Resource`：越界（含 BOSS 关 `stage_index == 4`）
+  返回 `null`，路径缺失时 `push_warning` 后也返回 `null`，由 `DuelView` 回退默认 P2 图集；
+- `_start_stage()` 在 `bind(sim)` 之前调 `_view.set_seat_atlas(enemy_atlas_for_stage(run.stage_index))`；
+  `_start_versus()` 调 `_view.set_seat_atlas(null)` 复位，本地双人仍是 P2 蓝色；
+- `DuelView.set_seat_atlas(atlas)` 只在值变化时记录，已绑局的会立即 `_bind_spine()` 重挂；
+  `_resolve_seat_atlas()` 的优先级是「按关覆盖 → `p2_atlas_file` → 约定 P2 路径」。
+
+四份新 `.atlas` 都以 `skeleton_p2.atlas` 为模板，仅页名改成 `skeleton_eN.png`，26 个 region 坐标不变；
+PNG 由人类提供、同尺寸 1323×1537，AI 未改像素。换关时同角色也不会污染 P1：克隆键含图集
+`instance_id`，`SpineFighterView._shared_data()` 按 atlas 分别缓存骨架数据。
+
 ## 7. 美术替换步骤（人类）
 
 1. 在 **Spine 4.3** 里打开/升级工程，导出 **JSON**（不是二进制 `.skel`）+ atlas + PNG；
@@ -301,6 +318,7 @@ time_scale = 动画时长(秒) / (动作窗口帧数 / 60)
 3. 覆盖 `resources/spine/` 下同名文件；图集页 PNG 名字若变了，同步改 `.atlas` 页名与 `.tres` 引用；
    若导出把图片放进子目录，`.atlas` 的 region 名会带 `images/` 前缀，必须与 JSON 附件名对齐（见 §4.2）；
    P2 蓝色衣装是独立图集 `skeleton_p2.png` / `skeleton_p2.atlas`，不进角色 `.tres`（见 §6.1）；
+   单人前四关的敌方配色同理，是 `skeleton_e1..e4.png` / `.atlas`，由关卡表选图集（见 §6.2）；
 4. 若角色有独立素材，按角色 id 新建/覆盖 `resources/spine/<id>.tres`，把 `animation_map` 按上表填好；
 5. `godot.exe --headless --path . --import` 重新导入；
 6. 跑 `godot.exe --path .` 进一局，确认脚底对齐（必要时调 `offset`）与五条动画切换。
@@ -314,9 +332,10 @@ time_scale = 动画时长(秒) / (动作窗口帧数 / 60)
   **5 条动画与时长**、GUARD/GUARD_REC/HITSTUN/CLASH/DOWN 各自映射、攻击切换、待机推进、
   攻击按整刀窗口重定时、构→斩不重启、再次进构重播、缺动画只报一次、镜像与关闭镜像、
   DOWN 播 siwang 且可见、无 DOWN 映射回退灰盒、暂停冻结、缩放、clear 释放）。
-- `tests/integration/test_duel_view_spine.gd`：8 例（ready 后 bind 双人接管、先 bind 再入树、未知角色回退、
-  显式字典覆盖、无 DOWN 映射回退灰盒、P2 图集隔离、暂停透传、换局不重复挂节点）。
-- 全量：**280/280 passed，1077 asserts，35 脚本，退出码 0**（Spine 子集 37 例）。
+- `tests/integration/test_duel_view_spine.gd`：11 例（ready 后 bind 双人接管、先 bind 再入树、未知角色回退、
+  显式字典覆盖、无 DOWN 映射回退灰盒、P2 图集隔离、**四关图集阶梯与越界回退**、
+  **按关覆盖只染 P2**、**换关重建克隆**、暂停透传、换局不重复挂节点）。
+- 全量：**314/314 passed，1344 asserts，37 脚本，退出码 0**（Spine 子集 40 例）。
 
 > 注意：headless GUT 里 `wait_frames()` 只等物理帧，`_process` 可能跨十几帧才跑一次；
 > 等动画要用 `await wait_process_frames(n)`，或直接调 `view.call("_update_spine")`。

@@ -25,8 +25,9 @@ const CHARGE_GOLD := Color("#ffc94a")
 
 const FX_SCENE := preload("res://scenes/duel/duel_fx.tscn")
 const BG_SCENE := preload("res://scenes/duel/rainy_night.tscn")
-## P2 的独立图集：同一副骨架换蓝色衣装贴图。按席位而非角色 id 绑定，
+## 默认的 P2 图集：同一副骨架换蓝色衣装贴图。按席位而非角色 id 绑定，
 ## 这样同一角色站在 P2 时也变蓝，而站在 P1 时仍是原色。
+## 单人阶梯第 1–4 关会由控制器传入 skeleton_e1..e4 覆盖，BOSS 关与双人走这里。
 const P2_ATLAS_PATH := "res://resources/spine/skeleton_p2.atlas"
 
 var sim: DuelSim
@@ -49,10 +50,14 @@ var _fx: DuelFx
 var _spine_p1: SpineFighterView
 var _spine_p2: SpineFighterView
 
-## P2 图集与原档案克隆的缓存。键是原档案的 instance_id：
-## 同一角色反复 bind 时复用同一个副本，SpineFighterView 不会每次重建骨架。
+## 默认 P2 图集的懒加载缓存；_seat_atlas 是控制器按关传入的覆盖，优先于它。
 var _p2_atlas: Resource
-var _p2_profiles: Dictionary = {}
+## 右侧席位（P2）克隆档案的缓存。键是「原档案 instance_id + 图集 instance_id」：
+## 同一角色在同一套图集下反复 bind 时复用副本；换关换图集时不会错拿旧克隆。
+var _seat_profiles: Dictionary = {}
+## 单人阶梯前四关的敌方图集，由控制器在 bind 前传入；为空时走默认 P2 图集
+## （BOSS 关与本地双人都是这条路）。
+var _seat_atlas: Resource
 
 var _flash: float = 0.0
 ## 符卡全屏淡紫闪的剩余量；内外爆环本身已交给 `DuelFx.burst_spell()`。
@@ -595,23 +600,36 @@ func _attach_spine_profile(view: SpineFighterView, fighter: FighterState) -> boo
 func _profile_for_side(profile: SpineFighterProfile, side: int) -> SpineFighterProfile:
 	if profile == null or side != DuelTypes.Side.P2:
 		return profile
-	var atlas := _resolve_p2_atlas()
+	var atlas := _resolve_seat_atlas()
 	if atlas == null or profile.atlas_file == atlas:
 		return profile
-	var key := profile.get_instance_id()
-	var cached: Variant = _p2_profiles.get(key)
+	var key := "%d:%d" % [profile.get_instance_id(), atlas.get_instance_id()]
+	var cached: Variant = _seat_profiles.get(key)
 	if cached is SpineFighterProfile:
 		return cached
-	var p2_profile := profile.duplicate() as SpineFighterProfile
-	if p2_profile == null:
+	var seat_profile := profile.duplicate() as SpineFighterProfile
+	if seat_profile == null:
 		return profile
-	p2_profile.atlas_file = atlas
-	_p2_profiles[key] = p2_profile
-	return p2_profile
+	seat_profile.atlas_file = atlas
+	_seat_profiles[key] = seat_profile
+	return seat_profile
 
 
-## P2 图集缺失或导入失败时回退原图集，保证对局仍能开。
-func _resolve_p2_atlas() -> Resource:
+## 控制器按关切换右侧席位的图集：第 1–4 关各一套人形贴图，
+## BOSS 关与本地双人传 null 回到默认 P2 蓝色图集。已绑局时立即重挂档案。
+func set_seat_atlas(atlas: Resource) -> void:
+	if _seat_atlas == atlas:
+		return
+	_seat_atlas = atlas
+	if sim != null:
+		_bind_spine()
+
+
+## 右侧席位图集：控制器按关传入的覆盖优先，其次 p2_atlas_file，
+## 最后默认 P2 图集。缺失或导入失败时回退原图集，保证对局仍能开。
+func _resolve_seat_atlas() -> Resource:
+	if _seat_atlas != null:
+		return _seat_atlas
 	if p2_atlas_file != null:
 		return p2_atlas_file
 	if _p2_atlas == null and ResourceLoader.exists(P2_ATLAS_PATH):

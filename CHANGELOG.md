@@ -6,6 +6,45 @@
 
 ---
 
+## 未发布 — 2026-11-07（单人前四关敌方骨骼材质）
+
+把人类提供的四张骨骼配色分配给单人阶梯第 1–4 关的敌人；第 5 关 BOSS 与本地双人继续用 P2 蓝色衣装。
+
+### 机制
+- **问题** 单人 5 关的敌人此前共用原色图集（`skeleton.atlas` / `skeleton.png`），关与关之间只有数值与 AI
+  档位差异，战斗外观完全相同，看不出「一路打到关底」的推进感。
+  → **修法** 新增 `resources/spine/skeleton_e1..e4.png` 与同名 `.atlas`（以 `skeleton_p2.atlas`
+  为模板，仅页名分别改成 `skeleton_eN.png`，26 个 region 坐标不变；PNG 为人类素材原样复制，未改像素）。
+  `DuelController.STAGE_ENEMY_ATLASES` 只登记前四关；`enemy_atlas_for_stage()` 越界（含 BOSS 关
+  `stage_index == 4`）返回 `null`。`_start_stage()` 在绑定对局前调 `DuelView.set_seat_atlas()`，
+  指定该关右侧席位的图集；`_start_versus()` 传 `null` 复位，双人仍是 P2。
+  → **验证** `--import` 退出码 0，`.ctex`/`.spatlas` 产物齐全；GUT **314/314（1344 asserts，37 脚本，
+  退出码 0）**，其中 `test_duel_view_spine.gd` 定向 **11/11（60 asserts）**。
+
+### 表现
+- **问题** 席位图集原先只按 P2 写死，缓存键只有档案 `instance_id`；若直接复用，换关时会让第 2 关仍显示
+  第 1 关的克隆。
+  → **修法** `DuelView` 增加 `set_seat_atlas(atlas)` 与 `_seat_atlas`，优先级为「按关覆盖 →
+  `p2_atlas_file` → 约定 P2 路径」；克隆缓存键改为「档案 `instance_id` + 图集 `instance_id`」，
+  并在已绑局时立即重挂。图集缺失 `push_warning` 后回退默认 P2 图集，不阻断开局。
+  → **验证** 新增 3 例：四关映射与越界 `null`、按关覆盖只染 P2（P1 仍 `skeleton.atlas`）、换图集重建克隆；
+  原有「双人 P2 用 `skeleton_p2.atlas`」用例保持通过。
+
+### 构建
+- **问题** 上一版产物 `build/windows/iai.exe`（119,893,104 B）不含四张新配色图集。
+  → **修法** `--headless --export-release "Windows Desktop" build/windows/iai.exe`（单文件嵌入 PCK）。
+  → **验证** `iai.exe` **121,225,120 B** + `libspine_godot.windows.template_release.x86_64.dll` 1,774,592 B；
+  产物 `--headless --quit-after 300` 退出码 0，中英各 165 条；日志里 `user://logs` 写入与根证书两条
+  ERROR 与 2026-11-06 的 `smoke2.log` 完全一致，属既有环境侧问题，与本次改动无关。
+
+### 文档
+- `docs/dev-example/spine-integration.md` §6.2（新）、§7 步骤 3、§8.1 计数；
+  `docs/dev-example/development-log.md` §18；`README.md` 资源目录；本文件与
+  `docs/gamejam/ai-disclosure.md`、`docs/gamejam/submission-checklist.md` M7.8。
+- 美术 0% AI：四张 PNG 由人类提供；AI 只复制文件、改 atlas 页名文本与接线，未改像素，未新增玩家可见文案。
+
+---
+
 ## 未发布 — 2026-11-06（提交前打包验证，20:00）
 
 截止前一日打包：不改功能，只重导出、重打包、复测。

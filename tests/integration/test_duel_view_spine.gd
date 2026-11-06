@@ -121,6 +121,79 @@ func test_p2_uses_its_own_atlas_even_with_the_same_character() -> void:
 			assert_eq(texture.resource_path, "res://resources/spine/skeleton_p2.png")
 
 
+## 单人阶梯第 1–4 关的敌人各用一套人形贴图；BOSS 关沿用默认 P2 图集。
+func test_stage_enemy_atlas_ladder_maps_first_four_stages() -> void:
+	var controller := preload("res://scripts/duel/duel_controller.gd")
+	for stage: int in range(4):
+		var atlas: Resource = controller.enemy_atlas_for_stage(stage)
+		assert_not_null(atlas, "第 %d 关敌方图集必须能加载" % (stage + 1))
+		if atlas == null:
+			continue
+		assert_eq(atlas.resource_path,
+				"res://resources/spine/skeleton_e%d.atlas" % (stage + 1),
+				"第 %d 关应使用 skeleton_e%d.atlas" % [stage + 1, stage + 1])
+		var textures: Array = atlas.call("get_textures")
+		assert_eq(textures.size(), 1, "第 %d 关图集应只有一张贴图" % (stage + 1))
+		if not textures.is_empty():
+			var texture := textures[0] as Texture2D
+			assert_not_null(texture)
+			if texture != null:
+				assert_eq(texture.resource_path,
+						"res://resources/spine/skeleton_e%d.png" % (stage + 1))
+	assert_null(controller.enemy_atlas_for_stage(RunState.STAGE_COUNT - 1),
+			"BOSS 关沿用默认 P2 图集")
+	assert_null(controller.enemy_atlas_for_stage(-1), "越界关卡要安全回退")
+	assert_null(controller.enemy_atlas_for_stage(99), "越界关卡要安全回退")
+
+
+## 控制器给右侧席位换图集后，只有 P2 变色，P1 仍是原色。
+func test_seat_atlas_override_paints_only_p2() -> void:
+	var view := _make_view()
+	view.set_seat_atlas(load("res://resources/spine/skeleton_e2.atlas"))
+	view.bind(DuelSim.new(FighterData.player_a(), FighterData.player_a(), 3))
+	await wait_process_frames(2)
+	var p1 := view.get("_spine_p1") as SpineFighterView
+	var p2 := view.get("_spine_p2") as SpineFighterView
+	assert_not_null(p1)
+	assert_not_null(p2)
+	if p1 == null or p2 == null or p1.profile == null or p2.profile == null:
+		return
+	assert_eq(p1.profile.atlas_file.resource_path, "res://resources/spine/skeleton.atlas",
+			"P1 不能被敌方图集污染")
+	assert_eq(p2.profile.atlas_file.resource_path, "res://resources/spine/skeleton_e2.atlas",
+			"第 2 关敌人换成 e2 图集")
+	var textures: Array = p2.profile.atlas_file.call("get_textures")
+	assert_eq(textures.size(), 1, "e2 图集应只有一张贴图")
+	if not textures.is_empty():
+		var texture := textures[0] as Texture2D
+		assert_not_null(texture)
+		if texture != null:
+			assert_eq(texture.resource_path, "res://resources/spine/skeleton_e2.png")
+
+
+## 换关换图集必须重建克隆，不能命中同一角色的旧缓存；清空后回到 P2 蓝。
+func test_switching_seat_atlas_rebuilds_the_clone() -> void:
+	var view := _make_view()
+	view.set_seat_atlas(load("res://resources/spine/skeleton_e1.atlas"))
+	view.bind(_pair())
+	await wait_process_frames(2)
+	var p2 := view.get("_spine_p2") as SpineFighterView
+	assert_not_null(p2)
+	if p2 == null or p2.profile == null:
+		return
+	assert_eq(p2.profile.atlas_file.resource_path, "res://resources/spine/skeleton_e1.atlas")
+	var first := p2.profile
+	view.set_seat_atlas(load("res://resources/spine/skeleton_e4.atlas"))
+	await wait_process_frames(1)
+	assert_eq(p2.profile.atlas_file.resource_path, "res://resources/spine/skeleton_e4.atlas",
+			"第 4 关必须换成 e4 图集")
+	assert_ne(p2.profile, first, "换关要换新克隆，不能复用旧档案")
+	view.set_seat_atlas(null)
+	await wait_process_frames(1)
+	assert_eq(p2.profile.atlas_file.resource_path, "res://resources/spine/skeleton_p2.atlas",
+			"清空覆盖后回到默认 P2 蓝色图集")
+
+
 func test_pause_reaches_the_spine_views() -> void:
 	var view := _make_view()
 	view.bind(_pair())

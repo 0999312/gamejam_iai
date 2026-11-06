@@ -741,4 +741,38 @@ Spine 子集 37 例；`--import` 退出码 0。`rainy-night-preview.png` 重拍�
 
 **限制**：文档中的「人类反馈」引用为消息编号（如 `m01481`），需在会话文件里检索原文；`.tmp-analysis/` 为临时产物，已删除。
 
+## 22. 单人前四关敌方骨骼材质（2026-11-07，m00002）
+
+**需求**（人类原话）：把 `temp_assets/test_spine` 里的 `skeleton_e1`–`skeleton_e4` 四张骨骼材质分配给单人模式第
+1、2、3、4 关敌人，最后一关（BOSS）与本地双人仍使用 P2 材质；完成后本地构建与远端推送。
+
+**为什么按关卡覆盖而不是改档案**：上一轮 P2 换装（§15）已经确定「配色属于席位，不属于角色 id」。
+阶梯敌人是同副骨架的配色变体，若给 5 个对手各复制一份 `.tres` 只改 `atlas_file`，换色就要动 5 份数据；
+而且 BOSS 关与双人必须回落到 P2，写死在档案里反而多一个特判。做法是把「右侧席位用哪张图集」提到
+`DuelController`：关卡表只登记前四关，越界（BOSS 关 `stage_index == 4`）自然返回 `null`，
+`DuelView` 沿用默认 P2，双人开局同样传 `null` 复位。
+
+**实现**：
+- 资源：`resources/spine/skeleton_e1..e4.png`（人类素材原样复制，1323×1537）与同名 `.atlas`——
+  以 `skeleton_p2.atlas` 为模板，仅页名改成 `skeleton_eN.png`，26 个 region 坐标与尺寸不变。
+- `duel_controller.gd`：`STAGE_ENEMY_ATLASES`（4 项）+ `static func enemy_atlas_for_stage(stage_index)`；
+  `_start_stage()` 在 `_view.bind(sim)` 之前 `set_seat_atlas(enemy_atlas_for_stage(run.stage_index))`，
+  `_start_versus()` 传 `null`。
+- `duel_view.gd`：新增 `_seat_atlas` 与 `set_seat_atlas(atlas)`（值变化且已绑局则立即 `_bind_spine()`）；
+  `_resolve_seat_atlas()` 优先级「按关覆盖 → `p2_atlas_file` → 约定 P2 路径」；克隆缓存键改为
+  「档案 `instance_id` + 图集 `instance_id`」，换关不会复用上一关的克隆。
+- 图集缺失时 `push_warning` 并回退默认 P2，不阻断开局。
+
+**验证**：
+- `--import`：首次因 atlas 先于 PNG 导入报 `Failed loading resource`，重跑退出码 0、无 ERROR；
+  产物 `.ctex`（299,194 / 358,598 / 304,440 / 353,466 B）与 `.spatlas`（各 3,007 B）齐全。
+- 新增 3 例：四关映射与 BOSS/负数/越界 `null`；按关覆盖只染 P2（同角色 P1 仍是 `skeleton.atlas`）；
+  换图集重建克隆并回落到 P2。定向 `-gtest=res://tests/integration/test_duel_view_spine.gd`
+  **11/11、60 asserts**；全量 GUT **314/314、1344 asserts、37 脚本、退出码 0**。
+
+**限制**：四套配色仍共用同一副骨架与动作映射，差异只在贴图；换图集必须保持页尺寸与 region 布局一致，
+否则 `SpineSkeletonDataResource` 会错位。图集与 PNG 的 `--import` 顺序问题会在首次导入时刷一条
+ERROR，属导入器行为，第二次即干净。美术 0% AI：PNG 由人类提供，AI 只复制文件、改 atlas 页名文本与接线。
+
+
 
