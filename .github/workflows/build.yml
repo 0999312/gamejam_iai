@@ -105,7 +105,9 @@ jobs:
             Semantic version: ${{ env.SEMVER }}
             Build: ${{ env.BUILD_VERSION }}
             Commit: ${{ github.sha }}
-          files: build/windows/*.exe
+          files: |
+            build/windows/*.exe
+            build/windows/*.dll
           fail_on_unmatched_files: true
           generate_release_notes: false
         env:
