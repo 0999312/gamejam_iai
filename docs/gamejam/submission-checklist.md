@@ -65,13 +65,13 @@
 - [x] 记录构建版本号与导出时间。Godot 4.7.2.stable（导出模板：非 mono `windows_release_x86_64`）/ 最新本地产物 2026-11-06 19:16；语义化版本 **`0.1.0`**（2026-10-21 起），构建号 `YYYY-MM-DD-NN`。
 - [x] GitHub Action 自动导出并创建 Release（`.github/workflows/build.yml`）：构建号 `YYYY-MM-DD-NN`（UTC，01 起），tag/Release 标题/附件同名；EXE 只作 Release 附件与 Artifact，不入库。远端已于 2026-10-20 跑通，Release `2026-10-20-02` 带 118 MB EXE；首次空 Release `2026-10-20-01` 保留未删。
 - [ ] 保留一份带 tag 的源码快照（如 `v0.9-submit`），避免提交后误改。
-- [x] 开发说明 README 已写（`README.md`，仅工程/构建/测试说明，不是提交用作品 README）；提交用 README 仍须人类按 §4 撰写。
+- [x] 开发说明 README 已写（`README.md`，仅工程/构建/测试说明，不是提交用作品 README）；提交用 README 已由人类提供文案并填充为 `docs/submit/README.md`（待人工审计后定稿）。
 
 ## 4. 提交材料
 
 - [ ] 可运行构建（按主办方指定格式）。
 - [ ] **README**（人类撰写）：一句话创意、玩法与操作说明、主题契合说明、亮点、截图、致谢（第三方素材 + AI 披露链接）。
-  - 2026-11-06：已建立**空骨架** `docs/gamejam/README-submit-skeleton.md`（章节结构 + 已核实事实表 + 规约固定声明），**正文仍为 `[待人类撰写]`**；按 R2 不得由 AI 起草正文。
+  - 2026-11-06：先建空骨架，随后由**人类提供全部正文**（一句话简介、主题契合、玩法说明、亮点），AI 仅负责事实表、排版与截图；成品 `docs/submit/README.md` + `docs/submit/shots/*.png`（4 张实机截图），**待人工审计后勾选**。按人类当次指令，README 内不写二次创作声明。
 - [ ] **封面图**（人类绘制或授权素材，非 AI）。
 - [ ] `docs/gamejam/ai-disclosure.md`（或仓库链接 + 该文件）。
 - [ ] 团队信息与署名。
@@ -125,7 +125,7 @@
 | PH-17 | 多语言 | `localization/en.json` 内容占位（通用 UI 已英文，其余 `[PLACEHOLDER]`；含 `ui.controls` 两条） | 47 | 人类 | 待翻译/改写 |
 | PH-18 | HUD / 符卡（v0.17 起含关底） | 符卡名 + 描述（`spell.spell_a/b/c/boss.name`、`spell.spell_a/b/c/boss.desc`） | 8 | 人类 | 待提供；v0.21 起已有 `[占位] 符卡 A/B/C/关底` 文本，替换为正式文案即可 |
 | PH-19 | 战斗 / 角色表现（2026-10-29 新增） | 测试 chibi Spine 骨架（`resources/spine/skeleton.spine-json` / `.atlas` / `.png` + 8 份 `resources/spine/<id>.tres`） | 8 角色共用 1 套 | 人类（美术） | 已接入，2026-11-04 换入**五动作版**（32 骨骼 / 33 槽位 / 10 IK / 1323×1537 / 26 regions）：`zhanli` 站立、`gongji` 攻击、`bei_gongji` 受击、`fangyu` 防御、`siwang` 战败；档案映射为 IDLE / COMMIT·SLASH·RECOVERY / HITSTUN / GUARD·GUARD_REC·CLASH / DOWN，倒地播 `siwang` 并保持可见；`SPELL` 已映射 `fangyu`（A 窗口内冻结末帧）、`CLASH` 借 `fangyu`；3.8 导出经提版（10 条 `constraints` + 38 段曲线转换），正式素材需 4.3 重导；**不是最终美术**，替换见 `docs/dev-example/spine-integration.md` §7；是否随作品分发取决于 §1 授权决策 |
-| PH-20 | 提交 README 正文 | 一句话简介 / 主题契合 / 玩法亮点等正文（骨架：`docs/gamejam/README-submit-skeleton.md`） | 1 篇 | 人类 | 2026-11-06 建骨架，正文待撰写 |
+| PH-20 | 提交 README 正文 | 一句话简介 / 主题契合 / 玩法亮点等正文 | 1 篇 | 人类 | 2026-11-06 人类提供文案，已成稿 `docs/submit/README.md`（含配置要求、键位、AI 使用情况、致谢），待人工审计定稿 |
 
 - [ ] 全部占位已替换为人类内容（§7 清零）。
 
