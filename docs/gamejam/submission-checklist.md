@@ -66,7 +66,7 @@
 - [x] 在**干净目录**解压/运行一次（2026-11-06）：把 `windows.zip` 解到 `%TEMP%/iai_clean`（无 `.godot/` 导入缓存），`iai.exe --headless --quit-after 300` **退出码 0**，日志两行语言加载各 165 条、无 `SCRIPT ERROR`。**仍未做的**：GUI 模式（非 headless）与另一台非开发机。 
 - [x] 记录构建版本号与导出时间。Godot 4.7.2.stable（导出模板：非 mono `windows_release_x86_64`）/ 最新本地产物 2026-11-06 19:16；语义化版本 **`0.1.0`**（2026-10-21 起），构建号 `YYYY-MM-DD-NN`。
 - [x] GitHub Action 自动导出并创建 Release（`.github/workflows/build.yml`）：构建号 `YYYY-MM-DD-NN`（UTC，01 起），tag/Release 标题/附件同名；EXE 只作 Release 附件与 Artifact，不入库。远端已于 2026-10-20 跑通，Release `2026-10-20-02` 带 118 MB EXE；首次空 Release `2026-10-20-01` 保留未删。
-- [ ] 保留一份带 tag 的源码快照（如 `v0.9-submit`），避免提交后误改。
+- [x] 保留一份带 tag 的源码快照（如 `v0.9-submit`），避免提交后误改。**已打 `v0.1.0-submit`（`e778e2a`）并推送**；提交记录见文末。
 - [x] 开发说明 README 已写（`README.md`，仅工程/构建/测试说明，不是提交用作品 README）；提交用 README 已由人类提供文案并填充为 `docs/submit/README.md`（待人工审计后定稿）。
 
 ## 4. 提交材料
@@ -80,6 +80,8 @@
 - [ ] 全部 PLACEHOLDER 已替换为人类内容（见 §7）。
 - [ ] （可选）`辉夜姬的五难题` 作答说明，如参加支线。
 - [ ] 提交通道与所需字段已确认（主办方指定方法，参与指南:39）。
+
+> **2026-11-07 提交包实况**：`build/windows/山间小屋组-iai-windows-改1.zip` 内已含提交用 `README.md`（4,718 B）与 2 张实机截图（`duel-concept-3x4.png`、`duel-slash-guard-16x9.png`）；**封面是否随表单单独提交、README 是否由人类撰写，需团队确认后回填**。本节的复选框仍以「人类确认」为准，不因包内存在文件而自动勾选。
 
 ## 5. 提交当天
 
