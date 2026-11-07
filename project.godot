@@ -12,21 +12,19 @@ config_version=5
 
 config/name="刀剑 · 心流"
 config/version="0.1.0"
-; 窗口标题在运行时按本地化（menu.title）刷新；这里固定 user:// 目录名，
-; 避免改名后存档路径漂移（原 godot_dsh_test 目录见 docs/dev-example/icon-and-window-title.md）。
+run/main_scene="res://scenes/menu/menu.tscn"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="iai"
-run/main_scene="res://scenes/menu/menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
-RegistryManager="*res://addons/mc_game_framework/autoload/registry_manager.gd"
-EventBus="*res://addons/mc_game_framework/autoload/event_bus.gd"
-I18NManager="*res://addons/mc_game_framework/autoload/i18n_manager.gd"
-UIManager="*res://addons/mc_game_framework/autoload/ui_manager.gd"
-SoundManager="*res://addons/sound_manager/sound_manager.gd"
+RegistryManager="*uid://djenx0rf18ew7"
+EventBus="*uid://dqjaimeyl43vd"
+I18NManager="*uid://wj05s0mpoqn"
+UIManager="*uid://b0mn85k3pon1l"
+SoundManager="*uid://bjex7rgsn4fi1"
 GameBootstrap="*res://scripts/core/game_bootstrap.gd"
 GUIDE="*res://addons/guide/guide.gd"
 
@@ -35,6 +33,10 @@ GUIDE="*res://addons/guide/guide.gd"
 window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
+
+[dotnet]
+
+project/assembly_name="刀剑 · 心流"
 
 [editor_plugins]
 
@@ -46,12 +48,4 @@ theme/custom="res://assets/theme/rain_night.tres"
 
 [physics]
 
-; 战斗判定的唯一时间基准：1 逻辑帧 = 1/60 秒 = 16.67ms。
-; 所有帧数据（前摇/架窗/硬直）都以逻辑帧计数，与渲染帧率无关。
-; 显式写死而不用引擎默认值，避免引擎升级或误改项目设置时静默改变手感。
-common/physics_ticks_per_second=60
-; 卡顿时单个渲染帧最多补 8 个物理步（≈133ms）；超过则时间膨胀（整体慢动作），
-; 不会让战斗变快，也不会跳过判定帧。
-common/max_physics_steps_per_frame=8
-; 关闭物理步插值，保证物理步严格落在 1/60 网格上（输入采样时刻不抖动）。
 common/physics_jitter_fix=0.0

@@ -1,6 +1,6 @@
-[gd_resource type="Theme" format=3]
+[gd_resource type="Theme" format=3 uid="uid://bux3jup57gq1i"]
 
-[ext_resource type="FontFile" path="res://assets/fonts/MiSans-Semibold.otf" id="1_w3rl4"]
+[ext_resource type="FontFile" uid="uid://mpu6nvnrxx26" path="res://assets/fonts/MiSans-Semibold.otf" id="1_w3rl4"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_w3rl4"]
 content_margin_left = 18.0
