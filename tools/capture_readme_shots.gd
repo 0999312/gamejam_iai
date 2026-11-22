@@ -133,17 +133,16 @@ func _pose_duel(sim: DuelSim, clash: bool) -> void:
 ## 竖屏时相机可见范围超出 1280×720 的背景板，会露出视口清屏色；
 ## 把背景板按可见矩形重摆，并把三个以像素为基准的 uniform 换算成新的归一化值。
 func _fit_background(view: DuelView, rect: Rect2) -> void:
-	var bg := view.get("_background") as ColorRect
+	var bg := view.get("_background") as RainyNightBackdrop
 	if bg == null:
 		return
 	bg.position = rect.position
 	bg.size = rect.size
-	var material := bg.material as ShaderMaterial
-	if material == null:
-		return
-	material.set_shader_parameter("ground_y", (GROUND_Y - rect.position.y) / rect.size.y)
-	material.set_shader_parameter("focus_left", (430.0 - rect.position.x) / rect.size.x)
-	material.set_shader_parameter("focus_right", (850.0 - rect.position.x) / rect.size.x)
+	# 降采样容器按可见矩形重设渲染尺寸，避免竖屏截图把雨丝拉扁。
+	bg.set_render_size(Vector2i(int(rect.size.x), int(rect.size.y)))
+	bg.set_shader_parameter("ground_y", (GROUND_Y - rect.position.y) / rect.size.y)
+	bg.set_shader_parameter("focus_left", (430.0 - rect.position.x) / rect.size.x)
+	bg.set_shader_parameter("focus_right", (850.0 - rect.position.x) / rect.size.x)
 
 
 func _save_root(path: String) -> void:

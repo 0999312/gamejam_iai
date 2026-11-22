@@ -13,7 +13,8 @@ const MENU_GROUND_Y := 0.96
 const MENU_POOL_STRENGTH := 0.0
 
 var _gold_label: Label
-var _background: ColorRect
+## 正常路径是 RainyNightBackdrop；场景损坏时回退为纯色 ColorRect。
+var _background: Control
 
 
 func _ready() -> void:
@@ -123,7 +124,7 @@ func _build_ui(restore_focus: bool = true) -> void:
 
 
 func _build_background() -> void:
-	var bg := BG_SCENE.instantiate() as ColorRect
+	var bg := BG_SCENE.instantiate() as RainyNightBackdrop
 	if bg == null:
 		# 极端情况下场景损坏：保留纯色底，菜单仍可用。
 		var fallback := ColorRect.new()
@@ -138,16 +139,11 @@ func _build_background() -> void:
 	bg.show_behind_parent = true
 	bg.z_index = -1
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# rainy_night.tscn 的材质是场景子资源，可能和 DuelView 共享；
-	# 菜单要改 ground_y/pool_strength，必须先复制，避免反过来污染对局。
-	if bg.material != null:
-		bg.material = bg.material.duplicate()
 	add_child(bg)
 	_background = bg
-	var mat := bg.material as ShaderMaterial
-	if mat != null:
-		mat.set_shader_parameter("ground_y", MENU_GROUND_Y)
-		mat.set_shader_parameter("pool_strength", MENU_POOL_STRENGTH)
+	# 每个实例在 _ready 里复制材质，菜单改参数不会污染对局。
+	bg.set_shader_parameter("ground_y", MENU_GROUND_Y)
+	bg.set_shader_parameter("pool_strength", MENU_POOL_STRENGTH)
 
 
 func _make_button(parent: Control, text: String) -> Button:

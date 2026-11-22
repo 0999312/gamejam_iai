@@ -19,6 +19,8 @@ const I18N_FILES: Dictionary = {
 	"zh_CN": "res://localization/zh_CN.json",
 	"en": "res://localization/en.json",
 }
+## 正常退出会删除；残留 = 上次没有走完退出流程，下次强制窗口化启动。
+const SESSION_LOCK_PATH := "user://session.lock"
 
 ## 10 个心得。effect 由 RunState 解释，amount 为效果数值。
 ##
@@ -53,6 +55,10 @@ var pending_character_p2: StringName = &"char_a"
 var pending_input_p1: StringName = &"keyboard"
 var pending_input_p2: StringName = &"keyboard"
 
+## 最近一次请求的窗口模式；-1 表示本进程还没请求过。
+var _desired_window_mode: int = -1
+var _window_mode_queued: bool = false
+
 ## 注意：困难模式只存在 meta.settings["hard_mode"] 一处真相，这里不再缓存副本。
 ## 缓存副本会与 meta 脱钩（测试替换 meta、读档后重载都会读到旧值）。
 
@@ -68,6 +74,7 @@ func _ready() -> void:
 	KeyBindings.normalize(meta.settings)
 	_load_i18n(current_language())
 	_ensure_audio_buses()
+	_prepare_session_lock()
 	apply_settings()
 	_refresh_guide_joy_devices.call_deferred()
 	EventBus.subscribe(&"LanguageChangedEvent", _on_language_changed)
@@ -164,7 +171,17 @@ func wipe_save() -> bool:
 	return ok
 
 
+## 应用设置：音频与窗口模式是两条独立路径。音量滑条/静音只调
+## apply_audio_settings()，不触发窗口模式同步（审计 P0-1）。
 func apply_settings() -> void:
+	if meta == null:
+		return
+	apply_audio_settings()
+	_set_fullscreen(bool(meta.settings.get("fullscreen", false)))
+
+
+## 只应用音频设置；音量拖动每帧都会调到这里，绝不能碰 DisplayServer。
+func apply_audio_settings() -> void:
 	if meta == null:
 		return
 	var master := clampf(float(meta.settings.get("volume_master", 0.8)), 0.0, 1.0)
@@ -180,16 +197,110 @@ func apply_settings() -> void:
 	if SoundManager != null:
 		SoundManager.set_sound_volume(sfx)
 		SoundManager.set_ambient_sound_volume(ambient)
-	_set_fullscreen(bool(meta.settings.get("fullscreen", false)))
 
 
+## 窗口模式请求：先记下目标，合并到下一次 idle 再执行。
+## 音量/静音/商店等调用方即使反复调 apply_settings()，也不会每帧同步窗口样式。
 func _set_fullscreen(enabled: bool) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	if enabled:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	else:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	_desired_window_mode = DisplayServer.WINDOW_MODE_FULLSCREEN if enabled else DisplayServer.WINDOW_MODE_WINDOWED
+	_queue_window_mode()
+
+
+func _queue_window_mode() -> void:
+	if _window_mode_queued:
+		return
+	_window_mode_queued = true
+	call_deferred("_apply_window_mode")
+
+
+## 幂等：当前模式已经是目标就什么都不做；最小化时也不抢恢复，
+## 避免音量变化把玩家刚最小化的窗口又弹回前台。
+func _apply_window_mode() -> void:
+	_window_mode_queued = false
+	if DisplayServer.get_name() == "headless" or _desired_window_mode < 0:
+		return
+	var current := DisplayServer.window_get_mode()
+	if not _needs_window_mode_change(current, _desired_window_mode):
+		return
+	DisplayServer.window_set_mode(_desired_window_mode)
+
+
+## 纯判定：当前已是目标模式就不重复同步；最小化时也不抢恢复。
+func _needs_window_mode_change(current: int, desired: int) -> bool:
+	if desired < 0:
+		return false
+	if current == DisplayServer.WINDOW_MODE_MINIMIZED:
+		return false
+	return current != desired
+
+
+## 失焦/恢复：窗口从最小化回来时再补一次目标模式；正常切前台是 no-op。
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_WM_CLOSE_REQUEST:
+			_clear_session_lock()
+		NOTIFICATION_APPLICATION_FOCUS_IN:
+			_on_window_focus_in()
+		NOTIFICATION_WM_WINDOW_FOCUS_IN:
+			_on_window_focus_in()
+
+
+func _on_window_focus_in() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if _desired_window_mode >= 0:
+		_queue_window_mode()
+
+
+## 上次进程没有正常退出的证据（session.lock 残留）→ 本次强制窗口化启动。
+## 全屏切换一旦在故障机上把窗口卡死，玩家至少还能靠重启回到可操作窗口。
+func _prepare_session_lock() -> void:
+	if DisplayServer.get_name() == "headless" or meta == null:
+		return
+	if _consume_session_lock():
+		meta.settings["fullscreen"] = false
+		save_meta()
+		push_warning("GameBootstrap: unclean exit detected; starting in windowed mode")
+	_write_session_lock()
+	var window := get_window()
+	if window != null and not window.close_requested.is_connected(_on_window_close_requested):
+		window.close_requested.connect(_on_window_close_requested)
+
+
+func _consume_session_lock() -> bool:
+	if not FileAccess.file_exists(SESSION_LOCK_PATH):
+		return false
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SESSION_LOCK_PATH))
+	return true
+
+
+func _write_session_lock() -> void:
+	var file := FileAccess.open(SESSION_LOCK_PATH, FileAccess.WRITE)
+	if file == null:
+		return
+	file.store_string(JSON.stringify({
+		"pid": OS.get_process_id(),
+		"started_at": Time.get_datetime_string_from_system(true),
+	}))
+	file.close()
+
+
+func _clear_session_lock() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if FileAccess.file_exists(SESSION_LOCK_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(SESSION_LOCK_PATH))
+
+
+func _on_window_close_requested() -> void:
+	_clear_session_lock()
+
+
+## autoload 退出时补删锁；正常退出、编辑器停止、close_requested 都会走到这里。
+func _exit_tree() -> void:
+	_clear_session_lock()
 
 
 ## sound_manager 默认把 music/sfx/ui 都放在 Master 上，会触发共享总线警告。

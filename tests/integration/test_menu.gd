@@ -43,7 +43,7 @@ func test_menu_shows_gold_and_four_entries() -> void:
 
 
 func test_menu_has_a_full_screen_rainy_night_backdrop() -> void:
-	var bg := _menu.get("_background") as ColorRect
+	var bg := _menu.get("_background") as RainyNightBackdrop
 	assert_not_null(bg, "主菜单必须有雨夜背景层")
 	assert_eq(bg.get_parent(), _menu)
 	assert_eq(bg.get_index(), 0, "背景必须是第一个子节点，标题/按钮压在它上面")
@@ -51,7 +51,7 @@ func test_menu_has_a_full_screen_rainy_night_backdrop() -> void:
 	assert_true(bg.show_behind_parent)
 	assert_lt(bg.z_index, 0, "背景不能盖住 UI")
 	assert_eq(bg.mouse_filter, Control.MOUSE_FILTER_IGNORE, "背景不得拦截菜单点击")
-	var mat := bg.material as ShaderMaterial
+	var mat := bg.get_shader_material()
 	assert_not_null(mat)
 	assert_eq(mat.shader.resource_path, "res://resources/shaders/rainy_night.gdshader")
 	assert_almost_eq(float(mat.get_shader_parameter("ground_y")), 0.96, 0.0001,

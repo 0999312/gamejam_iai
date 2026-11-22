@@ -20,7 +20,7 @@ func _pair() -> DuelSim:
 func test_ready_builds_a_full_screen_rainy_night_layer() -> void:
 	var view := _make_view()
 	await wait_process_frames(1)
-	var background := view.get("_background") as ColorRect
+	var background := view.get("_background") as RainyNightBackdrop
 	assert_not_null(background, "DuelView 入树后必须挂上雨夜背景")
 	if background == null:
 		return
@@ -35,11 +35,11 @@ func test_ready_builds_a_full_screen_rainy_night_layer() -> void:
 func test_rainy_night_uses_the_rain_shader_and_stage_uniforms() -> void:
 	var view := _make_view()
 	await wait_process_frames(1)
-	var background := view.get("_background") as ColorRect
+	var background := view.get("_background") as RainyNightBackdrop
 	assert_not_null(background)
 	if background == null:
 		return
-	var material := background.material as ShaderMaterial
+	var material := background.get_shader_material()
 	assert_not_null(material, "背景必须挂 ShaderMaterial")
 	if material == null:
 		return
@@ -59,7 +59,7 @@ func test_background_scene_is_self_contained_and_pointer_transparent() -> void:
 	assert_not_null(scene)
 	if scene == null:
 		return
-	var background := scene.instantiate() as ColorRect
+	var background := scene.instantiate() as RainyNightBackdrop
 	assert_not_null(background)
 	if background == null:
 		return

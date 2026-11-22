@@ -178,6 +178,10 @@ func _handle_joy_rebind(event: InputEvent) -> void:
 
 func _build_ui() -> void:
 	for child in get_children():
+		# 计时器不是 UI 节点：_save_timer/_wipe_timer 必须跨重建存活，
+		# 否则 _schedule_save() 会退化成每次 value_changed 都同步写盘（审计 P2-14）。
+		if child is Timer:
+			continue
 		remove_child(child)
 		child.queue_free()
 	_key_buttons.clear()
@@ -493,7 +497,7 @@ func _on_volume_changed(value: float, setting_key: String) -> void:
 	if meta == null:
 		return
 	meta.settings[setting_key] = clampf(value / 100.0, 0.0, 1.0)
-	GameBootstrap.apply_settings()
+	GameBootstrap.apply_audio_settings()
 	_schedule_save()
 
 
@@ -543,7 +547,7 @@ func _on_mute_toggled(pressed: bool) -> void:
 	if meta == null:
 		return
 	meta.settings["mute"] = pressed
-	GameBootstrap.apply_settings()
+	GameBootstrap.apply_audio_settings()
 	_schedule_save()
 
 

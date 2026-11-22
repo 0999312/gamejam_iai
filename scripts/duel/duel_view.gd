@@ -40,7 +40,7 @@ var sim: DuelSim
 
 ## 雨夜背景层。它是子节点但 z_index=-1 / show_behind_parent，绘制在自绘层之后，
 ## 因此不会挡住角色、心流环、血条或判定提示。
-var _background: ColorRect
+var _background: RainyNightBackdrop
 
 ## 粒子特效层（命中/对刀/架防），挂在自身之下，绘制顺序在自绘角色之上。
 var _fx: DuelFx
@@ -530,7 +530,7 @@ func _on_blocked(_attacker: int, defender_side: int, perfect: bool) -> void:
 func _build_background() -> void:
 	if _background != null:
 		return
-	_background = BG_SCENE.instantiate() as ColorRect
+	_background = BG_SCENE.instantiate() as RainyNightBackdrop
 	if _background == null:
 		return
 	_background.name = "RainyNight"
@@ -546,12 +546,9 @@ func _build_background() -> void:
 func _apply_background_focus() -> void:
 	if _background == null:
 		return
-	var material := _background.material as ShaderMaterial
-	if material == null:
-		return
-	material.set_shader_parameter("ground_y", GROUND_Y / 720.0)
-	material.set_shader_parameter("focus_left", P1_X / 1280.0)
-	material.set_shader_parameter("focus_right", P2_X / 1280.0)
+	_background.set_shader_parameter("ground_y", GROUND_Y / 720.0)
+	_background.set_shader_parameter("focus_left", P1_X / 1280.0)
+	_background.set_shader_parameter("focus_right", P2_X / 1280.0)
 
 
 ## Spine 人物层：有扩展、有档案时接管角色表现；任何一环缺失都保持灰盒。
